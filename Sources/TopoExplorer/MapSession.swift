@@ -10,23 +10,44 @@ final class MapSession: ObservableObject {
     private static let savedPathKey = "TopoExplorer.dataDirectory.v1"
     private static let bookmarkKey = "TopoExplorer.dataDirectoryBookmark.v1"
     private var securityScopedURL: URL?
+    private var didAttemptInitialLoad = false
+
+    private static var isSandboxed: Bool {
+        if ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil { return true }
+        return FileManager.default.homeDirectoryForCurrentUser.path.contains("/Library/Containers/")
+    }
 
     func loadDefaultIfAvailable() {
-        guard manifest == nil else { return }
+        guard manifest == nil, !didAttemptInitialLoad else { return }
+        didAttemptInitialLoad = true
         var candidates: [URL] = []
         if let bookmark = UserDefaults.standard.data(forKey: Self.bookmarkKey) {
             var stale = false
-            if let resolved = try? URL(
-                resolvingBookmarkData: bookmark,
-                options: [.withSecurityScope, .withoutUI],
-                relativeTo: nil,
-                bookmarkDataIsStale: &stale
-            ) {
-                if stale { persistBookmark(for: resolved) }
-                load(resolved)
-                if manifest != nil { return }
+            do {
+                let resolved = try URL(
+                    resolvingBookmarkData: bookmark,
+                    options: [.withSecurityScope, .withoutUI],
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &stale
+                )
+                if load(resolved), manifest != nil { return }
+                UserDefaults.standard.removeObject(forKey: Self.bookmarkKey)
+            } catch {
+                UserDefaults.standard.removeObject(forKey: Self.bookmarkKey)
+                errorMessage = "Die gespeicherte Ordnerfreigabe ist nicht mehr gültig. Bitte wähle den Kartendatenordner erneut."
             }
         }
+
+        // A sandboxed release may only open a user-selected URL or a valid
+        // security-scoped bookmark. A remembered plain path has no permission.
+        if Self.isSandboxed {
+            if errorMessage == nil {
+                errorMessage = "Wähle einmal den Ordner MapData/Germany. macOS merkt sich diese Freigabe für spätere Starts."
+            }
+            isChoosingDirectory = true
+            return
+        }
+
         if let saved = UserDefaults.standard.string(forKey: Self.savedPathKey) {
             candidates.append(URL(fileURLWithPath: saved, isDirectory: true))
         }
@@ -47,11 +68,17 @@ final class MapSession: ObservableObject {
         }
     }
 
-    func load(_ selectedURL: URL) {
-        securityScopedURL?.stopAccessingSecurityScopedResource()
-        securityScopedURL = nil
-        if selectedURL.startAccessingSecurityScopedResource() {
-            securityScopedURL = selectedURL
+    @discardableResult
+    func load(_ selectedURL: URL) -> Bool {
+        let accessStarted = selectedURL.startAccessingSecurityScopedResource()
+        var releaseNewAccess = accessStarted
+        defer {
+            if releaseNewAccess { selectedURL.stopAccessingSecurityScopedResource() }
+        }
+
+        if Self.isSandboxed && !accessStarted {
+            errorMessage = "macOS hat den Zugriff nicht freigegeben. Bitte wähle den Ordner MapData/Germany erneut."
+            return false
         }
 
         let directory: URL
@@ -60,46 +87,70 @@ final class MapSession: ObservableObject {
         } else if FileManager.default.fileExists(atPath: selectedURL.appendingPathComponent("Germany/manifest.json").path) {
             directory = selectedURL.appendingPathComponent("Germany", isDirectory: true)
         } else {
-            securityScopedURL?.stopAccessingSecurityScopedResource()
-            securityScopedURL = nil
-            errorMessage = "In diesem Ordner wurde keine manifest.json gefunden."
-            return
+            errorMessage = "In diesem Ordner wurde keine manifest.json gefunden. Bitte wähle MapData/Germany."
+            return false
         }
 
         do {
-            let data = try Data(contentsOf: directory.appendingPathComponent("manifest.json"))
+            let manifestURL = directory.appendingPathComponent("manifest.json")
+            guard FileManager.default.isReadableFile(atPath: manifestURL.path) else {
+                throw SessionError.accessDenied
+            }
+            let data = try Data(contentsOf: manifestURL)
             let decoded = try JSONDecoder().decode(MapManifest.self, from: data).validated()
             guard !FileManager.default.fileExists(atPath: directory.appendingPathComponent(".incomplete").path) else {
                 throw SessionError.incomplete
             }
+
+            let bookmark: Data?
+            do {
+                bookmark = try selectedURL.bookmarkData(
+                    options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+            } catch {
+                if Self.isSandboxed { throw SessionError.bookmarkFailed }
+                bookmark = nil
+            }
+
+            let previousAccess = securityScopedURL
+            securityScopedURL = accessStarted ? selectedURL : nil
+            releaseNewAccess = false
+            previousAccess?.stopAccessingSecurityScopedResource()
             manifest = decoded
             dataDirectory = directory
             errorMessage = nil
             UserDefaults.standard.set(directory.path, forKey: Self.savedPathKey)
-            persistBookmark(for: selectedURL)
+            if let bookmark {
+                UserDefaults.standard.set(bookmark, forKey: Self.bookmarkKey)
+            }
+            return true
         } catch {
-            manifest = nil
-            dataDirectory = nil
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
-    private func persistBookmark(for url: URL) {
-        if let bookmark = try? url.bookmarkData(
-            options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        ) {
-            UserDefaults.standard.set(bookmark, forKey: Self.bookmarkKey)
-        }
+    func reportDirectorySelectionError(_ error: Error) {
+        errorMessage = "Der Kartendatenordner konnte nicht gewählt werden: \(error.localizedDescription)"
     }
 }
 
 enum SessionError: LocalizedError {
     case incomplete
+    case accessDenied
+    case bookmarkFailed
 
     var errorDescription: String? {
-        "Die Kachelerzeugung ist noch nicht vollständig abgeschlossen."
+        switch self {
+        case .incomplete:
+            "Die Kachelerzeugung ist noch nicht vollständig abgeschlossen."
+        case .accessDenied:
+            "macOS verweigert den Zugriff auf manifest.json. Bitte wähle den Ordner MapData/Germany erneut."
+        case .bookmarkFailed:
+            "Die dauerhafte Ordnerfreigabe konnte nicht gespeichert werden. Bitte wähle MapData/Germany erneut."
+        }
     }
 }
 

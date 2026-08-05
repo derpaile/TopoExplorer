@@ -32,8 +32,13 @@ struct ContentView: View {
             allowedContentTypes: [.folder],
             allowsMultipleSelection: false
         ) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                session.load(url)
+            switch result {
+            case .success(let urls):
+                if let url = urls.first { session.load(url) }
+            case .failure(let error):
+                if (error as NSError).code != NSUserCancelledError {
+                    session.reportDirectorySelectionError(error)
+                }
             }
         }
     }
@@ -175,7 +180,7 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                 Text("Deutschland-Kartendaten fehlen")
                     .font(.title2.weight(.semibold))
-                Text(session.errorMessage ?? "Zuerst ./scripts/preprocess_germany.sh ausführen oder einen fertigen Datenordner wählen.")
+                Text(session.errorMessage ?? "Wähle den fertigen Ordner MapData/Germany. Beim ersten Start benötigt macOS dafür deine Freigabe.")
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: 560)

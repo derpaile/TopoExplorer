@@ -20,6 +20,9 @@ macOS-App-Sandbox erhalten.
    der bisherige Zugriff mit `stopAccessingSecurityScopedResource()` beendet.
 5. Meldet macOS ein veraltetes Bookmark, wird es aus der aufgelösten URL neu
    erzeugt. Schlägt die Auflösung fehl, zeigt die App wieder die Ordnerwahl an.
+6. Ein gespeicherter Klartextpfad wird in einem Sandbox-Release niemals als
+   Zugriffsersatz verwendet. Fehlt das Bookmark, öffnet die App beim ersten
+   Start direkt die Ordnerwahl.
 
 ## Datenmodell und Migration
 

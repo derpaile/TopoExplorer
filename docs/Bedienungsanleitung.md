@@ -4,7 +4,7 @@
 
 1. `TopoExplorer.dmg` öffnen.
 2. Die App nach „Applications“ ziehen.
-3. TopoExplorer starten und „Kartendaten wählen“ anklicken.
+3. TopoExplorer starten. Beim ersten Start öffnet sich die Ordnerwahl automatisch.
 4. `MapData/Germany` oder den übergeordneten `MapData`-Ordner wählen.
 
 Die Kartendaten bleiben außerhalb der App. Dadurch ist das Programm klein und
