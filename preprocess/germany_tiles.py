@@ -11,6 +11,7 @@ Payloads are zlib-compressed. The macOS app expands only visible tiles.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import shutil
@@ -32,6 +33,7 @@ TARGET_CRS = "EPSG:3035"
 TILE_SIZE = 512
 ELEVATION_MIN = -10.0
 ELEVATION_MAX = 3500.0
+PIPELINE_VERSION = 2
 
 DEFAULT_COLORS = [
     "#000000",  # no data
@@ -249,6 +251,36 @@ def manifest_for(bounds: tuple[float, float, float, float], levels: list[Level])
     }
 
 
+def ensure_safe_directory(path: Path) -> Path:
+    resolved = path.resolve()
+    if resolved == Path(resolved.anchor) or len(resolved.parts) < 4:
+        raise SystemExit(f"Unsicheres Ausgabeverzeichnis: {resolved}")
+    return resolved
+
+
+def source_signature(args: argparse.Namespace) -> dict:
+    result: dict[str, object] = {
+        "pipelineVersion": PIPELINE_VERSION,
+        "pipelineSHA256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "resolution": args.resolution,
+        "compression": args.compression,
+    }
+    for path in (args.landcover, args.dem):
+        stat = path.stat()
+        result[str(path)] = {"size": stat.st_size, "modifiedNs": stat.st_mtime_ns}
+    return result
+
+
+def base_tiles_complete(output: Path, levels: list[Level]) -> bool:
+    return all(
+        (output / f"z{level.z}" / f"{tile_x}_{tile_y}.land.z").is_file()
+        and (output / f"z{level.z}" / f"{tile_x}_{tile_y}.elev.z").is_file()
+        for level in levels
+        for tile_y in range(level.tilesY)
+        for tile_x in range(level.tilesX)
+    )
+
+
 def main() -> int:
     args = parse_args()
     if args.resolution <= 0:
@@ -276,7 +308,24 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    output = args.output.resolve()
+    output = ensure_safe_directory(args.output)
+    signature = source_signature(args)
+    manifest_path = output / "manifest.json"
+    if manifest_path.is_file() and not args.force:
+        existing = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if (
+            existing.get("generationSignature") == signature
+            and not (output / ".incomplete").exists()
+            and base_tiles_complete(output, levels)
+        ):
+            print(f"Bereits vollständig: {output}")
+            return 0
+        if existing.get("generationSignature") != signature:
+            print("Quellen, Einstellungen oder Pipeline wurden verändert; Grundkacheln werden neu aufgebaut.")
+            shutil.rmtree(output)
+    elif output.exists() and any(output.iterdir()) and not args.force:
+        print("Alte Ausgabe ohne reproduzierbare Signatur wird neu aufgebaut.")
+        shutil.rmtree(output)
     if args.force and output.exists():
         shutil.rmtree(output)
     output.mkdir(parents=True, exist_ok=True)
@@ -405,7 +454,7 @@ def main() -> int:
     manifest = manifest_for(bounds, levels)
     manifest["generatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     manifest["source"] = {"landcover": str(args.landcover), "dem": str(args.dem)}
-    manifest_path = output / "manifest.json"
+    manifest["generationSignature"] = signature
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     incomplete.unlink(missing_ok=True)
 

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RGBAColor: Codable, Equatable {
     var red: Double
@@ -45,11 +46,30 @@ struct RenderStyle {
     let reliefExaggeration: Float
     let reliefContrast: Float
     let ambientLight: Float
+    let sunAzimuthRadians: Float
+
+    init(
+        colors: [SIMD4<Float>],
+        reliefOpacity: Float,
+        reliefExaggeration: Float,
+        reliefContrast: Float,
+        ambientLight: Float,
+        sunAzimuthRadians: Float = 5.4977871438
+    ) {
+        self.colors = colors
+        self.reliefOpacity = reliefOpacity
+        self.reliefExaggeration = reliefExaggeration
+        self.reliefContrast = reliefContrast
+        self.ambientLight = ambientLight
+        self.sunAzimuthRadians = sunAzimuthRadians
+    }
 }
 
 @MainActor
 final class StyleSettings: ObservableObject {
-    struct Saved: Codable {
+    typealias Preset = MapStyleDocument
+
+    private struct LegacySaved: Codable {
         let colors: [RGBAColor]
         let reliefOpacity: Double
         let reliefExaggeration: Double
@@ -57,17 +77,13 @@ final class StyleSettings: ObservableObject {
         let ambientLight: Double
     }
 
-    struct Preset: Identifiable {
-        let id: String
-        let name: String
-        let colors: [RGBAColor]
-        let reliefOpacity: Double
-        let reliefExaggeration: Double
-        let reliefContrast: Double
-        let ambientLight: Double
-    }
-
-    private static let storageKey = "TopoExplorer.style.v1"
+    private static let legacyStorageKey = "TopoExplorer.style.v1"
+    private static let currentStorageKey = "TopoExplorer.style.v2"
+    private static let customStorageKey = "TopoExplorer.customStyles.v1"
+    private static let styleContentType = UTType(
+        filenameExtension: "topostyle",
+        conformingTo: .json
+    ) ?? .json
 
     static let originalColors = [
         "#000000", "#FF1111", "#FFD700", "#228B22",
@@ -85,59 +101,102 @@ final class StyleSettings: ObservableObject {
     ].map(RGBAColor.init(hex:))
 
     static let presets = [
-        Preset(
-            id: "original",
+        MapStyleDocument(
+            id: "builtin.original",
             name: "Original 2025",
             colors: originalColors,
-            reliefOpacity: 0.50,
-            reliefExaggeration: 45,
-            reliefContrast: 2.5,
-            ambientLight: 0.08
+            relief: ReliefStyle(
+                enabled: true, opacity: 0.50, exaggeration: 45,
+                contrast: 2.5, ambientLight: 0.08, sunAzimuthDegrees: 315
+            )
         ),
-        Preset(
-            id: "dataset",
+        MapStyleDocument(
+            id: "builtin.dataset",
             name: "Datensatz",
             colors: sourceColors,
-            reliefOpacity: 0.42,
-            reliefExaggeration: 34,
-            reliefContrast: 2.0,
-            ambientLight: 0.08
+            relief: ReliefStyle(
+                enabled: true, opacity: 0.42, exaggeration: 34,
+                contrast: 2.0, ambientLight: 0.08, sunAzimuthDegrees: 315
+            )
         ),
-        Preset(
-            id: "muted",
+        MapStyleDocument(
+            id: "builtin.muted",
             name: "Gedämpft",
             colors: mutedColors,
-            reliefOpacity: 0.36,
-            reliefExaggeration: 28,
-            reliefContrast: 1.8,
-            ambientLight: 0.10
+            relief: ReliefStyle(
+                enabled: true, opacity: 0.36, exaggeration: 28,
+                contrast: 1.8, ambientLight: 0.10, sunAzimuthDegrees: 315
+            )
         ),
     ]
 
-    @Published var colors: [RGBAColor] { didSet { changed() } }
-    @Published var reliefOpacity: Double { didSet { changed() } }
-    @Published var reliefExaggeration: Double { didSet { changed() } }
-    @Published var reliefContrast: Double { didSet { changed() } }
-    @Published var ambientLight: Double { didSet { changed() } }
+    @Published var colors: [RGBAColor] { didSet { propertyChanged() } }
+    @Published var reliefEnabled: Bool { didSet { propertyChanged() } }
+    @Published var reliefOpacity: Double { didSet { propertyChanged() } }
+    @Published var reliefExaggeration: Double { didSet { propertyChanged() } }
+    @Published var reliefContrast: Double { didSet { propertyChanged() } }
+    @Published var ambientLight: Double { didSet { propertyChanged() } }
+    @Published var sunAzimuthDegrees: Double { didSet { propertyChanged() } }
+    @Published private(set) var customStyles: [MapStyleDocument]
+    @Published private(set) var activeStyleName: String
+    @Published var errorMessage: String?
     @Published private(set) var revision = 0
 
+    private var activeStyleID: String?
+    private var isApplying = false
+
     init() {
-        colors = Self.originalColors
-        reliefOpacity = 0.50
-        reliefExaggeration = 45
-        reliefContrast = 2.5
-        ambientLight = 0.08
+        let original = Self.presets[0]
+        colors = original.colors
+        reliefEnabled = original.relief.enabled
+        reliefOpacity = original.relief.opacity
+        reliefExaggeration = original.relief.exaggeration
+        reliefContrast = original.relief.contrast
+        ambientLight = original.relief.ambientLight
+        sunAzimuthDegrees = original.relief.sunAzimuthDegrees
+        activeStyleName = original.name
+        activeStyleID = original.id
+        errorMessage = nil
 
         if
-            let data = UserDefaults.standard.data(forKey: Self.storageKey),
-            let saved = try? JSONDecoder().decode(Saved.self, from: data),
+            let data = UserDefaults.standard.data(forKey: Self.customStorageKey),
+            let decoded = try? JSONDecoder().decode([MapStyleDocument].self, from: data)
+        {
+            customStyles = decoded.compactMap { try? $0.validated() }
+        } else {
+            customStyles = []
+        }
+
+        if
+            let data = UserDefaults.standard.data(forKey: Self.currentStorageKey),
+            let saved = try? JSONDecoder().decode(MapStyleDocument.self, from: data),
+            let saved = try? saved.validated()
+        {
+            isApplying = true
+            assign(saved)
+            isApplying = false
+        } else if
+            let data = UserDefaults.standard.data(forKey: Self.legacyStorageKey),
+            let saved = try? JSONDecoder().decode(LegacySaved.self, from: data),
             saved.colors.count == 8
         {
-            colors = saved.colors
-            reliefOpacity = saved.reliefOpacity
-            reliefExaggeration = saved.reliefExaggeration
-            reliefContrast = saved.reliefContrast
-            ambientLight = saved.ambientLight
+            let migrated = MapStyleDocument(
+                id: "current",
+                name: "Übernommener Stil",
+                colors: saved.colors,
+                relief: ReliefStyle(
+                    enabled: saved.reliefOpacity > 0,
+                    opacity: saved.reliefOpacity,
+                    exaggeration: saved.reliefExaggeration,
+                    contrast: saved.reliefContrast,
+                    ambientLight: saved.ambientLight,
+                    sunAzimuthDegrees: 315
+                )
+            )
+            isApplying = true
+            assign(migrated)
+            isApplying = false
+            persistCurrent()
         }
     }
 
@@ -148,43 +207,157 @@ final class StyleSettings: ObservableObject {
         )
     }
 
-    func apply(_ preset: Preset) {
-        colors = preset.colors
-        reliefOpacity = preset.reliefOpacity
-        reliefExaggeration = preset.reliefExaggeration
-        reliefContrast = preset.reliefContrast
-        ambientLight = preset.ambientLight
+    func apply(_ document: MapStyleDocument) {
+        guard let validated = try? document.validated() else { return }
+        isApplying = true
+        assign(validated)
+        isApplying = false
+        revision &+= 1
+        persistCurrent()
+    }
+
+    func saveCurrent(named proposedName: String) {
+        let name = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            errorMessage = "Bitte zuerst einen Stilnamen eingeben."
+            return
+        }
+
+        let existing = customStyles.first { $0.name.compare(name, options: .caseInsensitive) == .orderedSame }
+        var document = currentDocument(named: name, id: existing?.id ?? "custom.\(UUID().uuidString)")
+        document.name = name
+        if let index = customStyles.firstIndex(where: { $0.id == document.id }) {
+            customStyles[index] = document
+        } else {
+            customStyles.append(document)
+        }
+        customStyles.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        activeStyleID = document.id
+        activeStyleName = document.name
+        persistCustomStyles()
+        persistCurrent()
+    }
+
+    func deleteCustomStyle(id: String) {
+        customStyles.removeAll { $0.id == id }
+        if activeStyleID == id {
+            activeStyleID = nil
+            activeStyleName = "Angepasst"
+            persistCurrent()
+        }
+        persistCustomStyles()
+    }
+
+    func importWithPanel() {
+        let panel = NSOpenPanel()
+        panel.title = "Kartenstil importieren"
+        panel.prompt = "Importieren"
+        panel.allowedContentTypes = [Self.styleContentType, .json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            var document = try MapStyleFile.read(from: url)
+            document.id = "custom.\(UUID().uuidString)"
+            if customStyles.contains(where: { $0.name.compare(document.name, options: .caseInsensitive) == .orderedSame }) {
+                document.name += " (importiert)"
+            }
+            customStyles.append(document)
+            customStyles.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            persistCustomStyles()
+            apply(document)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func exportWithPanel() {
+        let panel = NSSavePanel()
+        panel.title = "Kartenstil exportieren"
+        panel.prompt = "Exportieren"
+        panel.allowedContentTypes = [Self.styleContentType]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "\(safeFilename(activeStyleName)).topostyle"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            try MapStyleFile.write(currentDocument(named: activeStyleName), to: url)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func resetAll() {
-        colors = Self.originalColors
-        reliefOpacity = 0.50
-        reliefExaggeration = 45
-        reliefContrast = 2.5
-        ambientLight = 0.08
+        apply(Self.presets[0])
     }
 
     var renderStyle: RenderStyle {
         RenderStyle(
             colors: colors.map(\.vector),
-            reliefOpacity: Float(reliefOpacity),
+            reliefOpacity: reliefEnabled ? Float(reliefOpacity) : 0,
             reliefExaggeration: Float(reliefExaggeration),
             reliefContrast: Float(reliefContrast),
-            ambientLight: Float(ambientLight)
+            ambientLight: Float(ambientLight),
+            sunAzimuthRadians: Float(sunAzimuthDegrees * .pi / 180)
         )
     }
 
-    private func changed() {
+    var currentDocumentForExport: MapStyleDocument {
+        currentDocument(named: activeStyleName)
+    }
+
+    private func assign(_ document: MapStyleDocument) {
+        colors = document.colors
+        reliefEnabled = document.relief.enabled
+        reliefOpacity = document.relief.opacity
+        reliefExaggeration = document.relief.exaggeration
+        reliefContrast = document.relief.contrast
+        ambientLight = document.relief.ambientLight
+        sunAzimuthDegrees = document.relief.sunAzimuthDegrees
+        activeStyleID = document.id == "current" ? nil : document.id
+        activeStyleName = document.name
+    }
+
+    private func propertyChanged() {
+        guard !isApplying else { return }
+        activeStyleID = nil
+        activeStyleName = "Angepasst"
         revision &+= 1
-        let saved = Saved(
+        persistCurrent()
+    }
+
+    private func currentDocument(named name: String, id: String? = nil) -> MapStyleDocument {
+        MapStyleDocument(
+            id: id ?? activeStyleID ?? "current",
+            name: name,
             colors: colors,
-            reliefOpacity: reliefOpacity,
-            reliefExaggeration: reliefExaggeration,
-            reliefContrast: reliefContrast,
-            ambientLight: ambientLight
+            relief: ReliefStyle(
+                enabled: reliefEnabled,
+                opacity: reliefOpacity,
+                exaggeration: reliefExaggeration,
+                contrast: reliefContrast,
+                ambientLight: ambientLight,
+                sunAzimuthDegrees: sunAzimuthDegrees
+            )
         )
-        if let data = try? JSONEncoder().encode(saved) {
-            UserDefaults.standard.set(data, forKey: Self.storageKey)
+    }
+
+    private func persistCurrent() {
+        if let data = try? JSONEncoder().encode(currentDocument(named: activeStyleName)) {
+            UserDefaults.standard.set(data, forKey: Self.currentStorageKey)
         }
+    }
+
+    private func persistCustomStyles() {
+        if let data = try? JSONEncoder().encode(customStyles) {
+            UserDefaults.standard.set(data, forKey: Self.customStorageKey)
+        }
+    }
+
+    private func safeFilename(_ name: String) -> String {
+        let forbidden = CharacterSet(charactersIn: "/:\\?%*|\"<>")
+        let cleaned = name.components(separatedBy: forbidden).joined(separator: "-")
+        return cleaned.isEmpty ? "Kartenstil" : cleaned
     }
 }

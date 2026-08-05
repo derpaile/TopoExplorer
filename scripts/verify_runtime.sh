@@ -17,6 +17,7 @@ swiftc \
   -O \
   -framework AppKit \
   -framework CoreGraphics \
+  -framework CoreText \
   -framework ImageIO \
   -framework Metal \
   -framework SwiftUI \
@@ -25,8 +26,16 @@ swiftc \
   "$PROJECT_DIR/Sources/TopoExplorer/TileCache.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/MetalShader.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/StyleSettings.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/MapStyleDocument.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/MapManifest.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/MapReference.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/MapFeatures.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/MapExport.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/VectorTiles.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/RasterQueryService.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/MapSession.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/MapRenderer.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/MetalMapView.swift" \
   "$PROJECT_DIR/Tools/RuntimeVerifier.swift" \
   -o "$VERIFIER"
 

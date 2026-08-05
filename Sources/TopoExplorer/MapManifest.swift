@@ -1,6 +1,12 @@
 import Foundation
 
 struct MapManifest: Codable, Equatable {
+    struct LandcoverYear: Codable, Equatable, Identifiable {
+        let year: Int
+        let suffix: String
+        var id: Int { year }
+    }
+
     struct Level: Codable, Equatable, Identifiable {
         let z: Int
         let resolution: Double
@@ -31,6 +37,7 @@ struct MapManifest: Codable, Equatable {
     let compression: String
     let levels: [Level]
     let classes: [LandClass]
+    var landcoverYears: [LandcoverYear]? = nil
 
     var left: Double { bounds[0] }
     var bottom: Double { bounds[1] }
@@ -38,6 +45,7 @@ struct MapManifest: Codable, Equatable {
     var top: Double { bounds[3] }
     var width: Double { right - left }
     var height: Double { top - bottom }
+    var hasLandcover2020: Bool { landcoverYears?.contains(where: { $0.year == 2020 }) == true }
 
     func validated() throws -> MapManifest {
         guard version == 1 else { throw ManifestError.unsupportedVersion(version) }

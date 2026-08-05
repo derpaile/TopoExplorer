@@ -14,6 +14,8 @@
     <string>TopoExplorer</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
     <key>CFBundleVersion</key>
@@ -24,5 +26,27 @@
     <true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.json</string>
+            </array>
+            <key>UTTypeDescription</key>
+            <string>TopoExplorer-Kartenstil</string>
+            <key>UTTypeIdentifier</key>
+            <string>de.topo-explorer.style</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>topostyle</string>
+                </array>
+                <key>public.mime-type</key>
+                <string>application/vnd.topo-explorer.style+json</string>
+            </dict>
+        </dict>
+    </array>
 </dict>
 </plist>

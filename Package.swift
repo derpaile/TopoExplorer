@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "TopoExplorer",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(name: "TopoExplorer", targets: ["TopoExplorer"])
@@ -16,6 +16,9 @@ let package = Package(
             path: "Sources/TopoExplorer",
             linkerSettings: [
                 .linkedFramework("AppKit"),
+                .linkedFramework("CoreGraphics"),
+                .linkedFramework("CoreText"),
+                .linkedFramework("ImageIO"),
                 .linkedFramework("Metal"),
                 .linkedFramework("MetalKit"),
                 .linkedFramework("SwiftUI"),

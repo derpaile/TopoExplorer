@@ -11,3 +11,7 @@ Data/Raw/
 # Local runtime previews and logs.
 *.log
 *.trace
+
+# Xcode keeps personal UI state outside the reproducible project files.
+xcuserdata/
+*.xcuserstate

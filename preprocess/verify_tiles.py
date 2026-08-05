@@ -25,6 +25,7 @@ def main() -> int:
     elevation_size = tile_size + 2 * int(manifest["elevationBorder"])
     tile_count = 0
     seam_count = 0
+    has_2020 = any(item.get("year") == 2020 for item in manifest.get("landcoverYears", []))
 
     @lru_cache(maxsize=64)
     def elevation(z: int, x: int, y: int) -> np.ndarray:
@@ -42,6 +43,11 @@ def main() -> int:
                 land = np.frombuffer(zlib.decompress(land_path.read_bytes()), dtype=np.uint8)
                 if land.size != tile_size * tile_size or land.max(initial=0) > 7:
                     raise RuntimeError(f"Defekte Landkachel z{z}/{x}_{y}")
+                if has_2020:
+                    land_2020_path = root / f"z{z}" / f"{x}_{y}.land2020.z"
+                    land_2020 = np.frombuffer(zlib.decompress(land_2020_path.read_bytes()), dtype=np.uint8)
+                    if land_2020.size != tile_size * tile_size or land_2020.max(initial=0) > 7:
+                        raise RuntimeError(f"Defekte 2020-Landkachel z{z}/{x}_{y}")
                 current = elevation(z, x, y)
                 if x + 1 < tiles_x:
                     right = elevation(z, x + 1, y)
@@ -55,7 +61,8 @@ def main() -> int:
                     seam_count += 1
                 tile_count += 1
 
-    print(f"{tile_count} Kachelpaare und {seam_count} Reliefübergänge sind exakt nahtlos.")
+    suffix = " einschließlich 2020" if has_2020 else ""
+    print(f"{tile_count} Kachelpaare{suffix} und {seam_count} Reliefübergänge sind exakt nahtlos.")
     return 0
 
 

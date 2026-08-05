@@ -1,0 +1,419 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		CD485E41D9D4B2D91D35D6F8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087BD4D49CCBB61F6644EC79 /* ContentView.swift */; };
+		B8EB27A9954853E13CD463A7 /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95823F7FB89505016ED180E3 /* InspectorView.swift */; };
+		CD446BC705DF6C2F3229E40C /* MapExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BE2C7C2D6AA026D62B6A3C /* MapExport.swift */; };
+		2E09A0DA397FB41536D86DBE /* MapFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CCD0ABDF5CA7ACFF4715A13 /* MapFeatures.swift */; };
+		8C6509E4DBD082610A7453FC /* MapManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B9761A1808D3EDE1A07421D /* MapManifest.swift */; };
+		66564F1A605F2D4A3B0B2B04 /* MapReference.swift in Sources */ = {isa = PBXBuildFile; fileRef = C92469628E8F2C5044E08EF5 /* MapReference.swift */; };
+		AAE9DF664C85EAF3EC89EBB3 /* MapRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52CD081EC478B866234BEE24 /* MapRenderer.swift */; };
+		C8AADF4C4995D36FA5FB346E /* MapSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = E50CDB6CB98CCEB6E4838644 /* MapSession.swift */; };
+		C864717FE6D58AC43F3A1922 /* MapStyleDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40918B512F43C9065FF44A5D /* MapStyleDocument.swift */; };
+		B915C424AF582CE58B3086C1 /* MetalMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C5A7B39281AC0B73ACE3356 /* MetalMapView.swift */; };
+		0171A46CD21336C7919BD200 /* MetalShader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8180E1BEBB4A364DD37AC13B /* MetalShader.swift */; };
+		B8116BBA0046881601BF7ED5 /* RasterQueryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A52ED829D9D908C82FCBAE9F /* RasterQueryService.swift */; };
+		32CB61F06E996B985A426AFA /* SearchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90DE465864461936CC1DB888 /* SearchController.swift */; };
+		7EEFF3FA5434D0D9949960CE /* StyleSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DDD4BCA703704883DDCA4FD /* StyleSettings.swift */; };
+		53C350103342BD84A4E823E9 /* TileCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A938C8D96C97F192E8B317E /* TileCache.swift */; };
+		D905B4CAAC5792B4F5C54C85 /* TopoExplorerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A92E04A363DD73124C0E7E3 /* TopoExplorerApp.swift */; };
+		18897B80F7C89897A2CFBFEE /* VectorTiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = F697F9852D48B27078ECA529 /* VectorTiles.swift */; };
+		7942CC30A46874F6FA080E56 /* TopoExplorerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F966986DF050E8BEF1ADA8 /* TopoExplorerTests.swift */; };
+		A0ADEE088958E2AB2D38C4B2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3FCB359592CCBC228FA7C222 /* Assets.xcassets */; };
+		AF6FC50DCE151A4338EEFEBB /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 383AF80BBE54FC83042D0C52 /* AppKit.framework */; };
+		4A925207CEE9667500B6B1D8 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 33FF5CDD943372BC2E3E275E /* CoreGraphics.framework */; };
+		B6489AD069703777F674931A /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 63051D238B133D210099FF8D /* CoreText.framework */; };
+		C9EEF61C4F1F79F9F9C0BB79 /* ImageIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 01127B812A252208F5F5A4BB /* ImageIO.framework */; };
+		A709A6361DE12553AA2CD64E /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AFC0AB82536450E02150D8F5 /* Metal.framework */; };
+		B68BC06F4C4BDA84B6B66E87 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 39335C876A392B84D816FC3B /* MetalKit.framework */; };
+		95C4DC3F8995B200CF613572 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E83B2C70FB3DCD8D08CC3A02 /* SwiftUI.framework */; };
+		4FB23989CBF6284B9C7A192C /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D77C0599FB9EBE797D6659B /* UniformTypeIdentifiers.framework */; };
+		CD7A99B8ABBE6EE6CAD7F358 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = EB8A14B0E6B5EABE498C83C3 /* libz.tbd */; };
+		22E2BA603C2BE7B659E81620 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0E51853287F3FC2D9AFD3217 /* XCTest.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		41CA0C962AB0F3B17C35E305 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8941D38C381CA02693BE3F93 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 401D032BBC87BB86277679C8;
+			remoteInfo = TopoExplorer;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0FC47BF8E8651F1089BA43D3 /* TopoExplorer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TopoExplorer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		02723634BB64E69C13B520FE /* TopoExplorerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TopoExplorerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3FCB359592CCBC228FA7C222 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		535033033B7F7930338493E3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		55D065C4A04DF290E3175AD0 /* TopoExplorer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TopoExplorer.entitlements; sourceTree = "<group>"; };
+		087BD4D49CCBB61F6644EC79 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		95823F7FB89505016ED180E3 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
+		31BE2C7C2D6AA026D62B6A3C /* MapExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapExport.swift; sourceTree = "<group>"; };
+		0CCD0ABDF5CA7ACFF4715A13 /* MapFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapFeatures.swift; sourceTree = "<group>"; };
+		8B9761A1808D3EDE1A07421D /* MapManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapManifest.swift; sourceTree = "<group>"; };
+		C92469628E8F2C5044E08EF5 /* MapReference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapReference.swift; sourceTree = "<group>"; };
+		52CD081EC478B866234BEE24 /* MapRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapRenderer.swift; sourceTree = "<group>"; };
+		E50CDB6CB98CCEB6E4838644 /* MapSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapSession.swift; sourceTree = "<group>"; };
+		40918B512F43C9065FF44A5D /* MapStyleDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapStyleDocument.swift; sourceTree = "<group>"; };
+		5C5A7B39281AC0B73ACE3356 /* MetalMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalMapView.swift; sourceTree = "<group>"; };
+		8180E1BEBB4A364DD37AC13B /* MetalShader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalShader.swift; sourceTree = "<group>"; };
+		A52ED829D9D908C82FCBAE9F /* RasterQueryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RasterQueryService.swift; sourceTree = "<group>"; };
+		90DE465864461936CC1DB888 /* SearchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchController.swift; sourceTree = "<group>"; };
+		8DDD4BCA703704883DDCA4FD /* StyleSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleSettings.swift; sourceTree = "<group>"; };
+		5A938C8D96C97F192E8B317E /* TileCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCache.swift; sourceTree = "<group>"; };
+		4A92E04A363DD73124C0E7E3 /* TopoExplorerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopoExplorerApp.swift; sourceTree = "<group>"; };
+		F697F9852D48B27078ECA529 /* VectorTiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VectorTiles.swift; sourceTree = "<group>"; };
+		79F966986DF050E8BEF1ADA8 /* TopoExplorerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopoExplorerTests.swift; sourceTree = "<group>"; };
+		383AF80BBE54FC83042D0C52 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
+		33FF5CDD943372BC2E3E275E /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		63051D238B133D210099FF8D /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
+		01127B812A252208F5F5A4BB /* ImageIO.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ImageIO.framework; path = System/Library/Frameworks/ImageIO.framework; sourceTree = SDKROOT; };
+		AFC0AB82536450E02150D8F5 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		39335C876A392B84D816FC3B /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		E83B2C70FB3DCD8D08CC3A02 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		4D77C0599FB9EBE797D6659B /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
+		0E51853287F3FC2D9AFD3217 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		EB8A14B0E6B5EABE498C83C3 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.text-based-dylib-definition; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F001BC2AF9EB5498B3360756 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AF6FC50DCE151A4338EEFEBB /* AppKit.framework in Frameworks */,
+				4A925207CEE9667500B6B1D8 /* CoreGraphics.framework in Frameworks */,
+				B6489AD069703777F674931A /* CoreText.framework in Frameworks */,
+				C9EEF61C4F1F79F9F9C0BB79 /* ImageIO.framework in Frameworks */,
+				A709A6361DE12553AA2CD64E /* Metal.framework in Frameworks */,
+				B68BC06F4C4BDA84B6B66E87 /* MetalKit.framework in Frameworks */,
+				95C4DC3F8995B200CF613572 /* SwiftUI.framework in Frameworks */,
+				4FB23989CBF6284B9C7A192C /* UniformTypeIdentifiers.framework in Frameworks */,
+				CD7A99B8ABBE6EE6CAD7F358 /* libz.tbd in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6B208DB47DA230159E08E40 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				22E2BA603C2BE7B659E81620 /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		DF891E785808226D241F246E = {
+			isa = PBXGroup;
+			children = (
+				9642F1047C1002A1EE72F0DB /* TopoExplorer */ ,
+				EEFE21A1443933CA4DE017DA /* TopoExplorerTests */ ,
+				CF8D0BD4B75E8C2C174692A5 /* app */ ,
+				ED2F3B048716C9DC7573911C /* Frameworks */ ,
+				00C45FD35CB0F9C5F764F070 /* Products */ ,
+			);
+			sourceTree = "<group>";
+		};
+		9642F1047C1002A1EE72F0DB /* TopoExplorer */ = {
+			isa = PBXGroup;
+			children = (
+				087BD4D49CCBB61F6644EC79 /* ContentView.swift */,
+				95823F7FB89505016ED180E3 /* InspectorView.swift */,
+				31BE2C7C2D6AA026D62B6A3C /* MapExport.swift */,
+				0CCD0ABDF5CA7ACFF4715A13 /* MapFeatures.swift */,
+				8B9761A1808D3EDE1A07421D /* MapManifest.swift */,
+				C92469628E8F2C5044E08EF5 /* MapReference.swift */,
+				52CD081EC478B866234BEE24 /* MapRenderer.swift */,
+				E50CDB6CB98CCEB6E4838644 /* MapSession.swift */,
+				40918B512F43C9065FF44A5D /* MapStyleDocument.swift */,
+				5C5A7B39281AC0B73ACE3356 /* MetalMapView.swift */,
+				8180E1BEBB4A364DD37AC13B /* MetalShader.swift */,
+				A52ED829D9D908C82FCBAE9F /* RasterQueryService.swift */,
+				90DE465864461936CC1DB888 /* SearchController.swift */,
+				8DDD4BCA703704883DDCA4FD /* StyleSettings.swift */,
+				5A938C8D96C97F192E8B317E /* TileCache.swift */,
+				4A92E04A363DD73124C0E7E3 /* TopoExplorerApp.swift */,
+				F697F9852D48B27078ECA529 /* VectorTiles.swift */,
+			);
+			path = Sources/TopoExplorer;
+			sourceTree = "<group>";
+		};
+		EEFE21A1443933CA4DE017DA /* TopoExplorerTests */ = {
+			isa = PBXGroup;
+			children = (
+				79F966986DF050E8BEF1ADA8 /* TopoExplorerTests.swift */,
+			);
+			path = Tests/TopoExplorerTests;
+			sourceTree = "<group>";
+		};
+		CF8D0BD4B75E8C2C174692A5 /* app */ = {
+			isa = PBXGroup;
+			children = (3FCB359592CCBC228FA7C222 /* Assets.xcassets */, 535033033B7F7930338493E3 /* Info.plist */, 55D065C4A04DF290E3175AD0 /* TopoExplorer.entitlements */);
+			path = app;
+			sourceTree = "<group>";
+		};
+		ED2F3B048716C9DC7573911C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				383AF80BBE54FC83042D0C52 /* AppKit.framework */,
+				33FF5CDD943372BC2E3E275E /* CoreGraphics.framework */,
+				63051D238B133D210099FF8D /* CoreText.framework */,
+				01127B812A252208F5F5A4BB /* ImageIO.framework */,
+				AFC0AB82536450E02150D8F5 /* Metal.framework */,
+				39335C876A392B84D816FC3B /* MetalKit.framework */,
+				E83B2C70FB3DCD8D08CC3A02 /* SwiftUI.framework */,
+				4D77C0599FB9EBE797D6659B /* UniformTypeIdentifiers.framework */,
+				0E51853287F3FC2D9AFD3217 /* XCTest.framework */,
+				EB8A14B0E6B5EABE498C83C3 /* libz.tbd */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		00C45FD35CB0F9C5F764F070 /* Products */ = {
+			isa = PBXGroup;
+			children = (0FC47BF8E8651F1089BA43D3 /* TopoExplorer.app */, 02723634BB64E69C13B520FE /* TopoExplorerTests.xctest */);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		401D032BBC87BB86277679C8 /* TopoExplorer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6999223B144664B5601B7EE0 /* Build configuration list for PBXNativeTarget "TopoExplorer" */;
+			buildPhases = (8682261519D15BD64A9E5D31 /* Sources */, F001BC2AF9EB5498B3360756 /* Frameworks */, E28FAD8F60ECDED9B4AD087A /* Resources */);
+			buildRules = ();
+			dependencies = ();
+			name = TopoExplorer;
+			productName = TopoExplorer;
+			productReference = 0FC47BF8E8651F1089BA43D3 /* TopoExplorer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		9735C25A90A483A2E88187B6 /* TopoExplorerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 82A4B6F3DEB17576E838F4C6 /* Build configuration list for PBXNativeTarget "TopoExplorerTests" */;
+			buildPhases = (29BEEA3D856852A8CC3247ED /* Sources */, D6B208DB47DA230159E08E40 /* Frameworks */);
+			buildRules = ();
+			dependencies = (7C76F2783C7F6214CCEC5BA1 /* PBXTargetDependency */);
+			name = TopoExplorerTests;
+			productName = TopoExplorerTests;
+			productReference = 02723634BB64E69C13B520FE /* TopoExplorerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8941D38C381CA02693BE3F93 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					401D032BBC87BB86277679C8 = {CreatedOnToolsVersion = 16.0; };
+					9735C25A90A483A2E88187B6 = {CreatedOnToolsVersion = 16.0; TestTargetID = 401D032BBC87BB86277679C8; };
+				};
+			};
+			buildConfigurationList = FCBE72429C0B1B8B87DC8CC9 /* Build configuration list for PBXProject "TopoExplorer" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (de, en, Base);
+			mainGroup = DF891E785808226D241F246E;
+			productRefGroup = 00C45FD35CB0F9C5F764F070 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (401D032BBC87BB86277679C8 /* TopoExplorer */, 9735C25A90A483A2E88187B6 /* TopoExplorerTests */);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E28FAD8F60ECDED9B4AD087A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (A0ADEE088958E2AB2D38C4B2 /* Assets.xcassets in Resources */);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8682261519D15BD64A9E5D31 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CD485E41D9D4B2D91D35D6F8 /* ContentView.swift in Sources */,
+				B8EB27A9954853E13CD463A7 /* InspectorView.swift in Sources */,
+				CD446BC705DF6C2F3229E40C /* MapExport.swift in Sources */,
+				2E09A0DA397FB41536D86DBE /* MapFeatures.swift in Sources */,
+				8C6509E4DBD082610A7453FC /* MapManifest.swift in Sources */,
+				66564F1A605F2D4A3B0B2B04 /* MapReference.swift in Sources */,
+				AAE9DF664C85EAF3EC89EBB3 /* MapRenderer.swift in Sources */,
+				C8AADF4C4995D36FA5FB346E /* MapSession.swift in Sources */,
+				C864717FE6D58AC43F3A1922 /* MapStyleDocument.swift in Sources */,
+				B915C424AF582CE58B3086C1 /* MetalMapView.swift in Sources */,
+				0171A46CD21336C7919BD200 /* MetalShader.swift in Sources */,
+				B8116BBA0046881601BF7ED5 /* RasterQueryService.swift in Sources */,
+				32CB61F06E996B985A426AFA /* SearchController.swift in Sources */,
+				7EEFF3FA5434D0D9949960CE /* StyleSettings.swift in Sources */,
+				53C350103342BD84A4E823E9 /* TileCache.swift in Sources */,
+				D905B4CAAC5792B4F5C54C85 /* TopoExplorerApp.swift in Sources */,
+				18897B80F7C89897A2CFBFEE /* VectorTiles.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		29BEEA3D856852A8CC3247ED /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7942CC30A46874F6FA080E56 /* TopoExplorerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7C76F2783C7F6214CCEC5BA1 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 401D032BBC87BB86277679C8 /* TopoExplorer */; targetProxy = 41CA0C962AB0F3B17C35E305 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		877A6BA951A2EA0025A2ABE8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		959134B361DD7E21ADEA3164 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		3CF6A4F2E05B3AAE7E2CBFEE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = app/TopoExplorer.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = app/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lz",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.pauli.TopoExplorer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		23FB2CAEB38545C3793097DD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = app/TopoExplorer.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = app/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lz",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.pauli.TopoExplorer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+		B41A663912C5AD2A1D96567A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = de.pauli.TopoExplorerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TopoExplorer.app/Contents/MacOS/TopoExplorer";
+			};
+			name = Debug;
+		};
+		116C7F1B65D647B9F0FAA412 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = de.pauli.TopoExplorerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TopoExplorer.app/Contents/MacOS/TopoExplorer";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		FCBE72429C0B1B8B87DC8CC9 /* Build configuration list for PBXProject "TopoExplorer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (877A6BA951A2EA0025A2ABE8 /* Debug */, 959134B361DD7E21ADEA3164 /* Release */);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6999223B144664B5601B7EE0 /* Build configuration list for PBXNativeTarget "TopoExplorer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (3CF6A4F2E05B3AAE7E2CBFEE /* Debug */, 23FB2CAEB38545C3793097DD /* Release */);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		82A4B6F3DEB17576E838F4C6 /* Build configuration list for PBXNativeTarget "TopoExplorerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (B41A663912C5AD2A1D96567A /* Debug */, 116C7F1B65D647B9F0FAA412 /* Release */);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8941D38C381CA02693BE3F93 /* Project object */;
+}

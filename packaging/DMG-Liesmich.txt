@@ -1,0 +1,9 @@
+TopoExplorer für macOS
+
+1. TopoExplorer nach „Applications“ ziehen.
+2. Die App starten.
+3. „Kartendaten wählen“ anklicken und den erzeugten Ordner
+   MapData/Germany oder dessen übergeordneten MapData-Ordner wählen.
+
+Die Kartendaten sind wegen ihrer Größe nicht Bestandteil der App. Ihre
+Erzeugung und Bedienung sind in Bedienungsanleitung.md beschrieben.

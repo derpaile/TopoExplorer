@@ -5,9 +5,31 @@ import SwiftUI
 final class MapCanvasView: MTKView {
     weak var mapRenderer: MapRenderer?
     private var lastDragPoint: CGPoint?
+    private var pointerTrackingArea: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let pointerTrackingArea { removeTrackingArea(pointerTrackingArea) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.activeInKeyWindow, .mouseMoved, .mouseEnteredAndExited, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        pointerTrackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        mapRenderer?.inspect(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        mapRenderer?.clearInspection()
+    }
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
@@ -56,10 +78,14 @@ struct MetalMapView: NSViewRepresentable {
     let manifest: MapManifest
     let dataDirectory: URL
     @ObservedObject var style: StyleSettings
+    @ObservedObject var layers: LayerSettings
+    @ObservedObject var comparison: ComparisonSettings
+    @ObservedObject var export: MapExportController
     @ObservedObject var viewport: ViewportController
 
     final class Coordinator {
         var renderer: MapRenderer?
+        var lastExportID = -1
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -75,9 +101,17 @@ struct MetalMapView: NSViewRepresentable {
             manifest: manifest,
             dataDirectory: dataDirectory,
             style: style.renderStyle,
+            layers: layers.renderLayers,
+            comparison: comparison.renderComparison,
             fitToken: viewport.fitToken,
-            referenceToken: viewport.referenceToken,
-            reference: viewport.activeReference
+            navigationToken: viewport.navigationToken,
+            target: viewport.target
         )
+        if let request = export.request, request.id != context.coordinator.lastExportID {
+            context.coordinator.lastExportID = request.id
+            context.coordinator.renderer?.export(request) { result in
+                export.finish(result)
+            }
+        }
     }
 }

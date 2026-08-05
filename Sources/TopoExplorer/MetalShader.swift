@@ -18,6 +18,39 @@ enum MetalShader {
         float exaggeration;
         float contrast;
         float ambient;
+        float azimuth;
+        float padding0;
+        float padding1;
+        float padding2;
+    };
+
+    struct ComparisonUniforms {
+        uint mode;
+        float splitPosition;
+        float drawableWidth;
+        float padding;
+    };
+
+    struct VectorSegment {
+        short2 start;
+        short2 end;
+        uint attributes;
+    };
+
+    struct VectorUniforms {
+        // Tile origin (top-left), tile span and quantization extent in view points.
+        float4 tile;
+        // Viewport width and height in points.
+        float4 viewport;
+        uint layer;
+        uint pass;
+        uint zoom;
+        uint padding;
+    };
+
+    struct VectorOut {
+        float4 position [[position]];
+        float4 color;
     };
 
     vertex RasterOut tileVertex(
@@ -32,18 +65,26 @@ enum MetalShader {
 
     fragment float4 tileFragment(
         RasterOut in [[stage_in]],
-        texture2d<uint, access::read> landcover [[texture(0)]],
+        texture2d<uint, access::read> landcover2015 [[texture(0)]],
         texture2d<float, access::sample> elevation [[texture(1)]],
+        texture2d<uint, access::read> landcover2020 [[texture(2)]],
         constant float4 *palette [[buffer(0)]],
-        constant ReliefUniforms &relief [[buffer(1)]])
+        constant ReliefUniforms &relief [[buffer(1)]],
+        constant ComparisonUniforms &comparison [[buffer(2)]])
     {
-        uint landWidth = landcover.get_width();
-        uint landHeight = landcover.get_height();
+        uint landWidth = landcover2015.get_width();
+        uint landHeight = landcover2015.get_height();
         uint2 classPosition = min(
             uint2(in.uv * float2(landWidth, landHeight)),
             uint2(landWidth - 1, landHeight - 1)
         );
-        uint classIndex = min(landcover.read(classPosition).r, 7u);
+        bool use2020 = comparison.mode == 1u
+            || (comparison.mode == 2u
+                && in.position.x >= comparison.splitPosition * comparison.drawableWidth);
+        uint classIndex = min(
+            use2020 ? landcover2020.read(classPosition).r : landcover2015.read(classPosition).r,
+            7u
+        );
         float4 base = palette[classIndex];
         if (classIndex == 0u) {
             return float4(base.rgb, 1.0);
@@ -63,8 +104,8 @@ enum MetalShader {
         float3 normal = normalize(float3(-dzdx, -dzdy, 1.0));
 
         constexpr float altitude = 0.6108652382;
-        constexpr float azimuthOne = 5.4977871438;
-        constexpr float azimuthTwo = 2.3561944902;
+        float azimuthOne = relief.azimuth;
+        float azimuthTwo = fmod(relief.azimuth + M_PI_F, 2.0 * M_PI_F);
         float3 lightOne = normalize(float3(
             sin(azimuthOne) * cos(altitude),
             -cos(azimuthOne) * cos(altitude),
@@ -83,6 +124,76 @@ enum MetalShader {
         float reliefGray = clamp((1.0 - shade) + relief.ambient, 0.0, 1.0);
         float3 composed = mix(base.rgb, float3(reliefGray), relief.opacity);
         return float4(composed, 1.0);
+    }
+
+    float vectorCoreWidth(uint layer, uint kind)
+    {
+        if (layer == 1u) {
+            return kind <= 1u ? 2.8 : (kind <= 3u ? 2.1 : (kind <= 5u ? 1.5 : 1.0));
+        }
+        if (layer == 2u) return kind <= 2u ? 1.5 : 1.0;
+        if (layer == 3u) return kind <= 2u ? 1.8 : 1.1;
+        return kind == 1u ? 2.0 : (kind == 2u ? 1.4 : 0.8);
+    }
+
+    float4 vectorCoreColor(uint layer, uint kind)
+    {
+        if (layer == 1u) return float4(0.08, 0.06, 0.05, 0.88);
+        if (layer == 2u) return float4(0.05, 0.04, 0.05, 0.86);
+        if (layer == 3u) return float4(0.02, 0.30, 0.82, 0.92);
+        return float4(0.96, 0.96, 0.94, kind <= 2u ? 0.72 : 0.42);
+    }
+
+    float4 vectorCasingColor(uint layer, uint kind)
+    {
+        if (layer == 1u) {
+            return kind == 1u
+                ? float4(0.00, 0.36, 0.95, 0.95)
+                : float4(1.00, 0.75, 0.00, 0.90);
+        }
+        if (layer == 2u) return float4(0.92, 0.92, 0.88, 0.50);
+        return float4(0.05, 0.05, 0.05, 0.32);
+    }
+
+    vertex VectorOut vectorVertex(
+        uint vertexID [[vertex_id]],
+        uint instanceID [[instance_id]],
+        const device VectorSegment *segments [[buffer(0)]],
+        constant VectorUniforms &uniforms [[buffer(1)]])
+    {
+        constexpr uint endpoint[6] = {0u, 0u, 1u, 0u, 1u, 1u};
+        constexpr float side[6] = {1.0, -1.0, -1.0, 1.0, -1.0, 1.0};
+        VectorSegment segment = segments[instanceID];
+        uint kind = segment.attributes & 0xffu;
+        uint minimumZoom = (segment.attributes >> 8) & 0xffu;
+        float scale = uniforms.tile.z / uniforms.tile.w;
+        float2 a = uniforms.tile.xy + float2(segment.start) * scale;
+        float2 b = uniforms.tile.xy + float2(segment.end) * scale;
+        float2 delta = b - a;
+        float segmentLength = max(length(delta), 0.0001);
+        float width = vectorCoreWidth(uniforms.layer, kind);
+        float4 color = vectorCoreColor(uniforms.layer, kind);
+        if (uniforms.pass == 0u) {
+            width += 1.6;
+            color = vectorCasingColor(uniforms.layer, kind);
+        }
+        float2 normal = float2(-delta.y, delta.x) / segmentLength * (width * 0.5);
+        float2 point = (endpoint[vertexID] == 0u ? a : b) + normal * side[vertexID];
+        float2 clip = float2(
+            point.x / uniforms.viewport.x * 2.0 - 1.0,
+            1.0 - point.y / uniforms.viewport.y * 2.0
+        );
+        VectorOut out;
+        out.position = minimumZoom <= uniforms.zoom
+            ? float4(clip, 0.0, 1.0)
+            : float4(2.0, 2.0, 0.0, 1.0);
+        out.color = color;
+        return out;
+    }
+
+    fragment float4 vectorFragment(VectorOut in [[stage_in]])
+    {
+        return in.color;
     }
     """#
 }

@@ -5,6 +5,11 @@ struct TopoExplorerApp: App {
     @StateObject private var session = MapSession()
     @StateObject private var style = StyleSettings()
     @StateObject private var viewport = ViewportController()
+    @StateObject private var layers = LayerSettings()
+    @StateObject private var comparison = ComparisonSettings()
+    @StateObject private var search = SearchController()
+    @StateObject private var bookmarks = BookmarkStore()
+    @StateObject private var export = MapExportController()
 
     var body: some Scene {
         WindowGroup {
@@ -12,6 +17,11 @@ struct TopoExplorerApp: App {
                 .environmentObject(session)
                 .environmentObject(style)
                 .environmentObject(viewport)
+                .environmentObject(layers)
+                .environmentObject(comparison)
+                .environmentObject(search)
+                .environmentObject(bookmarks)
+                .environmentObject(export)
         }
         .windowStyle(.titleBar)
         .commands {
