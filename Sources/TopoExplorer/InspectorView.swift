@@ -11,7 +11,7 @@ struct InspectorView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Farben")
                         .font(.title2.weight(.semibold))
-                    Text("Alle Änderungen erscheinen direkt auf der Karte.")
+                    Text("Ein Preset setzt Farben und Relief vollständig.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

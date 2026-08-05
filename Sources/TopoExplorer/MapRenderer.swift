@@ -33,6 +33,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     private var pixelsPerMeter = 0.001
     private var needsFit = true
     private var lastFitToken = -1
+    private var lastReferenceToken = -1
+    private var pendingReference: MapReference?
 
     init?(view: MapCanvasView, manifest: MapManifest, viewport: ViewportController) {
         guard
@@ -72,7 +74,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         manifest newManifest: MapManifest,
         dataDirectory newDirectory: URL,
         style newStyle: RenderStyle,
-        fitToken: Int
+        fitToken: Int,
+        referenceToken: Int,
+        reference: MapReference?
     ) {
         let dataChanged = manifest != newManifest || dataDirectory?.standardizedFileURL != newDirectory.standardizedFileURL
         if dataChanged {
@@ -92,6 +96,12 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         if fitToken != lastFitToken {
             lastFitToken = fitToken
             needsFit = true
+            pendingReference = nil
+        }
+        if referenceToken != lastReferenceToken {
+            lastReferenceToken = referenceToken
+            pendingReference = reference
+            needsFit = false
         }
         requestDraw()
     }
@@ -106,7 +116,10 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             view.bounds.height > 1
         else { return }
 
-        if needsFit {
+        if let reference = pendingReference {
+            focus(reference)
+            pendingReference = nil
+        } else if needsFit {
             fit(manifest, in: view.bounds.size)
             needsFit = false
         }
@@ -194,6 +207,13 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         centerX = (manifest.left + manifest.right) / 2
         centerY = (manifest.bottom + manifest.top) / 2
         pixelsPerMeter = fitScale(manifest, in: size)
+    }
+
+    private func focus(_ reference: MapReference) {
+        centerX = reference.centerX
+        centerY = reference.centerY
+        pixelsPerMeter = 1 / reference.metersPerPoint
+        constrainCenter()
     }
 
     private func fitScale(_ manifest: MapManifest, in size: CGSize) -> Double {

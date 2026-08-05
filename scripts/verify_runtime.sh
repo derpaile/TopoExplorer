@@ -25,6 +25,8 @@ swiftc \
   "$PROJECT_DIR/Sources/TopoExplorer/TileCache.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/MetalShader.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/StyleSettings.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/MapManifest.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/MapReference.swift" \
   "$PROJECT_DIR/Tools/RuntimeVerifier.swift" \
   -o "$VERIFIER"
 
@@ -33,4 +35,4 @@ if [[ "${TOPO_VERIFY_BUILD_ONLY:-0}" == "1" ]]; then
 fi
 
 cd "$PROJECT_DIR"
-exec "$VERIFIER" "${1:-MapData/Germany}"
+exec "$VERIFIER" "${@:-MapData/Germany}"

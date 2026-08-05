@@ -157,6 +157,50 @@ def read_land_tile(path: Path) -> np.ndarray:
     return np.frombuffer(payload, dtype=np.uint8).reshape((TILE_SIZE, TILE_SIZE))
 
 
+def read_elevation_tile(path: Path) -> np.ndarray:
+    payload = zlib.decompress(path.read_bytes())
+    size = TILE_SIZE + 2
+    expected = size * size * 2
+    if len(payload) != expected:
+        raise RuntimeError(f"Defekte Höhenkachel: {path}")
+    return np.frombuffer(payload, dtype="<u2").reshape((size, size)).copy()
+
+
+def stitch_elevation_edges(output: Path, level: Level, compression: int) -> None:
+    """Copy canonical interior samples into adjacent DEM borders.
+
+    GDAL may round a bilinear value differently when overlapping windows are
+    requested separately. Canonical borders make central derivatives identical
+    on both sides of every tile boundary.
+    """
+    directory = output / f"z{level.z}"
+    for tile_y in range(level.tilesY):
+        for tile_x in range(level.tilesX - 1):
+            left_path = directory / f"{tile_x}_{tile_y}.elev.z"
+            right_path = directory / f"{tile_x + 1}_{tile_y}.elev.z"
+            left_tile = read_elevation_tile(left_path)
+            right_tile = read_elevation_tile(right_path)
+            left_interior = left_tile[:, -2].copy()
+            right_interior = right_tile[:, 1].copy()
+            right_tile[:, 0] = left_interior
+            left_tile[:, -1] = right_interior
+            write_compressed(left_path, left_tile.tobytes(order="C"), compression)
+            write_compressed(right_path, right_tile.tobytes(order="C"), compression)
+
+    for tile_y in range(level.tilesY - 1):
+        for tile_x in range(level.tilesX):
+            top_path = directory / f"{tile_x}_{tile_y}.elev.z"
+            bottom_path = directory / f"{tile_x}_{tile_y + 1}.elev.z"
+            top_tile = read_elevation_tile(top_path)
+            bottom_tile = read_elevation_tile(bottom_path)
+            top_interior = top_tile[-2, :].copy()
+            bottom_interior = bottom_tile[1, :].copy()
+            bottom_tile[0, :] = top_interior
+            top_tile[-1, :] = bottom_interior
+            write_compressed(top_path, top_tile.tobytes(order="C"), compression)
+            write_compressed(bottom_path, bottom_tile.tobytes(order="C"), compression)
+
+
 def derive_land_tile(output: Path, child_z: int, tile_x: int, tile_y: int) -> np.ndarray:
     children = np.zeros((TILE_SIZE * 2, TILE_SIZE * 2), dtype=np.uint8)
     child_dir = output / f"z{child_z}"
@@ -309,6 +353,8 @@ def main() -> int:
                     done += 1
                     show_progress(done, total_tiles, started)
 
+        stitch_elevation_edges(output, finest, args.compression)
+
         # Coarser land-cover levels come from the already-created child tiles.
         # The much smaller DEM can still be sampled directly for smooth relief.
         for level in reversed(levels[:-1]):
@@ -353,6 +399,8 @@ def main() -> int:
 
                         done += 1
                         show_progress(done, total_tiles, started)
+
+            stitch_elevation_edges(output, level, args.compression)
 
     manifest = manifest_for(bounds, levels)
     manifest["generatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

@@ -8,6 +8,7 @@ Native macOS-Karte für die vorhandenen Deutschlanddaten. Die App lädt nur sich
 - `preprocess/`: fensterweise Kachelerzeugung
 - `Data/Raw/`: lokale Quelldaten, nach Datentyp geordnet und nicht in Git
 - `MapData/Germany/`: erzeugte Deutschland-Kacheln, nicht in Git
+- `References/`: kleine, reproduzierbare Bildreferenzen für fünf Landschaftstypen
 - `scripts/`: Build, Aufbereitung und Laufzeitprüfung
 
 ## Kartendaten einmalig erzeugen
@@ -47,5 +48,14 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - `+` / `-`: zoomen
 - Farbflächen rechts: Farben sofort ändern
 - Reliefregler: Stärke, Überhöhung und Kontrast ändern
+- Referenzansichten: Harz, Alpen, Küste, Ruhrgebiet und Flachland direkt anspringen
 
 Die gewählten Farben und Reliefwerte werden dauerhaft lokal gespeichert.
+
+## Bildqualität prüfen
+
+```sh
+./scripts/verify_image_quality.sh
+```
+
+Die Prüfung validiert alle Kacheldaten, vergleicht jeden überlappenden Relief-Kachelrand bytegenau und rendert die fünf Referenzansichten erneut.

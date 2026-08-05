@@ -18,16 +18,20 @@ private struct PreviewRelief {
 
 @main
 struct RuntimeVerifier {
-    static func main() throws {
-        let root = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "MapData/Germany")
-        let level = root.appendingPathComponent("z0")
-        let packedLand = try Data(contentsOf: level.appendingPathComponent("0_0.land.z"))
-        let packedElevation = try Data(contentsOf: level.appendingPathComponent("0_0.elev.z"))
-        guard
-            let land = ZlibDecoder.decode(packedLand, expectedSize: 512 * 512),
-            let elevation = ZlibDecoder.decode(packedElevation, expectedSize: 514 * 514 * 2)
-        else { throw VerificationError.decompression }
+    private static let outputWidth = 960
+    private static let outputHeight = 640
 
+    static func main() throws {
+        let arguments = Array(CommandLine.arguments.dropFirst())
+        let root = URL(fileURLWithPath: arguments.first ?? "MapData/Germany", isDirectory: true)
+        let outputDirectory = URL(
+            fileURLWithPath: arguments.dropFirst().first ?? "References/Generated",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+
+        let manifestData = try Data(contentsOf: root.appendingPathComponent("manifest.json"))
+        let manifest = try JSONDecoder().decode(MapManifest.self, from: manifestData).validated()
         guard
             let device = MTLCreateSystemDefaultDevice(),
             let queue = device.makeCommandQueue(),
@@ -41,50 +45,61 @@ struct RuntimeVerifier {
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
         let pipeline = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        let palette = [
+            "#000000", "#FF1111", "#FFD700", "#228B22",
+            "#006400", "#98FB98", "#32CD32", "#0066CC",
+        ].map { RGBAColor(hex: $0).vector }
 
-        let landTexture = try texture(
-            device: device,
-            format: .r8Uint,
-            width: 512,
-            height: 512,
-            bytes: land,
-            bytesPerRow: 512
-        )
-        let elevationTexture = try texture(
-            device: device,
-            format: .r16Unorm,
-            width: 514,
-            height: 514,
-            bytes: elevation,
-            bytesPerRow: 514 * 2
-        )
+        for reference in MapReference.all {
+            let outputURL = outputDirectory.appendingPathComponent("\(reference.id).png")
+            try render(
+                reference,
+                root: root,
+                manifest: manifest,
+                device: device,
+                queue: queue,
+                pipeline: pipeline,
+                palette: palette,
+                outputURL: outputURL
+            )
+            print("Referenz \(reference.name): \(outputURL.path)")
+        }
+        print("Kacheldekompression, Metal-Shader und fünf Referenzbilder OK.")
+    }
 
-        let outputWidth = 468
-        let outputHeight = 564
+    private static func render(
+        _ reference: MapReference,
+        root: URL,
+        manifest: MapManifest,
+        device: MTLDevice,
+        queue: MTLCommandQueue,
+        pipeline: MTLRenderPipelineState,
+        palette: [SIMD4<Float>],
+        outputURL: URL
+    ) throws {
+        let level = manifest.levels.min {
+            abs(log2($0.resolution / reference.metersPerPoint))
+                < abs(log2($1.resolution / reference.metersPerPoint))
+        } ?? manifest.levels[0]
+        let pixelsPerMeter = 1 / reference.metersPerPoint
+        let halfWidth = Double(outputWidth) / (2 * pixelsPerMeter)
+        let halfHeight = Double(outputHeight) / (2 * pixelsPerMeter)
+        let tileMeters = Double(manifest.tileSize) * level.resolution
+        let minX = max(0, Int(floor((reference.centerX - halfWidth - manifest.left) / tileMeters)))
+        let maxX = min(level.tilesX - 1, Int(floor((reference.centerX + halfWidth - manifest.left) / tileMeters)))
+        let minY = max(0, Int(floor((manifest.top - reference.centerY - halfHeight) / tileMeters)))
+        let maxY = min(level.tilesY - 1, Int(floor((manifest.top - reference.centerY + halfHeight) / tileMeters)))
+        guard minX <= maxX, minY <= maxY else { throw VerificationError.outsideMap }
+
         let outputDescriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm,
             width: outputWidth,
             height: outputHeight,
             mipmapped: false
         )
-        outputDescriptor.usage = [.renderTarget]
+        outputDescriptor.usage = .renderTarget
         outputDescriptor.storageMode = .shared
         guard let output = device.makeTexture(descriptor: outputDescriptor) else { throw VerificationError.metal }
-
-        let uvMax = SIMD2<Float>(234.0 / 512.0, 282.0 / 512.0)
-        let vertices = [
-            PreviewVertex(position: [-1, 1], uv: [0, 0]),
-            PreviewVertex(position: [-1, -1], uv: [0, uvMax.y]),
-            PreviewVertex(position: [1, -1], uv: [uvMax.x, uvMax.y]),
-            PreviewVertex(position: [-1, 1], uv: [0, 0]),
-            PreviewVertex(position: [1, -1], uv: [uvMax.x, uvMax.y]),
-            PreviewVertex(position: [1, 1], uv: [uvMax.x, 0]),
-        ]
-        let palette = [
-            "#000000", "#FF1111", "#FFD700", "#228B22",
-            "#006400", "#98FB98", "#32CD32", "#0066CC",
-        ].map { RGBAColor(hex: $0).vector }
-        var relief = PreviewRelief()
 
         let pass = MTLRenderPassDescriptor()
         pass.colorAttachments[0].texture = output
@@ -96,12 +111,75 @@ struct RuntimeVerifier {
             let encoder = command.makeRenderCommandEncoder(descriptor: pass)
         else { throw VerificationError.metal }
         encoder.setRenderPipelineState(pipeline)
-        vertices.withUnsafeBytes { encoder.setVertexBytes($0.baseAddress!, length: $0.count, index: 0) }
         palette.withUnsafeBytes { encoder.setFragmentBytes($0.baseAddress!, length: $0.count, index: 0) }
+        var relief = PreviewRelief()
         encoder.setFragmentBytes(&relief, length: MemoryLayout<PreviewRelief>.stride, index: 1)
-        encoder.setFragmentTexture(landTexture, index: 0)
-        encoder.setFragmentTexture(elevationTexture, index: 1)
-        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertices.count)
+
+        var retainedTextures: [MTLTexture] = []
+        for y in minY...maxY {
+            for x in minX...maxX {
+                let directory = root.appendingPathComponent("z\(level.z)", isDirectory: true)
+                let name = "\(x)_\(y)"
+                let packedLand = try Data(contentsOf: directory.appendingPathComponent("\(name).land.z"))
+                let packedElevation = try Data(contentsOf: directory.appendingPathComponent("\(name).elev.z"))
+                guard
+                    let land = ZlibDecoder.decode(
+                        packedLand,
+                        expectedSize: manifest.tileSize * manifest.tileSize
+                    ),
+                    let elevation = ZlibDecoder.decode(
+                        packedElevation,
+                        expectedSize: (manifest.tileSize + 2) * (manifest.tileSize + 2) * 2
+                    )
+                else { throw VerificationError.decompression }
+                let landTexture = try texture(
+                    device: device,
+                    format: .r8Uint,
+                    width: manifest.tileSize,
+                    height: manifest.tileSize,
+                    bytes: land,
+                    bytesPerRow: manifest.tileSize
+                )
+                let elevationTexture = try texture(
+                    device: device,
+                    format: .r16Unorm,
+                    width: manifest.tileSize + 2,
+                    height: manifest.tileSize + 2,
+                    bytes: elevation,
+                    bytesPerRow: (manifest.tileSize + 2) * 2
+                )
+                retainedTextures.append(contentsOf: [landTexture, elevationTexture])
+
+                let left = manifest.left + Double(x) * tileMeters
+                let right = left + tileMeters
+                let top = manifest.top - Double(y) * tileMeters
+                let bottom = top - tileMeters
+                func normalizedX(_ world: Double) -> Float {
+                    Float((world - reference.centerX) * pixelsPerMeter / (Double(outputWidth) / 2))
+                }
+                func normalizedY(_ world: Double) -> Float {
+                    Float((world - reference.centerY) * pixelsPerMeter / (Double(outputHeight) / 2))
+                }
+                let x0 = normalizedX(left)
+                let x1 = normalizedX(right)
+                let y0 = normalizedY(bottom)
+                let y1 = normalizedY(top)
+                let vertices = [
+                    PreviewVertex(position: [x0, y1], uv: [0, 0]),
+                    PreviewVertex(position: [x0, y0], uv: [0, 1]),
+                    PreviewVertex(position: [x1, y0], uv: [1, 1]),
+                    PreviewVertex(position: [x0, y1], uv: [0, 0]),
+                    PreviewVertex(position: [x1, y0], uv: [1, 1]),
+                    PreviewVertex(position: [x1, y1], uv: [1, 0]),
+                ]
+                vertices.withUnsafeBytes {
+                    encoder.setVertexBytes($0.baseAddress!, length: $0.count, index: 0)
+                }
+                encoder.setFragmentTexture(landTexture, index: 0)
+                encoder.setFragmentTexture(elevationTexture, index: 1)
+                encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertices.count)
+            }
+        }
         encoder.endEncoding()
         command.commit()
         command.waitUntilCompleted()
@@ -116,9 +194,8 @@ struct RuntimeVerifier {
                 mipmapLevel: 0
             )
         }
-        let preview = URL(fileURLWithPath: "/tmp/topo-explorer-preview.png")
-        try writePNG(pixels, width: outputWidth, height: outputHeight, to: preview)
-        print("Kacheldekompression, Metal-Shader und Vorschaubild OK: \(preview.path)")
+        try writePNG(pixels, width: outputWidth, height: outputHeight, to: outputURL)
+        _ = retainedTextures
     }
 
     private static func texture(
@@ -163,7 +240,7 @@ struct RuntimeVerifier {
                     .union(.byteOrder32Little),
                 provider: provider,
                 decode: nil,
-                shouldInterpolate: true,
+                shouldInterpolate: false,
                 intent: .defaultIntent
             ),
             let destination = CGImageDestinationCreateWithURL(
@@ -182,4 +259,5 @@ private enum VerificationError: Error {
     case decompression
     case metal
     case image
+    case outsideMap
 }

@@ -61,6 +61,10 @@ final class StyleSettings: ObservableObject {
         let id: String
         let name: String
         let colors: [RGBAColor]
+        let reliefOpacity: Double
+        let reliefExaggeration: Double
+        let reliefContrast: Double
+        let ambientLight: Double
     }
 
     private static let storageKey = "TopoExplorer.style.v1"
@@ -81,9 +85,33 @@ final class StyleSettings: ObservableObject {
     ].map(RGBAColor.init(hex:))
 
     static let presets = [
-        Preset(id: "original", name: "Original 2025", colors: originalColors),
-        Preset(id: "dataset", name: "Datensatz", colors: sourceColors),
-        Preset(id: "muted", name: "Gedämpft", colors: mutedColors),
+        Preset(
+            id: "original",
+            name: "Original 2025",
+            colors: originalColors,
+            reliefOpacity: 0.50,
+            reliefExaggeration: 45,
+            reliefContrast: 2.5,
+            ambientLight: 0.08
+        ),
+        Preset(
+            id: "dataset",
+            name: "Datensatz",
+            colors: sourceColors,
+            reliefOpacity: 0.42,
+            reliefExaggeration: 34,
+            reliefContrast: 2.0,
+            ambientLight: 0.08
+        ),
+        Preset(
+            id: "muted",
+            name: "Gedämpft",
+            colors: mutedColors,
+            reliefOpacity: 0.36,
+            reliefExaggeration: 28,
+            reliefContrast: 1.8,
+            ambientLight: 0.10
+        ),
     ]
 
     @Published var colors: [RGBAColor] { didSet { changed() } }
@@ -122,6 +150,10 @@ final class StyleSettings: ObservableObject {
 
     func apply(_ preset: Preset) {
         colors = preset.colors
+        reliefOpacity = preset.reliefOpacity
+        reliefExaggeration = preset.reliefExaggeration
+        reliefContrast = preset.reliefContrast
+        ambientLight = preset.ambientLight
     }
 
     func resetAll() {

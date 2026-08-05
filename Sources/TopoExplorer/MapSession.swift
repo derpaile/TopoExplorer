@@ -77,10 +77,18 @@ enum SessionError: LocalizedError {
 @MainActor
 final class ViewportController: ObservableObject {
     @Published private(set) var fitToken = 0
+    @Published private(set) var referenceToken = 0
+    @Published private(set) var activeReference: MapReference?
     @Published private(set) var status = ""
 
     func fitGermany() {
+        activeReference = nil
         fitToken &+= 1
+    }
+
+    func show(_ reference: MapReference) {
+        activeReference = reference
+        referenceToken &+= 1
     }
 
     func updateStatus(_ value: String) {

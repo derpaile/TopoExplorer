@@ -10,7 +10,7 @@ enum MetalShader {
 
     struct RasterOut {
         float4 position [[position]];
-        float2 uv;
+        float2 uv [[center_no_perspective]];
     };
 
     struct ReliefUniforms {
@@ -49,6 +49,8 @@ enum MetalShader {
             return float4(base.rgb, 1.0);
         }
 
+        // Ein Pixel Überlappung je Kachel hält die lineare Reliefabtastung
+        // und die zentralen Ableitungen über Kachelgrenzen hinweg identisch.
         constexpr sampler elevationSampler(coord::pixel, address::clamp_to_edge, filter::linear);
         float2 elevationPosition = float2(1.5) + in.uv * float2(landWidth - 1, landHeight - 1);
         float left = elevation.sample(elevationSampler, elevationPosition + float2(-1.0, 0.0)).r;

@@ -75,7 +75,9 @@ struct MetalMapView: NSViewRepresentable {
             manifest: manifest,
             dataDirectory: dataDirectory,
             style: style.renderStyle,
-            fitToken: viewport.fitToken
+            fitToken: viewport.fitToken,
+            referenceToken: viewport.referenceToken,
+            reference: viewport.activeReference
         )
     }
 }

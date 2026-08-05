@@ -37,6 +37,14 @@ struct ContentView: View {
             Text(viewport.status)
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
+            Menu {
+                ForEach(MapReference.all) { reference in
+                    Button(reference.name) { viewport.show(reference) }
+                }
+            } label: {
+                Label(viewport.activeReference?.name ?? "Referenzansichten", systemImage: "viewfinder")
+            }
+            .disabled(session.manifest == nil)
             Button {
                 viewport.fitGermany()
             } label: {
@@ -67,7 +75,7 @@ struct ContentView: View {
                         style: style,
                         viewport: viewport
                     )
-                    Text("Ziehen: verschieben   ·   Mausrad: zoomen   ·   0: Deutschland")
+                    Text("Ziehen: verschieben   ·   Mausrad: zoomen   ·   Referenzen: feste Prüfgebiete   ·   0: Deutschland")
                         .font(.caption)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
