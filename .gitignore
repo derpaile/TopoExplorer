@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Generated map pyramid and local source datasets are reproducible, large artifacts.
+MapData/
+Data/Raw/
+
+# Local runtime previews and logs.
+*.log
+*.trace
