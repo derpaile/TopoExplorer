@@ -17,4 +17,5 @@ if ! command -v osmium >/dev/null 2>&1; then
   exit 1
 fi
 
+./scripts/download_supplemental_data.sh
 exec .venv/bin/python preprocess/germany_vectors.py "$@"

@@ -10,6 +10,14 @@ final class MapCanvasView: MTKView {
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { true }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.mapRenderer?.viewBecameVisible()
+        }
+    }
+
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let pointerTrackingArea { removeTrackingArea(pointerTrackingArea) }

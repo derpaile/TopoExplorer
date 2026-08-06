@@ -23,7 +23,7 @@ struct TopoExplorerApp: App {
                 .environmentObject(bookmarks)
                 .environmentObject(export)
         }
-        .windowStyle(.titleBar)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .sidebar) {
                 Button("Deutschland einpassen") { viewport.fitGermany() }

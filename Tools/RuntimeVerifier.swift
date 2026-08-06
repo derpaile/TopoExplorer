@@ -53,10 +53,11 @@ struct RuntimeVerifier {
 
         let manifestData = try Data(contentsOf: root.appendingPathComponent("manifest.json"))
         let manifest = try JSONDecoder().decode(MapManifest.self, from: manifestData).validated()
+        guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
+            throw VerificationError.metal
+        }
+        let library = try device.makeLibrary(source: MetalShader.source, options: nil)
         guard
-            let device = MTLCreateSystemDefaultDevice(),
-            let queue = device.makeCommandQueue(),
-            let library = try? device.makeLibrary(source: MetalShader.source, options: nil),
             let vertexFunction = library.makeFunction(name: "tileVertex"),
             let fragmentFunction = library.makeFunction(name: "tileFragment")
         else { throw VerificationError.metal }
@@ -66,10 +67,7 @@ struct RuntimeVerifier {
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
         let pipeline = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
-        let palette = [
-            "#000000", "#FF1111", "#FFD700", "#228B22",
-            "#006400", "#98FB98", "#32CD32", "#0066CC",
-        ].map { RGBAColor(hex: $0).vector }
+        let palette = manifest.classes.map { RGBAColor(hex: $0.defaultColor).vector }
 
         for reference in MapReference.all {
             let outputURL = outputDirectory.appendingPathComponent("\(reference.id).png")
@@ -252,8 +250,9 @@ struct RuntimeVerifier {
             id: "verification",
             name: "Prüfstil",
             colors: [
-                "#000000", "#FF1111", "#FFD700", "#228B22",
-                "#006400", "#98FB98", "#32CD32", "#0066CC",
+                "#101612", "#C84C55", "#C9A96E", "#B7CEA8",
+                "#D6BE78", "#6FAF7A", "#245C3A", "#47785A",
+                "#927A55", "#78A96D", "#39779B",
             ].map(RGBAColor.init(hex:)),
             relief: ReliefStyle(
                 enabled: true, opacity: 0.5, exaggeration: 45,
@@ -283,7 +282,7 @@ struct RuntimeVerifier {
             ),
             renderLayers: RenderLayers(
                 roads: true, railways: true, waterways: true,
-                boundaries: true, places: true
+                boundaries: true, places: true, geonames: true
             ),
             renderComparison: RenderComparison(mode: 0, splitPosition: 0.5)
         )
@@ -299,6 +298,7 @@ struct RuntimeVerifier {
             let description = png[kCGImagePropertyPNGDescription] as? String,
             description.contains("DLR/EOC"),
             description.contains("mundialis"),
+            description.contains("BKG 2026"),
             description.contains("openstreetmap.org/copyright"),
             FileManager.default.fileExists(
                 atPath: url.deletingPathExtension().appendingPathExtension("topostyle").path
@@ -317,10 +317,7 @@ struct RuntimeVerifier {
         guard let renderer = MapRenderer(view: view, manifest: manifest, viewport: viewport) else {
             throw VerificationError.metal
         }
-        let colors = [
-            "#000000", "#FF1111", "#FFD700", "#228B22",
-            "#006400", "#98FB98", "#32CD32", "#0066CC",
-        ].map(RGBAColor.init(hex:))
+        let colors = manifest.classes.map { RGBAColor(hex: $0.defaultColor) }
         let renderStyle = RenderStyle(
             colors: colors.map(\.vector),
             reliefOpacity: 0.5, reliefExaggeration: 45,
@@ -328,7 +325,7 @@ struct RuntimeVerifier {
         )
         let renderLayers = RenderLayers(
             roads: true, railways: true, waterways: true,
-            boundaries: true, places: true
+            boundaries: true, places: true, geonames: true
         )
         let renderComparison = RenderComparison(mode: 2, splitPosition: 0.42)
         renderer.update(
@@ -461,8 +458,12 @@ struct RuntimeVerifier {
             for x in minX...maxX {
                 let directory = root.appendingPathComponent("z\(level.z)", isDirectory: true)
                 let name = "\(x)_\(y)"
-                let packedLand = try Data(contentsOf: directory.appendingPathComponent("\(name).land.z"))
-                let packedLand2020 = try? Data(contentsOf: directory.appendingPathComponent("\(name).land2020.z"))
+                let packedLand = try Data(
+                    contentsOf: directory.appendingPathComponent("\(name).\(manifest.landcoverSuffix)")
+                )
+                let packedLand2020 = manifest.landcoverProduct == nil
+                    ? try? Data(contentsOf: directory.appendingPathComponent("\(name).land2020.z"))
+                    : nil
                 let packedElevation = try Data(contentsOf: directory.appendingPathComponent("\(name).elev.z"))
                 guard
                     let land = ZlibDecoder.decode(

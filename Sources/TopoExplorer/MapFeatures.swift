@@ -7,6 +7,7 @@ struct RenderLayers {
     let waterways: Bool
     let boundaries: Bool
     let places: Bool
+    let geonames: Bool
 }
 
 @MainActor
@@ -16,6 +17,7 @@ final class LayerSettings: ObservableObject {
     @Published var waterways: Bool { didSet { save() } }
     @Published var boundaries: Bool { didSet { save() } }
     @Published var places: Bool { didSet { save() } }
+    @Published var geonames: Bool { didSet { save() } }
 
     private static let key = "TopoExplorer.layers.v1"
 
@@ -26,6 +28,7 @@ final class LayerSettings: ObservableObject {
         waterways = saved["waterways"] ?? true
         boundaries = saved["boundaries"] ?? true
         places = saved["places"] ?? true
+        geonames = saved["geonames"] ?? true
     }
 
     var renderLayers: RenderLayers {
@@ -34,14 +37,15 @@ final class LayerSettings: ObservableObject {
             railways: railways,
             waterways: waterways,
             boundaries: boundaries,
-            places: places
+            places: places,
+            geonames: geonames
         )
     }
 
     private func save() {
         UserDefaults.standard.set(
             ["roads": roads, "railways": railways, "waterways": waterways,
-             "boundaries": boundaries, "places": places],
+             "boundaries": boundaries, "places": places, "geonames": geonames],
             forKey: Self.key
         )
     }
@@ -55,7 +59,7 @@ enum LandcoverMode: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
     var title: String {
         switch self {
-        case .year2015: "2015"
+        case .year2015: "Gesamtkarte"
         case .year2020: "2020"
         case .comparison: "Vergleich"
         }
@@ -77,9 +81,7 @@ final class ComparisonSettings: ObservableObject {
     }
 
     init() {
-        mode = LandcoverMode(
-            rawValue: UserDefaults.standard.integer(forKey: "TopoExplorer.landcoverMode.v1")
-        ) ?? .year2015
+        mode = .year2015
         let savedSplit = UserDefaults.standard.double(forKey: "TopoExplorer.splitPosition.v1")
         splitPosition = savedSplit == 0 ? 0.5 : min(max(savedSplit, 0.1), 0.9)
     }

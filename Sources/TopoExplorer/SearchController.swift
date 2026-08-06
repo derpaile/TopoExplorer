@@ -10,6 +10,30 @@ struct PlaceSearchRecord: Decodable, Identifiable, Equatable {
 
     var id: String { "\(name)|\(worldX)|\(worldY)" }
 
+    var kindTitle: String {
+        switch kind {
+        case 7: "Berg"
+        case 8: "Landschaft"
+        case 9: "Gewässer"
+        case 10: "Naturgebiet"
+        case 11: "Insel"
+        case 12: "Höhle"
+        default: "Ort"
+        }
+    }
+
+    var symbolName: String {
+        switch kind {
+        case 7: "mountain.2.fill"
+        case 8: "map.fill"
+        case 9: "water.waves"
+        case 10: "leaf.fill"
+        case 11: "globe.europe.africa.fill"
+        case 12: "triangle.fill"
+        default: "mappin.circle.fill"
+        }
+    }
+
     init(from decoder: Decoder) throws {
         var values = try decoder.unkeyedContainer()
         name = try values.decode(String.self)

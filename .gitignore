@@ -8,6 +8,10 @@ __pycache__/
 MapData/
 Data/Raw/
 
+# Isolierter 10-m-Versuch; Quellen und Ergebnisse werden reproduzierbar erzeugt.
+Experiments/HarzLandcover/work/
+Experiments/HarzLandcover/output/
+
 # Local runtime previews and logs.
 *.log
 *.trace

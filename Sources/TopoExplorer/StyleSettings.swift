@@ -86,18 +86,21 @@ final class StyleSettings: ObservableObject {
     ) ?? .json
 
     static let originalColors = [
-        "#000000", "#FF1111", "#FFD700", "#228B22",
-        "#006400", "#98FB98", "#32CD32", "#0066CC",
+        "#000000", "#FF1111", "#FFD700", "#98FB98",
+        "#E6B94A", "#228B22", "#006400", "#277A45",
+        "#9A774A", "#32CD32", "#0066CC",
     ].map(RGBAColor.init(hex:))
 
     static let sourceColors = [
-        "#000000", "#CC0B1E", "#BBAE6C", "#15B667",
-        "#067647", "#EFF2BE", "#B8E1A4", "#256FA8",
+        "#000000", "#CC0B1E", "#BBAE6C", "#EFF2BE",
+        "#D4B86F", "#15B667", "#067647", "#4B8F67",
+        "#957B57", "#B8E1A4", "#256FA8",
     ].map(RGBAColor.init(hex:))
 
     static let mutedColors = [
-        "#101612", "#C84C55", "#C9A96E", "#6FAF7A",
-        "#245C3A", "#B7CEA8", "#78A96D", "#39779B",
+        "#101612", "#C84C55", "#C9A96E", "#B7CEA8",
+        "#D6BE78", "#6FAF7A", "#245C3A", "#47785A",
+        "#927A55", "#78A96D", "#39779B",
     ].map(RGBAColor.init(hex:))
 
     static let presets = [
@@ -178,9 +181,8 @@ final class StyleSettings: ObservableObject {
         } else if
             let data = UserDefaults.standard.data(forKey: Self.legacyStorageKey),
             let saved = try? JSONDecoder().decode(LegacySaved.self, from: data),
-            saved.colors.count == 8
-        {
-            let migrated = MapStyleDocument(
+            saved.colors.count == 8,
+            let migrated = try? MapStyleDocument(
                 id: "current",
                 name: "Übernommener Stil",
                 colors: saved.colors,
@@ -192,7 +194,8 @@ final class StyleSettings: ObservableObject {
                     ambientLight: saved.ambientLight,
                     sunAzimuthDegrees: 315
                 )
-            )
+            ).validated()
+        {
             isApplying = true
             assign(migrated)
             isApplying = false

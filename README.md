@@ -1,6 +1,6 @@
 # TopoExplorer
 
-Native macOS-Karte für die vorhandenen Deutschlanddaten. Die App lädt nur sichtbare Kacheln, berechnet das Relief in Metal und lässt alle acht Farben live verändern.
+Native macOS-Karte für die vorhandenen Deutschlanddaten. Die App lädt nur sichtbare Kacheln, berechnet das Relief in Metal und lässt alle elf Farben live verändern.
 
 ## Projektstruktur
 
@@ -19,7 +19,7 @@ Native macOS-Karte für die vorhandenen Deutschlanddaten. Die App lädt nur sich
 ```
 
 Der erste Befehl richtet die lokale Python-Umgebung ein und erzeugt Raster-,
-Zeitvergleichs-, Vektor- und Ortskacheln. Abgebrochene Läufe werden fortgesetzt.
+Gesamtlandbedeckungs-, Vektor- und Ortskacheln. Abgebrochene Läufe werden fortgesetzt.
 Die feinste Rasterauflösung beträgt 50 Meter.
 
 Erwartete Quelldateien:
@@ -29,7 +29,12 @@ Data/Raw/LandCover/Land_Cover_DE_2015.tif
 Data/Raw/LandCover/classification_map_germany_2020_v02.tif
 Data/Raw/Elevation/gmted2010_mean_7p5arcsec.tiff
 Data/Raw/OSM/germany-latest.osm.pbf
+Data/Raw/BKG/gn250/GN250.csv
 ```
+
+Die amtlichen Deutschland-Geonamen GN250 werden bei `prepare_all.sh` automatisch
+geladen. Sie ergänzen die OSM-Orte um Berge, Landschaften, Gewässer, Naturgebiete,
+Inseln und Höhlen.
 
 ## App bauen und starten
 
@@ -51,10 +56,10 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Farbflächen rechts: Farben sofort ändern
 - Reliefregler: Stärke, Überhöhung und Kontrast ändern
 - Referenzansichten: Harz, Alpen, Küste, Ruhrgebiet und Flachland direkt anspringen
-- Ebenen: Straßen, Bahn, Flüsse, Grenzen und Orte einzeln schalten
+- Ebenen: Straßen, Bahn, Flüsse, Grenzen, Orte und Natur-/Geländenamen einzeln schalten
 - Suche: Ortsname oder EPSG:3035-Koordinaten eingeben
 - Mauszeiger: Koordinaten, Höhe und Landklasse ablesen
-- Zeitvergleich: 2015, 2020 oder geteilte Ansicht
+- Gesamtkarte: komplementäre Details aus den Klassifikationen 2015 und 2020
 - Export: echter Metal-Neuaufbau bis 4× mit feineren Kacheln, Maßstab und Stil-Datei
 
 Stile und Lesezeichen werden dauerhaft lokal gespeichert. Eigene Kartenstile

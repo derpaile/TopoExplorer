@@ -20,6 +20,7 @@ fi
 
 ./scripts/preprocess_germany.sh "$@"
 ./scripts/preprocess_landcover_2020.sh
+./scripts/preprocess_landcover_fusion.sh
 ./scripts/preprocess_vectors.sh
 ./scripts/verify_vectors.sh
 ./scripts/verify_image_quality.sh

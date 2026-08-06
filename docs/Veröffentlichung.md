@@ -74,7 +74,7 @@ Passwörter und Schlüssel erscheinen weder in Skripten noch im Repository.
 2. In Xcode: Product → Test sowie Product → Archive
 3. DMG auf einem zweiten Benutzerkonto öffnen
 4. App nach `/Applications` ziehen, Kartendaten wählen und neu starten
-5. Suche, Stilimport/-export, Ebenen, Zeitvergleich und PNG-Export prüfen
+5. Suche, Stilimport/-export, Ebenen, Gesamt-Landbedeckung und PNG-Export prüfen
 6. Datenordnerzugriff nach Neustart, Verschieben und Berechtigungsentzug prüfen
 7. `codesign --verify --deep --strict TopoExplorer.app`
 8. Bei notariertem Release: `spctl --assess --type execute --verbose TopoExplorer.app`

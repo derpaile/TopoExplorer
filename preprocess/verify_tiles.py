@@ -26,6 +26,8 @@ def main() -> int:
     tile_count = 0
     seam_count = 0
     has_2020 = any(item.get("year") == 2020 for item in manifest.get("landcoverYears", []))
+    fusion_suffix = manifest.get("landcoverProduct", {}).get("suffix")
+    maximum_class = len(manifest["classes"]) - 1
 
     @lru_cache(maxsize=64)
     def elevation(z: int, x: int, y: int) -> np.ndarray:
@@ -43,6 +45,11 @@ def main() -> int:
                 land = np.frombuffer(zlib.decompress(land_path.read_bytes()), dtype=np.uint8)
                 if land.size != tile_size * tile_size or land.max(initial=0) > 7:
                     raise RuntimeError(f"Defekte Landkachel z{z}/{x}_{y}")
+                if fusion_suffix:
+                    fusion_path = root / f"z{z}" / f"{x}_{y}.{fusion_suffix}"
+                    fusion = np.frombuffer(zlib.decompress(fusion_path.read_bytes()), dtype=np.uint8)
+                    if fusion.size != tile_size * tile_size or fusion.max(initial=0) > maximum_class:
+                        raise RuntimeError(f"Defekte Gesamtkachel z{z}/{x}_{y}")
                 if has_2020:
                     land_2020_path = root / f"z{z}" / f"{x}_{y}.land2020.z"
                     land_2020 = np.frombuffer(zlib.decompress(land_2020_path.read_bytes()), dtype=np.uint8)
@@ -61,7 +68,7 @@ def main() -> int:
                     seam_count += 1
                 tile_count += 1
 
-    suffix = " einschließlich 2020" if has_2020 else ""
+    suffix = " einschließlich 2020 und Gesamtkarte" if fusion_suffix else (" einschließlich 2020" if has_2020 else "")
     print(f"{tile_count} Kachelpaare{suffix} und {seam_count} Reliefübergänge sind exakt nahtlos.")
     return 0
 

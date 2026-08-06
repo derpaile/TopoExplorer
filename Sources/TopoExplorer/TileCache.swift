@@ -84,6 +84,7 @@ final class TileCache: NSObject, NSCacheDelegate {
     private let device: MTLDevice
     private let tileSize: Int
     private let elevationSize: Int
+    private let landcoverSuffix: String
     private let cache = NSCache<NSString, TileTextures>()
     private let loadingQueue = DispatchQueue(label: "TopoExplorer.tile-loading", qos: .userInitiated, attributes: .concurrent)
     private let stateLock = NSLock()
@@ -94,9 +95,10 @@ final class TileCache: NSObject, NSCacheDelegate {
     private var hitCount = 0
     private var missCount = 0
 
-    init(device: MTLDevice, tileSize: Int, elevationBorder: Int) {
+    init(device: MTLDevice, tileSize: Int, elevationBorder: Int, landcoverSuffix: String = "land.z") {
         self.device = device
         self.tileSize = tileSize
+        self.landcoverSuffix = landcoverSuffix
         elevationSize = tileSize + elevationBorder * 2
         super.init()
         cache.totalCostLimit = 384 * 1024 * 1024
@@ -208,7 +210,7 @@ final class TileCache: NSObject, NSCacheDelegate {
 
     private func load(_ key: TileKey, from directory: URL) -> TileTextures? {
         let levelDirectory = directory.appendingPathComponent("z\(key.z)", isDirectory: true)
-        let landURL = levelDirectory.appendingPathComponent("\(key.filename).land.z")
+        let landURL = levelDirectory.appendingPathComponent("\(key.filename).\(landcoverSuffix)")
         let land2020URL = levelDirectory.appendingPathComponent("\(key.filename).land2020.z")
         let elevationURL = levelDirectory.appendingPathComponent("\(key.filename).elev.z")
         guard
@@ -220,8 +222,10 @@ final class TileCache: NSObject, NSCacheDelegate {
                 expectedSize: elevationSize * elevationSize * MemoryLayout<UInt16>.size
             )
         else { return nil }
-        let land2020 = (try? Data(contentsOf: land2020URL, options: .mappedIfSafe))
-            .flatMap { ZlibDecoder.decode($0, expectedSize: tileSize * tileSize) }
+        let land2020 = landcoverSuffix == "land.z"
+            ? (try? Data(contentsOf: land2020URL, options: .mappedIfSafe))
+                .flatMap { ZlibDecoder.decode($0, expectedSize: tileSize * tileSize) }
+            : nil
 
         let landDescriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .r8Uint,

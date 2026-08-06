@@ -83,7 +83,7 @@ enum MetalShader {
                 && in.position.x >= comparison.splitPosition * comparison.drawableWidth);
         uint classIndex = min(
             use2020 ? landcover2020.read(classPosition).r : landcover2015.read(classPosition).r,
-            7u
+            10u
         );
         float4 base = palette[classIndex];
         if (classIndex == 0u) {
@@ -132,7 +132,9 @@ enum MetalShader {
             return kind <= 1u ? 2.8 : (kind <= 3u ? 2.1 : (kind <= 5u ? 1.5 : 1.0));
         }
         if (layer == 2u) return kind <= 2u ? 1.5 : 1.0;
-        if (layer == 3u) return kind <= 2u ? 1.8 : 1.1;
+        if (layer == 3u) {
+            return kind == 1u ? 1.45 : (kind == 2u ? 1.05 : (kind == 3u ? 0.52 : 0.38));
+        }
         return kind == 1u ? 2.0 : (kind == 2u ? 1.4 : 0.8);
     }
 
@@ -140,7 +142,10 @@ enum MetalShader {
     {
         if (layer == 1u) return float4(0.08, 0.06, 0.05, 0.88);
         if (layer == 2u) return float4(0.05, 0.04, 0.05, 0.86);
-        if (layer == 3u) return float4(0.02, 0.30, 0.82, 0.92);
+        if (layer == 3u) {
+            float alpha = kind == 1u ? 0.76 : (kind == 2u ? 0.70 : (kind == 3u ? 0.70 : 0.58));
+            return float4(0.04, 0.36, 0.68, alpha);
+        }
         return float4(0.96, 0.96, 0.94, kind <= 2u ? 0.72 : 0.42);
     }
 
@@ -166,6 +171,12 @@ enum MetalShader {
         VectorSegment segment = segments[instanceID];
         uint kind = segment.attributes & 0xffu;
         uint minimumZoom = (segment.attributes >> 8) & 0xffu;
+        if (uniforms.layer == 3u) {
+            // Das dichte Kleinfließgewässernetz darf den grünen Untergrund
+            // in mittleren Maßstäben nicht flächig blau überdecken.
+            if (kind == 3u) minimumZoom = max(minimumZoom, 5u);
+            if (kind >= 4u) minimumZoom = max(minimumZoom, 6u);
+        }
         float scale = uniforms.tile.z / uniforms.tile.w;
         float2 a = uniforms.tile.xy + float2(segment.start) * scale;
         float2 b = uniforms.tile.xy + float2(segment.end) * scale;

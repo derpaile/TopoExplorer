@@ -8,63 +8,67 @@ struct InspectorView: View {
     @ObservedObject var comparison: ComparisonSettings
     @ObservedObject var export: MapExportController
     @ObservedObject var viewport: ViewportController
+    let onClose: () -> Void
     @State private var newStyleName = ""
+    @State private var showAdvancedRelief = false
+    @State private var showStyleManagement = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                styleManagement
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Farben")
-                        .font(.title3.weight(.semibold))
-                    ForEach(Array(manifest.classes.enumerated()), id: \.element.id) { index, landClass in
-                        ColorPicker(
-                            landClass.name,
-                            selection: style.colorBinding(at: index),
-                            supportsOpacity: false
-                        )
-                    }
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(Color.green.opacity(0.12))
+                    Image(systemName: "slider.horizontal.3")
+                        .foregroundStyle(Color(red: 0.18, green: 0.48, blue: 0.34))
                 }
+                .frame(width: 30, height: 30)
 
-                Divider()
-
-                reliefControls
-
-                Divider()
-
-                layerControls
-
-                if manifest.hasLandcover2020 {
-                    Divider()
-                    comparisonControls
-                }
-
-                Divider()
-
-                exportControls
-
-                Divider()
-
-                Button("Originalwerte wiederherstellen") { style.resetAll() }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Kartendaten")
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Kartendarstellung")
                         .font(.headline)
-                    Text("\(manifest.levels.count) Zoomstufen · feinste Auflösung \(Int(manifest.levels.last?.resolution ?? 0)) m")
-                    Text(session.dataDirectory?.path ?? "")
-                        .lineLimit(3)
-                        .textSelection(.enabled)
+                    Text(style.activeStyleName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(width: 24, height: 24)
+                        .background(Color.primary.opacity(0.07), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Schließen")
             }
-            .padding(16)
+            .padding(14)
+
+            Divider().opacity(0.55)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    presetControls
+                    paletteControls
+                    reliefControls
+                    exportControls
+                    styleManagement
+                    dataDetails
+                }
+                .padding(14)
+            }
         }
-        .frame(minWidth: 300, idealWidth: 330, maxWidth: 380)
-        .background(.regularMaterial)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.55), .white.opacity(0.10), .black.opacity(0.10)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
+        }
+        .shadow(color: .black.opacity(0.22), radius: 22, y: 10)
         .alert("Kartenstil", isPresented: errorIsPresented) {
             Button("OK") { style.errorMessage = nil }
         } message: {
@@ -72,103 +76,151 @@ struct InspectorView: View {
         }
     }
 
-    private var exportControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Export")
-                .font(.title3.weight(.semibold))
-            Picker("Größe", selection: $export.scale) {
-                Text("Bildschirm").tag(1)
-                Text("2×").tag(2)
-                Text("4×").tag(4)
+    private var presetControls: some View {
+        panelSection(title: "Stimmung", symbol: "circle.lefthalf.filled") {
+            VStack(spacing: 6) {
+                ForEach(StyleSettings.presets) { preset in
+                    Button {
+                        style.apply(preset)
+                    } label: {
+                        HStack(spacing: 9) {
+                            HStack(spacing: -3) {
+                                ForEach(Array(preset.colors.prefix(4).enumerated()), id: \.offset) { _, color in
+                                    Circle()
+                                        .fill(color.color)
+                                        .frame(width: 13, height: 13)
+                                        .overlay(Circle().stroke(.white.opacity(0.55), lineWidth: 0.5))
+                                }
+                            }
+                            Text(preset.name)
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                            if style.activeStyleName == preset.name {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 7)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .background(
+                        style.activeStyleName == preset.name
+                            ? Color.accentColor.opacity(0.09)
+                            : Color.primary.opacity(0.035),
+                        in: RoundedRectangle(cornerRadius: 9)
+                    )
+                }
             }
-            .pickerStyle(.segmented)
-            Toggle("Maßstab einzeichnen", isOn: $export.includeScaleBar)
-            Button("Sichtbaren Ausschnitt als PNG …") {
-                export.chooseDestination(
-                    style: style, layers: layers, snapshot: viewport.snapshot,
-                    labels: viewport.labels, comparison: comparison
-                )
-            }
-            if let message = export.message {
-                Text(message)
+        }
+    }
+
+    private var paletteControls: some View {
+        panelSection(title: "Kartenfarben", symbol: "paintpalette.fill") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Direkt anklicken, um eine Landklasse anzupassen.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 8) {
+                    ForEach(Array(manifest.classes.enumerated()), id: \.element.id) { index, landClass in
+                        VStack(spacing: 4) {
+                            ColorPicker(
+                                landClass.name,
+                                selection: style.colorBinding(at: index),
+                                supportsOpacity: false
+                            )
+                            .labelsHidden()
+                            .frame(width: 28, height: 24)
+                            .help(landClass.name)
+
+                            Text(landClass.name)
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
             }
-            Text("2015-Daten: CC BY-NC 4.0; Exporte mit 2015-Landbedeckung sind nicht für kommerzielle Nutzung freigegeben.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
     }
 
-    private var layerControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Ebenen")
-                .font(.title3.weight(.semibold))
-            Toggle("Straßen", isOn: $layers.roads)
-            Toggle("Eisenbahnen", isOn: $layers.railways)
-            Toggle("Flüsse", isOn: $layers.waterways)
-            Toggle("Grenzen", isOn: $layers.boundaries)
-            Toggle("Orte und Namen", isOn: $layers.places)
-        }
-    }
+    private var reliefControls: some View {
+        panelSection(title: "Relief", symbol: "mountain.2.fill") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Gelände plastisch darstellen", isOn: $style.reliefEnabled)
 
-    private var comparisonControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Landbedeckung")
-                .font(.title3.weight(.semibold))
-            Picker("Ansicht", selection: $comparison.mode) {
-                ForEach(LandcoverMode.allCases) { mode in Text(mode.title).tag(mode) }
-            }
-            .pickerStyle(.segmented)
-            if comparison.mode == .comparison {
                 valueSlider(
-                    "Trennlinie", value: $comparison.splitPosition,
-                    range: 0.1...0.9, format: "%.0f %%", multiplier: 100
+                    "Stärke", value: $style.reliefOpacity,
+                    range: 0...1, format: "%.0f %%", multiplier: 100
                 )
-                Text("Links 2015 · rechts 2020")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .disabled(!style.reliefEnabled)
+
+                DisclosureGroup("Feinabstimmung", isExpanded: $showAdvancedRelief) {
+                    VStack(spacing: 10) {
+                        valueSlider("Überhöhung", value: $style.reliefExaggeration, range: 0...120, format: "%.0f×")
+                        valueSlider("Kontrast", value: $style.reliefContrast, range: 0.5...5, format: "%.1f")
+                        valueSlider(
+                            "Grundlicht", value: $style.ambientLight,
+                            range: 0...0.35, format: "%.0f %%", multiplier: 100
+                        )
+                        valueSlider(
+                            "Sonne · \(compassDirection)", value: $style.sunAzimuthDegrees,
+                            range: 0...360, format: "%.0f°"
+                        )
+                    }
+                    .padding(.top, 8)
+                }
+                .font(.subheadline)
+                .disabled(!style.reliefEnabled)
+            }
+        }
+    }
+
+    private var exportControls: some View {
+        panelSection(title: "Karte teilen", symbol: "square.and.arrow.up") {
+            VStack(alignment: .leading, spacing: 9) {
+                Picker("Auflösung", selection: $export.scale) {
+                    Text("1×").tag(1)
+                    Text("2×").tag(2)
+                    Text("4×").tag(4)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Toggle("Maßstab einzeichnen", isOn: $export.includeScaleBar)
+
+                Button {
+                    export.chooseDestination(
+                        style: style,
+                        layers: layers,
+                        snapshot: viewport.snapshot,
+                        labels: viewport.labels,
+                        comparison: comparison
+                    )
+                } label: {
+                    Label("Sichtbaren Ausschnitt exportieren", systemImage: "photo")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(viewport.snapshot == nil)
+
+                if let message = export.message {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
 
     private var styleManagement: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Kartenstil")
-                    .font(.title2.weight(.semibold))
-                Text(style.activeStyleName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Menu("Stil auswählen") {
-                Section("Mitgeliefert") {
-                    ForEach(StyleSettings.presets) { preset in
-                        Button(preset.name) { style.apply(preset) }
-                    }
-                }
+        DisclosureGroup("Eigene Stile", isExpanded: $showStyleManagement) {
+            VStack(alignment: .leading, spacing: 9) {
                 if !style.customStyles.isEmpty {
-                    Section("Eigene Stile") {
-                        ForEach(style.customStyles) { savedStyle in
-                            Button(savedStyle.name) { style.apply(savedStyle) }
-                        }
-                    }
-                }
-            }
-            .menuStyle(.borderlessButton)
-
-            HStack(spacing: 6) {
-                TextField("Name für eigenen Stil", text: $newStyleName)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { saveCurrentStyle() }
-                Button("Speichern") { saveCurrentStyle() }
-                    .disabled(newStyleName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
-            if !style.customStyles.isEmpty {
-                VStack(spacing: 4) {
                     ForEach(style.customStyles) { savedStyle in
                         HStack {
                             Button(savedStyle.name) { style.apply(savedStyle) }
@@ -183,33 +235,56 @@ struct InspectorView: View {
                             .buttonStyle(.borderless)
                             .help("Stil löschen")
                         }
+                        .font(.caption)
                     }
                 }
-                .font(.caption)
-            }
 
-            HStack(spacing: 8) {
-                Button("Importieren …") { style.importWithPanel() }
-                Button("Exportieren …") { style.exportWithPanel() }
+                HStack(spacing: 6) {
+                    TextField("Name", text: $newStyleName)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { saveCurrentStyle() }
+                    Button("Sichern") { saveCurrentStyle() }
+                        .disabled(newStyleName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
+                HStack(spacing: 6) {
+                    Button("Importieren …") { style.importWithPanel() }
+                    Button("Exportieren …") { style.exportWithPanel() }
+                    Spacer()
+                    Button("Zurücksetzen") { style.resetAll() }
+                }
+                .controlSize(.small)
             }
-            .controlSize(.small)
+            .padding(.top, 9)
         }
+        .font(.subheadline.weight(.medium))
     }
 
-    private var reliefControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Toggle("Relief anzeigen", isOn: $style.reliefEnabled)
-                .font(.title3.weight(.semibold))
-
-            Group {
-                valueSlider("Stärke", value: $style.reliefOpacity, range: 0...1, format: "%.0f %%", multiplier: 100)
-                valueSlider("Überhöhung", value: $style.reliefExaggeration, range: 0...120, format: "%.0f×")
-                valueSlider("Kontrast", value: $style.reliefContrast, range: 0.5...5, format: "%.1f")
-                valueSlider("Grundlicht", value: $style.ambientLight, range: 0...0.35, format: "%.0f %%", multiplier: 100)
-                valueSlider("Sonnenrichtung \(compassDirection)", value: $style.sunAzimuthDegrees, range: 0...360, format: "%.0f°")
-            }
-            .disabled(!style.reliefEnabled)
+    private var dataDetails: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Kartengrundlage", systemImage: "externaldrive")
+                .font(.caption.weight(.semibold))
+            Text("\(manifest.levels.count) Zoomstufen · feinste Auflösung \(Int(manifest.levels.last?.resolution ?? 0)) m")
+            Text("2015-Daten: CC BY-NC 4.0 · Exporte mit dieser Landbedeckung sind nicht kommerziell freigegeben.")
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .padding(.top, 2)
+    }
+
+    private func panelSection<Content: View>(
+        title: String,
+        symbol: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Label(title, systemImage: symbol)
+                .font(.subheadline.weight(.semibold))
+            content()
+        }
+        .padding(11)
+        .background(Color.primary.opacity(0.038), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var compassDirection: String {
@@ -228,9 +303,7 @@ struct InspectorView: View {
     private func saveCurrentStyle() {
         let name = newStyleName.trimmingCharacters(in: .whitespacesAndNewlines)
         style.saveCurrent(named: name)
-        if style.errorMessage == nil {
-            newStyleName = ""
-        }
+        if style.errorMessage == nil { newStyleName = "" }
     }
 
     private func valueSlider(
@@ -243,10 +316,11 @@ struct InspectorView: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
                 Text(title)
+                    .font(.caption)
                 Spacer()
                 Text(String(format: format, value.wrappedValue * multiplier))
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
             }
             Slider(value: value, in: range)
         }

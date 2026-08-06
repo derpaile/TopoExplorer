@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import csv
 import hashlib
 import json
 import math
@@ -34,9 +35,10 @@ from rasterio.warp import transform
 
 TARGET_CRS = "EPSG:3035"
 SOURCE_CRS = "EPSG:4326"
+GEONAMES_CRS = "EPSG:25832"
 MAGIC = b"TVT1"
 FORMAT_VERSION = 1
-PIPELINE_VERSION = 3
+PIPELINE_VERSION = 5
 EXTENT = 8192
 BUFFER = 128  # 8 screen pixels for a 512 pixel raster tile
 TILE_HEADER = struct.Struct("<4sHHHII")
@@ -62,9 +64,9 @@ ROAD_TYPES = {
     "secondary_link": (4, 3),
     "tertiary": (5, 4),
     "tertiary_link": (5, 4),
-    "residential": (6, 5),
-    "unclassified": (6, 5),
-    "living_street": (6, 5),
+    "residential": (6, 6),
+    "unclassified": (6, 6),
+    "living_street": (6, 6),
     "service": (7, 6),
     "track": (8, 6),
 }
@@ -83,8 +85,8 @@ RAIL_TYPES = {
 WATER_TYPES = {
     "river": (1, 2),
     "canal": (2, 3),
-    "stream": (3, 4),
-    "drain": (4, 5),
+    "stream": (3, 5),
+    "drain": (4, 6),
     "ditch": (5, 6),
 }
 
@@ -98,6 +100,19 @@ PLACE_TYPES = {
     "hamlet": 5,
     "isolated_dwelling": 5,
     "locality": 6,
+}
+
+GEONAME_KINDS = {
+    "Besonderer_Hoehenpunkt": 7,
+    "AX_Landschaft": 8,
+    "Gewaesser": 9,
+    "AX_StehendesGewaesser": 9,
+    "AX_Meer": 9,
+    "AX_Moor": 10,
+    "AX_Sumpf": 10,
+    "AX_NaturUmweltOderBodenschutzrecht": 10,
+    "AX_Insel": 11,
+    "AX_Hoehleneingang": 12,
 }
 
 OSMIUM_FILTERS = [
@@ -148,6 +163,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pbf", type=Path, default=Path("Data/Raw/OSM/germany-latest.osm.pbf"))
     parser.add_argument("--railways", type=Path, default=Path("Data/Raw/OSM/railways.geojson"))
     parser.add_argument("--places", type=Path, default=Path("Data/Raw/OSM/places.geojson"))
+    parser.add_argument(
+        "--geonames",
+        type=Path,
+        default=Path("Data/Raw/BKG/gn250/GN250.csv"),
+        help="Amtliche BKG-Geonamen GN250 in ETRS89 / UTM 32N",
+    )
     parser.add_argument("--output", type=Path, default=Path("MapData/Germany/Vectors"))
     parser.add_argument("--work", type=Path, default=Path(".build/vector-preprocess"))
     parser.add_argument("--compression", type=int, choices=range(1, 10), default=6)
@@ -719,6 +740,71 @@ def read_places(path: Path, builder: VectorBuilder) -> list[Place]:
     return places
 
 
+def geoname_min_zoom(object_type: str, subtype: str, elevation: int) -> int:
+    if object_type == "Besonderer_Hoehenpunkt":
+        return 3 if elevation >= 1_500 else 4 if elevation >= 800 else 5
+    if object_type == "AX_Landschaft":
+        return 3 if subtype in {"Gebirge, Bergland, Hügelland", "(Tief-) Ebene, Flachland"} else 4
+    if object_type == "AX_Meer":
+        return 2
+    if object_type == "AX_NaturUmweltOderBodenschutzrecht" and subtype == "Naturpark":
+        return 3
+    if object_type == "AX_Insel":
+        return 4
+    return 6
+
+
+def read_geonames(path: Path, builder: VectorBuilder, existing: list[Place]) -> list[Place]:
+    candidates: list[tuple[str, int, int, float, float]] = []
+    with path.open("r", encoding="utf-8-sig", newline="") as source:
+        for row in csv.DictReader(source, delimiter=";"):
+            object_type = str(row.get("OBA") or "")
+            kind = GEONAME_KINDS.get(object_type)
+            name = str(row.get("NAME") or "").strip()
+            if kind is None or not name:
+                continue
+            try:
+                x = float(row["RECHTS"])
+                y = float(row["HOCH"])
+                elevation = parse_population(row.get("HOEHE"))
+            except (KeyError, TypeError, ValueError):
+                continue
+            candidates.append(
+                (
+                    name,
+                    kind,
+                    geoname_min_zoom(object_type, str(row.get("OBA_WERT") or ""), elevation),
+                    x,
+                    y,
+                )
+            )
+
+    projected_xs, projected_ys = transform(
+        GEONAMES_CRS,
+        TARGET_CRS,
+        [candidate[3] for candidate in candidates],
+        [candidate[4] for candidate in candidates],
+    )
+    left, bottom, right, top = builder.bounds
+    seen = {
+        (normalized_name(place.name), place.kind, round(place.x / 20), round(place.y / 20))
+        for place in existing
+    }
+    geonames: list[Place] = []
+    for candidate, x, y in zip(candidates, projected_xs, projected_ys):
+        name, kind, min_zoom, _, _ = candidate
+        identity = (normalized_name(name), kind, round(x / 20), round(y / 20))
+        if identity in seen or not (left <= x <= right and bottom <= y <= top):
+            continue
+        seen.add(identity)
+        geoname = Place(name, kind, 0, x, y, min_zoom)
+        geonames.append(geoname)
+        builder.add_place(geoname)
+    geonames.sort(key=lambda place: (place.min_zoom, place.kind, normalized_name(place.name)))
+    print(f"  Amtliche Natur- und Geländenamen: {len(geonames):,}")
+    return existing + geonames
+
+
 def write_osmium_config(path: Path) -> None:
     document = {
         "attributes": {
@@ -945,7 +1031,10 @@ def write_manifest(
         "layers": layer_manifest(),
         "flags": {"bridge": 1, "tunnel": 2},
         "places": {
-            "kinds": ["Stadt", "Kleinstadt", "Dorf", "Stadtteil", "Weiler", "Ort"],
+            "kinds": [
+                "Stadt", "Kleinstadt", "Dorf", "Stadtteil", "Weiler", "Ort",
+                "Berg", "Landschaft", "Gewässer", "Naturgebiet", "Insel", "Höhle",
+            ],
             "index": "places-index.json.z",
             "indexFormat": "zlib-json",
             "fields": ["name", "kind", "population", "x", "y", "minZoom"],
@@ -970,7 +1059,7 @@ def write_manifest(
 
 def main() -> int:
     args = parse_args()
-    required = [args.manifest, args.pbf, args.railways, args.places]
+    required = [args.manifest, args.pbf, args.railways, args.places, args.geonames]
     for path in required:
         if not path.is_file():
             raise SystemExit(f"Quelldatei fehlt: {path}")
@@ -1000,7 +1089,9 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     work.mkdir(parents=True, exist_ok=True)
 
-    signature = source_signature([args.pbf, args.railways, args.places], args.manifest)
+    signature = source_signature(
+        [args.pbf, args.railways, args.places, args.geonames], args.manifest
+    )
     final_manifest = output / "vector-manifest.json"
     if final_manifest.is_file() and not args.force:
         existing = json.loads(final_manifest.read_text(encoding="utf-8"))
@@ -1045,6 +1136,7 @@ def main() -> int:
             process_line_features(osmium_features(filtered_pbf, config_path), builder, "OSM")
             print("Orte werden gekachelt und indexiert …")
             places = read_places(args.places, builder)
+            places = read_geonames(args.geonames, builder, places)
         finally:
             spool.close()
         counts = counts_document(spool, builder, places)
@@ -1070,6 +1162,7 @@ def main() -> int:
             "pbf": str(args.pbf),
             "railways": str(args.railways),
             "places": str(args.places),
+            "geonames": str(args.geonames),
             "rasterManifest": str(args.manifest),
         },
         place_index_sizes,

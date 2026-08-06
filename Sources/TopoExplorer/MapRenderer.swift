@@ -53,12 +53,13 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     private var manifest: MapManifest?
     private var dataDirectory: URL?
     private var style = RenderStyle(
-        colors: Array(repeating: SIMD4<Float>(0, 0, 0, 1), count: 8),
+        colors: Array(repeating: SIMD4<Float>(0, 0, 0, 1), count: 11),
         reliefOpacity: 0.5, reliefExaggeration: 45, reliefContrast: 2.5,
         ambientLight: 0.08, sunAzimuthRadians: 5.4977871438
     )
     private var layers = RenderLayers(
-        roads: true, railways: true, waterways: true, boundaries: true, places: true
+        roads: true, railways: true, waterways: true, boundaries: true,
+        places: true, geonames: true
     )
     private var comparison = RenderComparison(mode: 0, splitPosition: 0.5)
     private var centerX = 0.0
@@ -105,9 +106,15 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         self.commandQueue = commandQueue
         self.rasterPipeline = rasterPipeline
         self.vectorPipeline = vectorPipeline
-        tileCache = TileCache(device: device, tileSize: manifest.tileSize, elevationBorder: manifest.elevationBorder)
+        tileCache = TileCache(
+            device: device, tileSize: manifest.tileSize,
+            elevationBorder: manifest.elevationBorder,
+            landcoverSuffix: manifest.landcoverSuffix
+        )
         vectorCache = VectorTileCache(device: device)
         self.manifest = manifest
+        centerX = (manifest.left + manifest.right) / 2
+        centerY = (manifest.bottom + manifest.top) / 2
         super.init()
 
         view.device = device
@@ -138,7 +145,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             tileCache = TileCache(
                 device: commandQueue.device,
                 tileSize: newManifest.tileSize,
-                elevationBorder: newManifest.elevationBorder
+                elevationBorder: newManifest.elevationBorder,
+                landcoverSuffix: newManifest.landcoverSuffix
             )
             vectorCache = VectorTileCache(device: commandQueue.device)
             queryService = RasterQueryService(manifest: newManifest, directory: newDirectory)
@@ -157,8 +165,10 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         }
         if navigationToken != lastNavigationToken {
             lastNavigationToken = navigationToken
-            pendingTarget = target
-            needsFit = false
+            if let target {
+                pendingTarget = target
+                needsFit = false
+            }
         }
         requestDraw()
     }
@@ -303,6 +313,10 @@ final class MapRenderer: NSObject, MTKViewDelegate {
 
     func forceFit() {
         needsFit = true
+        requestDraw()
+    }
+
+    func viewBecameVisible() {
         requestDraw()
     }
 
@@ -653,7 +667,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     ) -> (lineCount: Int, labels: [MapLabel]) {
         guard
             renderLayers.roads || renderLayers.railways || renderLayers.waterways
-                || renderLayers.boundaries || renderLayers.places
+                || renderLayers.boundaries || renderLayers.places || renderLayers.geonames
         else {
             return (0, [])
         }
@@ -741,8 +755,10 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 }
             }
 
-            if renderLayers.places {
-                for place in tile.places where Int(place.minZoom) <= visibleZoom {
+            if renderLayers.places || renderLayers.geonames {
+                for place in tile.places where Int(place.minZoom) <= visibleZoom
+                    && (place.kind <= 6 ? renderLayers.places : renderLayers.geonames)
+                {
                     let point = world(place.point)
                     places.append((place, point.x, point.y))
                 }
@@ -831,6 +847,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     ) -> [MapLabel] {
         var seen = Set<String>()
         let sorted = candidates.sorted {
+            if $0.0.minZoom != $1.0.minZoom { return $0.0.minZoom < $1.0.minZoom }
             if $0.0.population != $1.0.population { return $0.0.population > $1.0.population }
             return $0.0.kind < $1.0.kind
         }

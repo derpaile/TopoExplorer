@@ -3,6 +3,7 @@ import Foundation
 struct MapStyleDocument: Codable, Equatable, Identifiable {
     static let formatIdentifier = "de.topo-explorer.style"
     static let currentVersion = 1
+    static let colorCount = 11
 
     var format: String
     var version: Int
@@ -34,9 +35,6 @@ struct MapStyleDocument: Codable, Equatable, Identifiable {
         guard version > 0, version <= Self.currentVersion else {
             throw MapStyleFileError.unsupportedVersion(version)
         }
-        guard colors.count == 8 else {
-            throw MapStyleFileError.wrongColorCount(colors.count)
-        }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw MapStyleFileError.missingName
         }
@@ -46,9 +44,22 @@ struct MapStyleDocument: Codable, Equatable, Identifiable {
 
         var result = self
         result.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        result.colors = colors.map(\.clamped)
+        result.colors = Self.fusionColors(from: colors).map(\.clamped)
+        guard result.colors.count == Self.colorCount else {
+            throw MapStyleFileError.wrongColorCount(colors.count)
+        }
         result.relief = relief.clamped
         return result
+    }
+
+    private static func fusionColors(from colors: [RGBAColor]) -> [RGBAColor] {
+        guard colors.count == 8 else { return colors }
+        return [
+            colors[0], colors[1], colors[2], colors[5],
+            colors[5].mixed(with: colors[2]),
+            colors[3], colors[4], colors[3].mixed(with: colors[4]),
+            colors[4].mixed(with: colors[2]), colors[6], colors[7],
+        ]
     }
 }
 
@@ -105,7 +116,7 @@ enum MapStyleFileError: LocalizedError {
         case let .unsupportedVersion(version):
             return "Stilversion \(version) wird von dieser App nicht unterstützt."
         case let .wrongColorCount(count):
-            return "Der Stil enthält \(count) statt 8 Landklassenfarben."
+            return "Der Stil enthält \(count) statt \(MapStyleDocument.colorCount) Landklassenfarben."
         case .missingName:
             return "Der Stil hat keinen Namen."
         case .invalidNumber:
@@ -115,6 +126,15 @@ enum MapStyleFileError: LocalizedError {
 }
 
 private extension RGBAColor {
+    func mixed(with other: RGBAColor) -> RGBAColor {
+        RGBAColor(
+            red: (red + other.red) / 2,
+            green: (green + other.green) / 2,
+            blue: (blue + other.blue) / 2,
+            alpha: (alpha + other.alpha) / 2
+        )
+    }
+
     var isFinite: Bool {
         red.isFinite && green.isFinite && blue.isFinite && alpha.isFinite
     }

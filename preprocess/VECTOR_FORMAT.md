@@ -44,18 +44,18 @@ Danach folgen zuerst alle Linien und anschließend alle Orte.
 | Punkte `(x, y)` | je `i16, i16` |
 | optionaler Name | UTF-8 |
 
-## Ortsrecord
+## Namensrecord
 
 | Feld | Typ |
 |---|---:|
-| Ortsart, ab 1; Namen stehen im Manifest | `u8` |
+| Namensart, ab 1; Orte 1–6, Natur- und Geländenamen 7–12; Bezeichnungen stehen im Manifest | `u8` |
 | minimale Zoomstufe | `u8` |
 | reserviert | `u16` |
 | Position `(x, y)` | `i16, i16` |
-| Bevölkerung; 0 bedeutet unbekannt | `u32` |
+| Bevölkerung; bei Natur- und Geländenamen 0 | `u32` |
 | UTF-8-Namenslänge | `u16` |
 | Name | UTF-8 |
 
-`places-index.json.z` ist ein zlib-komprimiertes JSON-Dokument für Suche und
+`places-index.json.z` ist ein zlib-komprimiertes JSON-Dokument für Orts- und Geonamensuche und
 direktes Anspringen. Jedes Array folgt den Feldern
 `name, kind, population, x, y, minZoom`; `x/y` sind EPSG:3035-Koordinaten.

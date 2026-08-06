@@ -49,12 +49,13 @@ zentriert. Unter dem Mauszeiger zeigt die App – sofern in den Daten vorhanden 
 Koordinaten, Höhe und Landklasse. Häufig benötigte Ausschnitte können als
 Lesezeichen gespeichert werden.
 
-## Zeitvergleich
+## Gesamt-Landbedeckung
 
-Die Landbedeckungsjahre 2015 und 2020 verwenden denselben Kartenstil. Mit dem
-Jahresumschalter wird die aktive Ebene gewählt; die Vergleichsansicht stellt
-beide Zeitstände im gleichen Ausschnitt gegenüber. Ein Stilwechsel gilt für
-beide Seiten.
+Die Gesamtkarte verbindet die komplementären Informationen der
+Landbedeckungsklassifikationen von 2015 und 2020. Sie unterscheidet insbesondere
+Laub- und Nadelwald, saisonale und unsichere Landwirtschaft sowie
+Nadelwald-Offenflächen. Die Karte zeigt diese Details gemeinsam und ist kein
+Zeitvergleich.
 
 ## Export
 

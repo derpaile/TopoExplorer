@@ -129,7 +129,8 @@ enum MapExportWriter {
             + "Landbedeckung \(request.landcoverMode.title) · Stil \(request.styleDocument.name)\n"
             + "Land 2015: DLR/EOC, DOI 10.15489/1ccmlap3mn39, CC BY-NC 4.0. "
             + "Land 2020: mundialis, DL-DE/BY-2.0. "
-            + "Vektordaten: © OpenStreetMap contributors, ODbL, https://www.openstreetmap.org/copyright\n"
+            + "Vektordaten: © OpenStreetMap contributors, ODbL, https://www.openstreetmap.org/copyright. "
+            + (request.renderLayers.geonames ? "Geonamen: © BKG 2026, dl-de/by-2.0.\n" : "\n")
             + "TopoStyle: \(styleJSON)"
         guard let destination = CGImageDestinationCreateWithURL(
             request.url as CFURL, UTType.png.identifier as CFString, 1, nil
@@ -155,10 +156,13 @@ enum MapExportWriter {
     ) {
         let logicalWidth = request.snapshot.visibleWidthMeters / request.snapshot.metersPerPoint
         let pixelScale = max(1, CGFloat(width) / CGFloat(max(logicalWidth, 1)))
-        let texts = [
+        var texts = [
             "Vektor: © OpenStreetMap contributors · ODbL · https://www.openstreetmap.org/copyright",
             "Land: DLR/EOC 2015 · CC BY-NC 4.0 | mundialis 2020 · DL-DE/BY-2.0",
         ]
+        if request.renderLayers.geonames {
+            texts.insert("Geonamen: © BKG 2026 · dl-de/by-2.0", at: 1)
+        }
         let font = CTFontCreateWithName(
             "Helvetica" as CFString, 9 * pixelScale,
             nil

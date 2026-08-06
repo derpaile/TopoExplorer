@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Harz · Landbedeckung 10 m</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #111713; color: #edf1eb; }
+    header { display: flex; gap: 18px; align-items: end; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid #344039; }
+    h1 { margin: 0; font-size: 21px; font-weight: 600; }
+    header p { margin: 5px 0 0; color: #aeb9b1; font-size: 13px; }
+    nav { display: flex; gap: 7px; flex-wrap: wrap; }
+    button { border: 1px solid #46534b; border-radius: 7px; background: #202923; color: #e9eee9; padding: 7px 10px; cursor: pointer; }
+    button[aria-pressed="true"] { background: #e1e8df; color: #182019; border-color: #e1e8df; }
+    main { display: grid; grid-template-columns: minmax(0, 1fr) 290px; min-height: calc(100vh - 78px); }
+    .map-shell { overflow: auto; background: #0d120f; display: grid; place-items: start center; }
+    .map-shell img { display: block; max-width: none; width: 100%; height: auto; image-rendering: auto; }
+    aside { border-left: 1px solid #344039; padding: 15px 16px 24px; background: #18201b; }
+    h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: #cbd4cd; }
+    h3 { margin: 17px 0 7px; font-size: 12px; color: #9fac9f; text-transform: uppercase; letter-spacing: .08em; }
+    .legend { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 5px 8px; align-items: center; font-size: 12px; }
+    .swatch { width: 12px; height: 12px; border-radius: 2px; }
+    footer { margin-top: 18px; color: #8e9a91; font-size: 11px; line-height: 1.45; }
+    @media (max-width: 780px) {
+      header { align-items: start; flex-direction: column; }
+      main { grid-template-columns: 1fr; }
+      aside { border-left: 0; border-top: 1px solid #344039; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Harz · Landbedeckung 10 m</h1>
+      <p>Eigenständiger Prototyp · 39 Klassen · ohne OSM und Straßenvektoren</p>
+    </div>
+    <nav aria-label="Kartenausschnitt">
+      <button type="button" data-image="output/harz-overview.png" aria-pressed="true">Gesamter Harz</button>
+      <button type="button" data-image="output/harz-nordharz.png" aria-pressed="false">Nordharz und Felder</button>
+      <button type="button" data-image="output/harz-brocken.png" aria-pressed="false">Brocken und Wald</button>
+    </nav>
+  </header>
+  <main>
+    <section class="map-shell" aria-label="Landbedeckungskarte">
+      <img id="map" src="output/harz-overview.png" alt="Klassifizierte 10-Meter-Landbedeckung des Harzes">
+    </section>
+    <aside>
+      <h2>Legende</h2>
+      <div id="legend"></div>
+      <footer>
+        Grundlage: ESA WorldCover 2021. Kulturarten: JRC EUCROPMAP 2018.
+        Baumgattungen: ForestPaths 2020, Early Access. Die Messung 2015 dient
+        ausschließlich als Zusatzbeleg für Nadelwald-Offenflächen.
+      </footer>
+    </aside>
+  </main>
+  <script>
+    const classes = [
+      ["Siedlung", [["#9E3544","Siedlung dicht"],["#C85862","Siedlung locker"],["#D97972","Versiegelte Einzelfläche"]]],
+      ["Landwirtschaft", [["#C7B474","Landwirtschaft saisonal"],["#D5C990","Landwirtschaft unbekannt"],["#C69252","Weichweizen"],["#A97850","Hartweizen"],["#D6A34F","Gerste"],["#B78352","Roggen"],["#CEB06D","Hafer"],["#E3C83F","Mais"],["#72AFC1","Reis"],["#B98C78","Triticale"],["#D0A88E","Sonstiges Getreide"],["#9A6C3E","Kartoffeln"],["#805132","Zuckerrüben"],["#AA7B56","Sonstige Wurzelkulturen"],["#B26670","Sonstige Industriekulturen"],["#D48372","Sonnenblumen"],["#D6B448","Raps und Rübsen"],["#8C6F69","Soja"],["#99A66B","Hülsenfrüchte"],["#A7BC72","Futterkulturen"]]],
+      ["Wald", [["#3E6848","Lärche"],["#1F5135","Fichte"],["#315E3B","Kiefer"],["#669664","Buche"],["#779C65","Eiche"],["#3D6A49","Sonstiger Nadelwald"],["#79A875","Sonstiger Laubwald"],["#50795A","Waldtyp unbekannt"],["#947B55","Nadelwald-Offenfläche"]]],
+      ["Natur", [["#39779B","Wasser"],["#B59B70","Offener oder spärlicher Boden"],["#89985C","Strauchland und Heide"],["#88AD69","Grasland"],["#5D9E91","Krautiges Feuchtgebiet"],["#A8AE83","Moose und Flechten"],["#E7EEE9","Schnee und Eis"]]]
+    ];
+    const legend = document.getElementById("legend");
+    classes.forEach(([group, items]) => {
+      const heading = document.createElement("h3");
+      heading.textContent = group;
+      legend.appendChild(heading);
+      const grid = document.createElement("div");
+      grid.className = "legend";
+      items.forEach(([color, label]) => {
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.background = color;
+        const text = document.createElement("span");
+        text.textContent = label;
+        grid.append(swatch, text);
+      });
+      legend.appendChild(grid);
+    });
+    const map = document.getElementById("map");
+    document.querySelectorAll("button[data-image]").forEach(button => {
+      button.addEventListener("click", () => {
+        map.src = button.dataset.image;
+        document.querySelectorAll("button[data-image]").forEach(peer => peer.setAttribute("aria-pressed", String(peer === button)));
+      });
+    });
+  </script>
+</body>
+</html>

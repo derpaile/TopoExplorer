@@ -67,7 +67,7 @@ def verify_tile(
         require(offset + PLACE_HEADER.size <= len(payload), f"Abgeschnittener Ortskopf: {path}")
         kind, min_zoom, reserved, x, y, population, name_size = PLACE_HEADER.unpack_from(payload, offset)
         offset += PLACE_HEADER.size
-        require(1 <= kind <= 6, f"Unbekannte Ortsart {kind}: {path}")
+        require(1 <= kind <= 12, f"Unbekannte Namensart {kind}: {path}")
         require(min_zoom <= zoom, f"Ort vor minZoom in z{zoom}: {path}")
         require(reserved == 0, f"Reserviertes Ortsfeld belegt: {path}")
         require(0 <= x <= extent and 0 <= y <= extent, f"Ort außerhalb der Kachel: {path}")
@@ -121,7 +121,7 @@ def main() -> int:
         require(len(place) == 6 and bool(place[0]), "Ungültiger Eintrag im Ortsindex")
         name, kind, population, x, y, min_zoom = place
         require(isinstance(name, str), "Ungültiger Ortsname im Ortsindex")
-        require(isinstance(kind, int) and 1 <= kind <= 6, f"Ungültige Ortsart: {name}")
+        require(isinstance(kind, int) and 1 <= kind <= 12, f"Ungültige Namensart: {name}")
         require(isinstance(population, int) and 0 <= population <= 20_000_000, f"Ungültige Bevölkerung: {name}")
         require(isinstance(x, (int, float)) and isinstance(y, (int, float)), f"Ungültige Koordinate: {name}")
         require(isinstance(min_zoom, int) and 0 <= min_zoom <= 20, f"Ungültige Zoomstufe: {name}")

@@ -66,7 +66,9 @@ final class RasterQueryService {
         if let cached = cache.object(forKey: key.cacheKey) { return cached }
         let levelDirectory = directory.appendingPathComponent("z\(key.z)", isDirectory: true)
         guard
-            let packedLand = try? Data(contentsOf: levelDirectory.appendingPathComponent("\(key.filename).land.z")),
+            let packedLand = try? Data(contentsOf: levelDirectory.appendingPathComponent(
+                "\(key.filename).\(manifest.landcoverSuffix)"
+            )),
             let packedElevation = try? Data(contentsOf: levelDirectory.appendingPathComponent("\(key.filename).elev.z")),
             let land2015 = ZlibDecoder.decode(
                 packedLand, expectedSize: manifest.tileSize * manifest.tileSize
@@ -76,10 +78,10 @@ final class RasterQueryService {
                 expectedSize: (manifest.tileSize + 2) * (manifest.tileSize + 2) * 2
             )
         else { return nil }
-        let land2020URL = levelDirectory.appendingPathComponent("\(key.filename).land2020.z")
-        let land2020 = (try? Data(contentsOf: land2020URL)).flatMap {
-            ZlibDecoder.decode($0, expectedSize: manifest.tileSize * manifest.tileSize)
-        }
+        let land2020: Data? = manifest.landcoverProduct == nil
+            ? (try? Data(contentsOf: levelDirectory.appendingPathComponent("\(key.filename).land2020.z")))
+                .flatMap { ZlibDecoder.decode($0, expectedSize: manifest.tileSize * manifest.tileSize) }
+            : nil
         let tile = RasterQueryTile(land2015: land2015, land2020: land2020, elevation: elevation)
         cache.setObject(tile, forKey: key.cacheKey, cost: land2015.count + elevation.count + (land2020?.count ?? 0))
         return tile

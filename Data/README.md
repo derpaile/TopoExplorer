@@ -5,9 +5,14 @@
 - `LandCover/`: Landbedeckung 2015 und 2020
 - `Elevation/`: verwendetes GMTED-Höhenmodell und Metadaten
 - `OSM/`: Deutschland-PBF sowie Orts- und Bahncache
+- `BKG/`: amtliche geografische Namen GN250 samt Quelldokumentation
 - `Boundaries/`: präzise Ländergrenzen in EPSG:3035
 
 `../MapData/Germany/` enthält die daraus erzeugte Kachelpyramide und wird ebenfalls nicht eingecheckt. Beide Verzeichnisse lassen sich lokal sichern oder neu erzeugen.
+
+Nach den beiden Jahresklassifikationen erzeugt
+`scripts/preprocess_landcover_fusion.sh` daraus die detailreiche gemeinsame
+Landbedeckung in `*.landfusion.z`.
 
 ## Vektoren und Orte
 
@@ -25,6 +30,13 @@ werden diese lokalen Quellen verwendet:
 - `OSM/germany-latest.osm.pbf`: Straßen, Gewässer und Verwaltungsgrenzen
 - `OSM/railways.geojson`: Bahncache
 - `OSM/places.geojson`: Ortsname, Ortsart und Bevölkerung
+- `BKG/gn250/GN250.csv`: Berge, Landschaften, Gewässer, Naturgebiete, Inseln und Höhlen
+
+GN250 wird bei Bedarf automatisch geladen:
+
+```sh
+./scripts/download_supplemental_data.sh
+```
 
 Die Ausgabe liegt in `../MapData/Germany/Vectors/`. Format und Swift-taugliches
 Binärlayout sind in `preprocess/VECTOR_FORMAT.md` beschrieben. Der zentrale,

@@ -1,6 +1,11 @@
 import Foundation
 
 struct MapManifest: Codable, Equatable {
+    struct LandcoverProduct: Codable, Equatable {
+        let name: String
+        let suffix: String
+    }
+
     struct LandcoverYear: Codable, Equatable, Identifiable {
         let year: Int
         let suffix: String
@@ -38,6 +43,7 @@ struct MapManifest: Codable, Equatable {
     let levels: [Level]
     let classes: [LandClass]
     var landcoverYears: [LandcoverYear]? = nil
+    var landcoverProduct: LandcoverProduct? = nil
 
     var left: Double { bounds[0] }
     var bottom: Double { bounds[1] }
@@ -45,7 +51,10 @@ struct MapManifest: Codable, Equatable {
     var top: Double { bounds[3] }
     var width: Double { right - left }
     var height: Double { top - bottom }
-    var hasLandcover2020: Bool { landcoverYears?.contains(where: { $0.year == 2020 }) == true }
+    var landcoverSuffix: String { landcoverProduct?.suffix ?? "land.z" }
+    var hasLandcover2020: Bool {
+        landcoverProduct == nil && landcoverYears?.contains(where: { $0.year == 2020 }) == true
+    }
 
     func validated() throws -> MapManifest {
         guard version == 1 else { throw ManifestError.unsupportedVersion(version) }
@@ -55,7 +64,9 @@ struct MapManifest: Codable, Equatable {
         guard !levels.isEmpty, levels.map(\.z) == Array(minZoom...maxZoom) else {
             throw ManifestError.invalidLevels
         }
-        guard classes.count == 8, classes.map(\.id) == Array(0...7) else {
+        let expectedClassCount = landcoverProduct == nil ? 8 : 11
+        guard classes.count == expectedClassCount,
+              classes.map(\.id) == Array(0..<expectedClassCount) else {
             throw ManifestError.invalidClasses
         }
         return self
@@ -77,7 +88,7 @@ enum ManifestError: LocalizedError {
         case .invalidTileLayout: "Das Kachelformat ist ungültig."
         case .unsupportedCompression(let compression): "Kompression \(compression) wird nicht unterstützt."
         case .invalidLevels: "Die Zoomstufen sind unvollständig."
-        case .invalidClasses: "Die acht Landklassen sind unvollständig."
+        case .invalidClasses: "Die Landklassen sind unvollständig."
         }
     }
 }
