@@ -53,6 +53,10 @@ struct RuntimeVerifier {
 
         let manifestData = try Data(contentsOf: root.appendingPathComponent("manifest.json"))
         let manifest = try JSONDecoder().decode(MapManifest.self, from: manifestData).validated()
+        guard
+            Set(StyleSettings.presets.map(\.id)).count == StyleSettings.presets.count,
+            StyleSettings.presets.allSatisfy({ (try? $0.validated()) != nil })
+        else { throw VerificationError.style }
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
             throw VerificationError.metalDevice
         }
@@ -631,5 +635,6 @@ private enum VerificationError: Error {
     case metalTexture
     case image
     case outsideMap
+    case style
     case vector
 }

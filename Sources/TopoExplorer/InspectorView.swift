@@ -85,15 +85,21 @@ struct InspectorView: View {
                     } label: {
                         HStack(spacing: 9) {
                             HStack(spacing: -3) {
-                                ForEach(Array(preset.colors.prefix(4).enumerated()), id: \.offset) { _, color in
+                                ForEach(StyleSettings.previewColorIndices, id: \.self) { index in
                                     Circle()
-                                        .fill(color.color)
+                                        .fill(preset.colors[index].color)
                                         .frame(width: 13, height: 13)
                                         .overlay(Circle().stroke(.white.opacity(0.55), lineWidth: 0.5))
                                 }
                             }
-                            Text(preset.name)
-                                .font(.subheadline.weight(.medium))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(preset.name)
+                                    .font(.subheadline.weight(.medium))
+                                Text(StyleSettings.description(for: preset))
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
                             Spacer()
                             if style.activeStyleName == preset.name {
                                 Image(systemName: "checkmark.circle.fill")
@@ -112,6 +118,18 @@ struct InspectorView: View {
                         in: RoundedRectangle(cornerRadius: 9)
                     )
                 }
+
+                Button {
+                    style.resetToStandard()
+                } label: {
+                    Label("Erststart-Standard wiederherstellen", systemImage: "arrow.counterclockwise")
+                        .font(.caption.weight(.medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
             }
         }
     }
@@ -263,7 +281,7 @@ struct InspectorView: View {
                     Button("Importieren …") { style.importWithPanel() }
                     Button("Exportieren …") { style.exportWithPanel() }
                     Spacer()
-                    Button("Zurücksetzen") { style.resetAll() }
+                    Button("Auf Standard") { style.resetToStandard() }
                 }
                 .controlSize(.small)
             }

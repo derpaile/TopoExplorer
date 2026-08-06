@@ -129,16 +129,73 @@ final class StyleSettings: ObservableObject {
         "#80A94F", "#277043", "#69B26B", "#3D7A50", "#A56D36",
     ].map(RGBAColor.init(hex:))
 
+    static let satelliteColors = [
+        "#0C1110", "#824C47", "#A26658", "#C0846D", "#326A84",
+        "#AB9068", "#687A50", "#7F995F", "#4D8076", "#859271",
+        "#EDF1EE", "#C2AE69", "#B9A775", "#D0B874", "#C79F5C",
+        "#B8954B", "#A98A46", "#D4C080", "#C0A44D", "#87A871",
+        "#AD9653", "#C9B36E", "#9B7950", "#A87863", "#B08B62",
+        "#9B7355", "#B98546", "#D1B94F", "#788B55", "#879963",
+        "#8EA36B", "#657B42", "#173C2C", "#2B5035", "#5F824C",
+        "#718947", "#234632", "#6E965D", "#486C4D", "#9A815B",
+    ].map(RGBAColor.init(hex:))
+
+    static let engravingColors = [
+        "#E9DFC8", "#5E302C", "#7E4337", "#A05C48", "#63899A",
+        "#C2A879", "#8C956A", "#A6AE79", "#718F83", "#9A9B72",
+        "#F5F0E4", "#BFA96C", "#C8B784", "#D0B66C", "#C49B52",
+        "#D7C383", "#AF8B45", "#CBB67D", "#B89347", "#9EA76A",
+        "#BA9D55", "#CEB878", "#A98152", "#986747", "#B18A5F",
+        "#9F7953", "#B27A48", "#C6A042", "#8B8D57", "#9A9B63",
+        "#A6A86B", "#6E804F", "#354D37", "#455B3A", "#75825A",
+        "#7D7B4B", "#3F5439", "#7F9365", "#627353", "#8D744E",
+    ].map(RGBAColor.init(hex:))
+
+    static let auroraColors = [
+        "#071014", "#C23A63", "#E15A78", "#F48791", "#247CA0",
+        "#896B62", "#456D68", "#4F8972", "#2B7E78", "#6B8D7B",
+        "#D9EEF0", "#B99B55", "#8B7768", "#D6AE52", "#C48A4F",
+        "#E4C966", "#B76D7C", "#D6A65D", "#C87750", "#4C9C8A",
+        "#A77BBA", "#D0A35B", "#AA6C76", "#96619D", "#BC7A75",
+        "#8E718C", "#DD875E", "#E3BA48", "#638F8B", "#769B78",
+        "#83AA83", "#568C62", "#0E493E", "#1C5D4D", "#3C7B5A",
+        "#578359", "#195144", "#4C936E", "#326F58", "#8B6F5C",
+    ].map(RGBAColor.init(hex:))
+
+    static let pastelColors = [
+        "#F6F2EA", "#A96670", "#C98488", "#E3AAA5", "#70A8C2",
+        "#D3B894", "#A7B28A", "#B7C998", "#86B6AD", "#BEC3A0",
+        "#FFFFFC", "#DBCB8F", "#D7C7A7", "#E8C98A", "#DDB077",
+        "#E7D39F", "#CDB982", "#E5C594", "#D9B477", "#B6C69D",
+        "#C9B1D4", "#E0C69D", "#D1A692", "#C49DAE", "#D8B4A6",
+        "#B7AAC7", "#E6AD8F", "#E5C75E", "#AAB99A", "#B4C4A4",
+        "#AAC298", "#9CB68E", "#527B67", "#688B70", "#91AF82",
+        "#A8B78C", "#5E8069", "#9CBE92", "#7DA887", "#B29A7B",
+    ].map(RGBAColor.init(hex:))
+
+    static let bauhausColors = [
+        "#F1EBDD", "#B51D28", "#D74332", "#E86C4A", "#1768AC",
+        "#C89031", "#7E8D35", "#55A64B", "#168F88", "#A2A64E",
+        "#FFFFFF", "#E3B72C", "#B79A5B", "#F0C735", "#E59A24",
+        "#D9B22D", "#C7762D", "#E4BC53", "#F29F26", "#5BA85B",
+        "#2D9A9A", "#D49A2A", "#B96C30", "#8A552D", "#C57B50",
+        "#A04A49", "#E1652E", "#E0C218", "#667C3E", "#78944A",
+        "#8EAA55", "#5D852E", "#114B32", "#1E6137", "#3D7B3B",
+        "#6B8232", "#19553A", "#4C954D", "#318448", "#9B6C3A",
+    ].map(RGBAColor.init(hex:))
+
+    static let standardPreset = MapStyleDocument(
+        id: "builtin.atlas",
+        name: "Standard · Erststart",
+        colors: atlasColors,
+        relief: ReliefStyle(
+            enabled: true, opacity: 0.40, exaggeration: 34,
+            contrast: 2.0, ambientLight: 0.09, sunAzimuthDegrees: 315
+        )
+    )
+
     static let presets = [
-        MapStyleDocument(
-            id: "builtin.atlas",
-            name: "Naturatlas",
-            colors: atlasColors,
-            relief: ReliefStyle(
-                enabled: true, opacity: 0.40, exaggeration: 34,
-                contrast: 2.0, ambientLight: 0.09, sunAzimuthDegrees: 315
-            )
-        ),
+        standardPreset,
         MapStyleDocument(
             id: "builtin.agriculture",
             name: "Kulturarten",
@@ -166,7 +223,69 @@ final class StyleSettings: ObservableObject {
                 contrast: 2.5, ambientLight: 0.06, sunAzimuthDegrees: 315
             )
         ),
+        MapStyleDocument(
+            id: "builtin.satellite",
+            name: "Satellitisch",
+            colors: satelliteColors,
+            relief: ReliefStyle(
+                enabled: true, opacity: 0.50, exaggeration: 42,
+                contrast: 2.1, ambientLight: 0.07, sunAzimuthDegrees: 305
+            )
+        ),
+        MapStyleDocument(
+            id: "builtin.engraving",
+            name: "Kupferstich",
+            colors: engravingColors,
+            relief: ReliefStyle(
+                enabled: true, opacity: 0.27, exaggeration: 25,
+                contrast: 2.7, ambientLight: 0.13, sunAzimuthDegrees: 300
+            )
+        ),
+        MapStyleDocument(
+            id: "builtin.aurora",
+            name: "Nordlicht",
+            colors: auroraColors,
+            relief: ReliefStyle(
+                enabled: true, opacity: 0.35, exaggeration: 36,
+                contrast: 2.2, ambientLight: 0.06, sunAzimuthDegrees: 325
+            )
+        ),
+        MapStyleDocument(
+            id: "builtin.pastel",
+            name: "Pastellfelder",
+            colors: pastelColors,
+            relief: ReliefStyle(
+                enabled: true, opacity: 0.23, exaggeration: 22,
+                contrast: 1.55, ambientLight: 0.14, sunAzimuthDegrees: 315
+            )
+        ),
+        MapStyleDocument(
+            id: "builtin.bauhaus",
+            name: "Bauhaus",
+            colors: bauhausColors,
+            relief: ReliefStyle(
+                enabled: true, opacity: 0.25, exaggeration: 24,
+                contrast: 2.0, ambientLight: 0.10, sunAzimuthDegrees: 315
+            )
+        ),
     ]
+
+    static let previewColorIndices = [1, 4, 13, 32, 34]
+
+    static func description(for preset: MapStyleDocument) -> String {
+        switch preset.id {
+        case "builtin.atlas": "Unveränderte Darstellung beim ersten Start dieser Version."
+        case "builtin.agriculture": "Kulturarten treten klarer als einzelne Felder hervor."
+        case "builtin.forest": "Baumgattungen und Waldöffnungen sind besonders gut lesbar."
+        case "builtin.contrast": "Kräftige Trennung für schwierige Licht- und Zoomstufen."
+        case "builtin.satellite": "Naturnahe, dunkle Töne mit plastischem Gelände."
+        case "builtin.engraving": "Warme Papierfarben wie eine historische Landesaufnahme."
+        case "builtin.aurora": "Kühle Nachtkarte mit leuchtenden Kulturflächen."
+        case "builtin.pastel": "Helle, ruhige Flächen für Beschriftung und Druck."
+        case "builtin.bauhaus": "Reduzierte Primärfarben und starke Flächenrhythmen."
+        default: ""
+        }
+    }
 
     @Published var colors: [RGBAColor] { didSet { propertyChanged() } }
     @Published var reliefEnabled: Bool { didSet { propertyChanged() } }
@@ -184,7 +303,7 @@ final class StyleSettings: ObservableObject {
     private var isApplying = false
 
     init() {
-        let original = Self.presets[0]
+        let original = Self.standardPreset
         colors = original.colors
         reliefEnabled = original.relief.enabled
         reliefOpacity = original.relief.opacity
@@ -211,7 +330,7 @@ final class StyleSettings: ObservableObject {
             let saved = try? saved.validated()
         {
             isApplying = true
-            assign(saved)
+            assign(Self.presets.first(where: { $0.id == saved.id }) ?? saved)
             isApplying = false
         } else if
             let data = UserDefaults.standard.data(forKey: Self.legacyStorageKey),
@@ -326,8 +445,8 @@ final class StyleSettings: ObservableObject {
         }
     }
 
-    func resetAll() {
-        apply(Self.presets[0])
+    func resetToStandard() {
+        apply(Self.standardPreset)
     }
 
     var renderStyle: RenderStyle {

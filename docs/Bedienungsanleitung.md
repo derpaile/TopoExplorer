@@ -35,9 +35,11 @@ Ein abgebrochener Kachellauf kann mit demselben Befehl fortgesetzt werden.
 ## Darstellung
 
 Im rechten Bereich sind die 40 Landklassen in Grundlage, Siedlung, Natur,
-Landwirtschaft und Wald gegliedert. Jede Farbe ist veränderbar. Die Themen
-Naturatlas, Kulturarten, Waldarten und Kontrastreich setzen vollständige
-Paletten. Stil-Dateien lassen sich speichern, weitergeben und importieren.
+Landwirtschaft und Wald gegliedert. Jede Farbe ist veränderbar. Das
+unveränderliche Profil **Standard · Erststart** stellt exakt die Darstellung
+des ersten Starts dieser Version wieder her. Dazu kommen Kulturarten,
+Waldarten, Kontrastreich, Satellitisch, Kupferstich, Nordlicht, Pastellfelder
+und Bauhaus. Stil-Dateien lassen sich speichern, weitergeben und importieren.
 
 Straßen, Eisenbahnen, Flüsse, Grenzen und Ortsnamen erscheinen abhängig von
 der Zoomstufe. Nicht benötigte Ebenen können ausgeschaltet werden.
