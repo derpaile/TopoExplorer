@@ -31,7 +31,10 @@ final class RasterQueryService {
             worldX >= manifest.left, worldX < manifest.right,
             worldY >= manifest.bottom, worldY < manifest.top
         else {
-            completion(MapProbe(worldX: worldX, worldY: worldY, elevation: nil, className: nil))
+            completion(MapProbe(
+                worldX: worldX, worldY: worldY,
+                elevation: nil, classID: nil, className: nil
+            ))
             return
         }
         let pixelX = Int((worldX - manifest.left) / level.resolution)
@@ -65,6 +68,7 @@ final class RasterQueryService {
             let result = MapProbe(
                 worldX: worldX, worldY: worldY,
                 elevation: classID == 0 ? nil : Int(meters.rounded()),
+                classID: classID == 0 ? nil : classID,
                 className: classID == 0 ? nil : className
             )
             DispatchQueue.main.async { completion(result) }

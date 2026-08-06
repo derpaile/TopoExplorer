@@ -435,7 +435,7 @@ struct ContentView: View {
             mapTopBar(manifest: manifest)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-            mapBottomBar
+            mapBottomBar(manifest: manifest)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
             if showInspector {
@@ -517,16 +517,19 @@ struct ContentView: View {
         .padding(12)
     }
 
-    private var mapBottomBar: some View {
+    private func mapBottomBar(manifest: MapManifest) -> some View {
         HStack(alignment: .bottom, spacing: 10) {
             VStack(alignment: .leading, spacing: 6) {
                 if let probe = viewport.probe {
-                    Label(probe.summary, systemImage: "cursorarrow.rays")
-                        .font(.caption.monospacedDigit())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .atlasGlass(cornerRadius: 10)
-                        .transition(.opacity)
+                    CursorInfoGlassOverlay(
+                        probe: probe,
+                        crs: manifest.crs,
+                        surfaceColor: probe.classID.flatMap { id in
+                            style.colors.indices.contains(id) ? style.colors[id].color : nil
+                        }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
                 }
 
                 if !viewport.status.isEmpty {
@@ -557,6 +560,7 @@ struct ContentView: View {
             .atlasGlass(cornerRadius: 9)
         }
         .padding(12)
+        .animation(.snappy(duration: 0.20), value: viewport.probe != nil)
     }
 
     private var comparisonOverlay: some View {
@@ -852,6 +856,109 @@ struct ContentView: View {
         case "ruhrgebiet": "Städte & Industrie"
         default: "Felder & Siedlungen"
         }
+    }
+}
+
+private struct CursorInfoGlassOverlay: View {
+    let probe: MapProbe
+    let crs: String
+    let surfaceColor: Color?
+
+    private var accent: Color { surfaceColor ?? .secondary }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("HÖHE", systemImage: "mountain.2.fill")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(probe.elevation.map(String.init) ?? "—")
+                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text("m")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 82, alignment: .leading)
+
+            Rectangle()
+                .fill(.primary.opacity(0.10))
+                .frame(width: 1, height: 52)
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(accent)
+                        .frame(width: 8, height: 8)
+                        .overlay(Circle().stroke(.white.opacity(0.65), lineWidth: 0.7))
+                        .shadow(color: accent.opacity(0.45), radius: 3)
+                    Text("OBERFLÄCHE")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .tracking(0.8)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text(probe.className ?? "Keine Kartendaten")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .contentTransition(.interpolate)
+
+                HStack(spacing: 7) {
+                    Text("E \(coordinate(probe.worldX))")
+                    Text("N \(coordinate(probe.worldY))")
+                    Text(crs.replacingOccurrences(of: "EPSG:", with: "EPSG "))
+                        .foregroundStyle(.tertiary)
+                }
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundStyle(.secondary)
+            }
+            .frame(width: 236, alignment: .leading)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [accent.opacity(0.17), .clear, .black.opacity(0.025)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.72), accent.opacity(0.20), .black.opacity(0.12)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
+        }
+        .overlay(alignment: .topLeading) {
+            Capsule()
+                .fill(.white.opacity(0.38))
+                .frame(width: 74, height: 1)
+                .padding(.leading, 18)
+        }
+        .shadow(color: .black.opacity(0.18), radius: 16, y: 7)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(probe.summary)
+    }
+
+    private func coordinate(_ value: Double) -> String {
+        Int(value.rounded()).formatted(.number.grouping(.automatic))
     }
 }
 

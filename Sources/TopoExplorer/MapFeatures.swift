@@ -102,6 +102,7 @@ struct MapProbe: Equatable {
     let worldX: Double
     let worldY: Double
     let elevation: Int?
+    let classID: Int?
     let className: String?
 
     var summary: String {
