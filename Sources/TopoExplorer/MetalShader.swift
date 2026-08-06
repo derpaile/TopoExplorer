@@ -83,7 +83,7 @@ enum MetalShader {
                 && in.position.x >= comparison.splitPosition * comparison.drawableWidth);
         uint classIndex = min(
             use2020 ? landcover2020.read(classPosition).r : landcover2015.read(classPosition).r,
-            10u
+            39u
         );
         float4 base = palette[classIndex];
         if (classIndex == 0u) {
@@ -93,7 +93,11 @@ enum MetalShader {
         // Ein Pixel Überlappung je Kachel hält die lineare Reliefabtastung
         // und die zentralen Ableitungen über Kachelgrenzen hinweg identisch.
         constexpr sampler elevationSampler(coord::pixel, address::clamp_to_edge, filter::linear);
-        float2 elevationPosition = float2(1.5) + in.uv * float2(landWidth - 1, landHeight - 1);
+        float2 elevationInterior = float2(
+            elevation.get_width() - 2,
+            elevation.get_height() - 2
+        );
+        float2 elevationPosition = float2(1.5) + in.uv * (elevationInterior - 1.0);
         float left = elevation.sample(elevationSampler, elevationPosition + float2(-1.0, 0.0)).r;
         float right = elevation.sample(elevationSampler, elevationPosition + float2(1.0, 0.0)).r;
         float up = elevation.sample(elevationSampler, elevationPosition + float2(0.0, -1.0)).r;

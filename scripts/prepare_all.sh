@@ -18,10 +18,11 @@ if ! command -v osmium >/dev/null 2>&1; then
   fi
 fi
 
-./scripts/preprocess_germany.sh "$@"
-./scripts/preprocess_landcover_2020.sh
-./scripts/preprocess_landcover_fusion.sh
-./scripts/preprocess_vectors.sh
+./scripts/preprocess_landcover_10m.sh "$@"
+./scripts/preprocess_vectors.sh \
+  --manifest MapData/Germany-10m/manifest.json \
+  --output MapData/Germany-10m/Vectors
+./scripts/activate_landcover_10m.sh
 ./scripts/verify_vectors.sh
 ./scripts/verify_image_quality.sh
 

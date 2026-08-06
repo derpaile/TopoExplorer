@@ -2,7 +2,7 @@
 
 `Raw/` enthält große lokale Quelldaten und wird nicht in Git aufgenommen:
 
-- `LandCover/`: Landbedeckung 2015 und 2020
+- `LandCover/`: Landbedeckung 2015 für Grenzen und Nadelwald-Offenflächen
 - `Elevation/`: verwendetes GMTED-Höhenmodell und Metadaten
 - `OSM/`: Deutschland-PBF sowie Orts- und Bahncache
 - `BKG/`: amtliche geografische Namen GN250 samt Quelldokumentation
@@ -10,9 +10,16 @@
 
 `../MapData/Germany/` enthält die daraus erzeugte Kachelpyramide und wird ebenfalls nicht eingecheckt. Beide Verzeichnisse lassen sich lokal sichern oder neu erzeugen.
 
-Nach den beiden Jahresklassifikationen erzeugt
-`scripts/preprocess_landcover_fusion.sh` daraus die detailreiche gemeinsame
-Landbedeckung in `*.landfusion.z`.
+`scripts/preprocess_landcover_10m.sh` erzeugt eine neue Kachelpyramide in
+`../MapData/Germany-10m/`. ESA WorldCover 2021, JRC EUCROPMAP 2018 und
+ForestPaths 2020 werden nacheinander geladen, direkt in `*.landrich.z`
+integriert und wieder entfernt. Dadurch liegen nie mehrere große neue
+Datensätze gleichzeitig auf der Platte. Standard: 10 m Landbedeckung, 100 m
+Relief-Abtastung und höchstens 8 GB Arbeitsbestand.
+
+Nach erfolgreicher Vektoraufbereitung aktiviert
+`scripts/activate_landcover_10m.sh` die neue Karte. Die vorherige
+`MapData/Germany` wird ohne Kopie als datierte 50-m-Sicherung umbenannt.
 
 ## Vektoren und Orte
 

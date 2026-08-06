@@ -54,13 +54,13 @@ struct RuntimeVerifier {
         let manifestData = try Data(contentsOf: root.appendingPathComponent("manifest.json"))
         let manifest = try JSONDecoder().decode(MapManifest.self, from: manifestData).validated()
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
-            throw VerificationError.metal
+            throw VerificationError.metalDevice
         }
         let library = try device.makeLibrary(source: MetalShader.source, options: nil)
         guard
             let vertexFunction = library.makeFunction(name: "tileVertex"),
             let fragmentFunction = library.makeFunction(name: "tileFragment")
-        else { throw VerificationError.metal }
+        else { throw VerificationError.metalShader }
 
         let pipelineDescriptor = MTLRenderPipelineDescriptor()
         pipelineDescriptor.vertexFunction = vertexFunction
@@ -284,7 +284,8 @@ struct RuntimeVerifier {
                 roads: true, railways: true, waterways: true,
                 boundaries: true, places: true, geonames: true
             ),
-            renderComparison: RenderComparison(mode: 0, splitPosition: 0.5)
+            renderComparison: RenderComparison(mode: 0, splitPosition: 0.5),
+            sources: []
         )
         try MapExportWriter.write(pixels: pixels, width: 96, height: 64, request: request)
         guard
@@ -315,7 +316,7 @@ struct RuntimeVerifier {
         let view = MapCanvasView(frame: CGRect(x: 0, y: 0, width: 320, height: 240))
         let viewport = ViewportController()
         guard let renderer = MapRenderer(view: view, manifest: manifest, viewport: viewport) else {
-            throw VerificationError.metal
+            throw VerificationError.metalRenderer
         }
         let colors = manifest.classes.map { RGBAColor(hex: $0.defaultColor) }
         let renderStyle = RenderStyle(
@@ -373,7 +374,8 @@ struct RuntimeVerifier {
             landcoverMode: .comparison,
             renderStyle: renderStyle,
             renderLayers: renderLayers,
-            renderComparison: renderComparison
+            renderComparison: renderComparison,
+            sources: manifest.sources ?? []
         )
 
         var outcome: Result<URL, Error>?
@@ -427,7 +429,9 @@ struct RuntimeVerifier {
         )
         outputDescriptor.usage = .renderTarget
         outputDescriptor.storageMode = .shared
-        guard let output = device.makeTexture(descriptor: outputDescriptor) else { throw VerificationError.metal }
+        guard let output = device.makeTexture(descriptor: outputDescriptor) else {
+            throw VerificationError.metalOutput
+        }
 
         let pass = MTLRenderPassDescriptor()
         pass.colorAttachments[0].texture = output
@@ -437,7 +441,7 @@ struct RuntimeVerifier {
         guard
             let command = queue.makeCommandBuffer(),
             let encoder = command.makeRenderCommandEncoder(descriptor: pass)
-        else { throw VerificationError.metal }
+        else { throw VerificationError.metalEncoder }
         encoder.setRenderPipelineState(pipeline)
         palette.withUnsafeBytes { encoder.setFragmentBytes($0.baseAddress!, length: $0.count, index: 0) }
         var relief = PreviewRelief()
@@ -454,6 +458,8 @@ struct RuntimeVerifier {
         )
 
         var retainedTextures: [MTLTexture] = []
+        let elevationTileSize = manifest.elevationTileSize(at: level)
+        let elevationTextureSize = elevationTileSize + 2
         for y in minY...maxY {
             for x in minX...maxX {
                 let directory = root.appendingPathComponent("z\(level.z)", isDirectory: true)
@@ -472,7 +478,7 @@ struct RuntimeVerifier {
                     ),
                     let elevation = ZlibDecoder.decode(
                         packedElevation,
-                        expectedSize: (manifest.tileSize + 2) * (manifest.tileSize + 2) * 2
+                        expectedSize: elevationTextureSize * elevationTextureSize * 2
                     )
                 else { throw VerificationError.decompression }
                 let land2020 = packedLand2020.flatMap {
@@ -489,10 +495,10 @@ struct RuntimeVerifier {
                 let elevationTexture = try texture(
                     device: device,
                     format: .r16Unorm,
-                    width: manifest.tileSize + 2,
-                    height: manifest.tileSize + 2,
+                    width: elevationTextureSize,
+                    height: elevationTextureSize,
                     bytes: elevation,
-                    bytesPerRow: (manifest.tileSize + 2) * 2
+                    bytesPerRow: elevationTextureSize * 2
                 )
                 let land2020Texture = try texture(
                     device: device,
@@ -538,7 +544,9 @@ struct RuntimeVerifier {
         encoder.endEncoding()
         command.commit()
         command.waitUntilCompleted()
-        guard command.status == .completed else { throw command.error ?? VerificationError.metal }
+        guard command.status == .completed else {
+            throw command.error ?? VerificationError.metalCommand
+        }
 
         var pixels = Data(count: outputWidth * outputHeight * 4)
         pixels.withUnsafeMutableBytes {
@@ -569,7 +577,9 @@ struct RuntimeVerifier {
         )
         descriptor.usage = .shaderRead
         descriptor.storageMode = .shared
-        guard let texture = device.makeTexture(descriptor: descriptor) else { throw VerificationError.metal }
+        guard let texture = device.makeTexture(descriptor: descriptor) else {
+            throw VerificationError.metalTexture
+        }
         bytes.withUnsafeBytes {
             texture.replace(
                 region: MTLRegionMake2D(0, 0, width, height),
@@ -612,7 +622,13 @@ struct RuntimeVerifier {
 
 private enum VerificationError: Error {
     case decompression
-    case metal
+    case metalDevice
+    case metalShader
+    case metalRenderer
+    case metalOutput
+    case metalEncoder
+    case metalCommand
+    case metalTexture
     case image
     case outsideMap
     case vector

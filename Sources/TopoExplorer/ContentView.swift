@@ -106,6 +106,8 @@ struct ContentView: View {
 
                     if manifest.hasLandcover2020 {
                         landcoverSection
+                    } else {
+                        richLandcoverSection(manifest: manifest)
                     }
 
                     bookmarkSection
@@ -270,6 +272,36 @@ struct ContentView: View {
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+        }
+        .padding(10)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func richLandcoverSection(manifest: MapManifest) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sidebarSectionTitle("Oberflächen", systemImage: "square.grid.3x3.fill")
+            Text("\(manifest.classes.count - 1) sichtbare Klassen · 10-m-Gesamtkarte")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(["Siedlung", "Natur", "Landwirtschaft", "Wald"], id: \.self) { group in
+                let classes = manifest.classes.filter { $0.group == group }
+                if let first = classes.first {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(RGBAColor(hex: first.defaultColor).color)
+                            .frame(width: 16, height: 12)
+                        Text(group)
+                            .font(.caption.weight(.medium))
+                        Spacer()
+                        Text("\(classes.count)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Text("Alle Klassen und Themen unter Kartendarstellung.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .padding(10)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
@@ -787,7 +819,8 @@ struct ContentView: View {
             layers: layers,
             snapshot: viewport.snapshot,
             labels: viewport.labels,
-            comparison: comparison
+            comparison: comparison,
+            sources: session.manifest?.sources ?? []
         )
     }
 

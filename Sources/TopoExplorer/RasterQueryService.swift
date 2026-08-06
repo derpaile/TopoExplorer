@@ -45,8 +45,17 @@ final class RasterQueryService {
             guard let self, let tile = self.tile(key) else { return }
             let land = year2020 ? (tile.land2020 ?? tile.land2015) : tile.land2015
             let classID = Int(land[localY * self.manifest.tileSize + localX])
-            let elevationSize = self.manifest.tileSize + 2
-            let elevationOffset = ((localY + 1) * elevationSize + localX + 1) * 2
+            let elevationTileSize = self.manifest.elevationTileSize(at: self.level)
+            let elevationSize = elevationTileSize + self.manifest.elevationBorder * 2
+            let elevationX = min(
+                elevationTileSize - 1,
+                localX * elevationTileSize / self.manifest.tileSize
+            ) + self.manifest.elevationBorder
+            let elevationY = min(
+                elevationTileSize - 1,
+                localY * elevationTileSize / self.manifest.tileSize
+            ) + self.manifest.elevationBorder
+            let elevationOffset = (elevationY * elevationSize + elevationX) * 2
             let encoded = UInt16(tile.elevation[elevationOffset])
                 | (UInt16(tile.elevation[elevationOffset + 1]) << 8)
             let normalized = Double(encoded) / 65_535
@@ -65,6 +74,8 @@ final class RasterQueryService {
     private func tile(_ key: TileKey) -> RasterQueryTile? {
         if let cached = cache.object(forKey: key.cacheKey) { return cached }
         let levelDirectory = directory.appendingPathComponent("z\(key.z)", isDirectory: true)
+        let elevationTileSize = manifest.elevationTileSize(at: level)
+        let elevationSize = elevationTileSize + manifest.elevationBorder * 2
         guard
             let packedLand = try? Data(contentsOf: levelDirectory.appendingPathComponent(
                 "\(key.filename).\(manifest.landcoverSuffix)"
@@ -75,7 +86,7 @@ final class RasterQueryService {
             ),
             let elevation = ZlibDecoder.decode(
                 packedElevation,
-                expectedSize: (manifest.tileSize + 2) * (manifest.tileSize + 2) * 2
+                expectedSize: elevationSize * elevationSize * 2
             )
         else { return nil }
         let land2020: Data? = manifest.landcoverProduct == nil

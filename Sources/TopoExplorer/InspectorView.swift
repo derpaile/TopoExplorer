@@ -117,29 +117,40 @@ struct InspectorView: View {
     }
 
     private var paletteControls: some View {
-        panelSection(title: "Kartenfarben", symbol: "paintpalette.fill") {
+        panelSection(title: "Legende und Farben", symbol: "paintpalette.fill") {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Direkt anklicken, um eine Landklasse anzupassen.")
+                Text("Alle Oberflächen sind einzeln färbbar und nach Thema geordnet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 8) {
-                    ForEach(Array(manifest.classes.enumerated()), id: \.element.id) { index, landClass in
-                        VStack(spacing: 4) {
-                            ColorPicker(
-                                landClass.name,
-                                selection: style.colorBinding(at: index),
-                                supportsOpacity: false
-                            )
-                            .labelsHidden()
-                            .frame(width: 28, height: 24)
-                            .help(landClass.name)
+                ForEach(paletteGroups, id: \.name) { group in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(group.name)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3),
+                            spacing: 8
+                        ) {
+                            ForEach(group.classes) { landClass in
+                                VStack(spacing: 4) {
+                                    ColorPicker(
+                                        landClass.name,
+                                        selection: style.colorBinding(at: landClass.id),
+                                        supportsOpacity: false
+                                    )
+                                    .labelsHidden()
+                                    .frame(width: 28, height: 24)
+                                    .help(landClass.name)
 
-                            Text(landClass.name)
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity)
+                                    Text(landClass.name)
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.center)
+                                        .frame(maxWidth: .infinity, minHeight: 22)
+                                }
+                            }
                         }
                     }
                 }
@@ -198,7 +209,8 @@ struct InspectorView: View {
                         layers: layers,
                         snapshot: viewport.snapshot,
                         labels: viewport.labels,
-                        comparison: comparison
+                        comparison: comparison,
+                        sources: manifest.sources ?? []
                     )
                 } label: {
                     Label("Sichtbaren Ausschnitt exportieren", systemImage: "photo")
@@ -265,8 +277,14 @@ struct InspectorView: View {
             Label("Kartengrundlage", systemImage: "externaldrive")
                 .font(.caption.weight(.semibold))
             Text("\(manifest.levels.count) Zoomstufen · feinste Auflösung \(Int(manifest.levels.last?.resolution ?? 0)) m")
-            Text("2015-Daten: CC BY-NC 4.0 · Exporte mit dieser Landbedeckung sind nicht kommerziell freigegeben.")
-                .fixedSize(horizontal: false, vertical: true)
+            if let sources = manifest.sources {
+                ForEach(sources) { source in
+                    Text("\(source.name) \(source.year) · \(source.role) · \(source.license)")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text("Historische Landbedeckung 2015/2020")
+            }
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -291,6 +309,18 @@ struct InspectorView: View {
         let names = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"]
         let index = Int((style.sunAzimuthDegrees + 22.5).truncatingRemainder(dividingBy: 360) / 45)
         return names[min(max(index, 0), names.count - 1)]
+    }
+
+    private var paletteGroups: [(name: String, classes: [MapManifest.LandClass])] {
+        let order = ["Grundlage", "Siedlung", "Natur", "Landwirtschaft", "Wald"]
+        let grouped = Dictionary(grouping: manifest.classes) { $0.group ?? "Oberflächen" }
+        let known = order.compactMap { name in
+            grouped[name].map { (name: name, classes: $0) }
+        }
+        let remaining = grouped.keys.filter { !order.contains($0) }.sorted().map {
+            (name: $0, classes: grouped[$0] ?? [])
+        }
+        return known + remaining
     }
 
     private var errorIsPresented: Binding<Bool> {

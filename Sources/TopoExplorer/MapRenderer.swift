@@ -53,7 +53,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     private var manifest: MapManifest?
     private var dataDirectory: URL?
     private var style = RenderStyle(
-        colors: Array(repeating: SIMD4<Float>(0, 0, 0, 1), count: 11),
+        colors: Array(repeating: SIMD4<Float>(0, 0, 0, 1), count: MapStyleDocument.colorCount),
         reliefOpacity: 0.5, reliefExaggeration: 45, reliefContrast: 2.5,
         ambientLight: 0.08, sunAzimuthRadians: 5.4977871438
     )
@@ -109,6 +109,11 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         tileCache = TileCache(
             device: device, tileSize: manifest.tileSize,
             elevationBorder: manifest.elevationBorder,
+            elevationSizes: Dictionary(
+                uniqueKeysWithValues: manifest.levels.map {
+                    ($0.z, manifest.elevationTileSize(at: $0))
+                }
+            ),
             landcoverSuffix: manifest.landcoverSuffix
         )
         vectorCache = VectorTileCache(device: device)
@@ -146,6 +151,11 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 device: commandQueue.device,
                 tileSize: newManifest.tileSize,
                 elevationBorder: newManifest.elevationBorder,
+                elevationSizes: Dictionary(
+                    uniqueKeysWithValues: newManifest.levels.map {
+                        ($0.z, newManifest.elevationTileSize(at: $0))
+                    }
+                ),
                 landcoverSuffix: newManifest.landcoverSuffix
             )
             vectorCache = VectorTileCache(device: commandQueue.device)

@@ -19,6 +19,7 @@ struct MapManifest: Codable, Equatable {
         let height: Int
         let tilesX: Int
         let tilesY: Int
+        var elevationTileSize: Int? = nil
 
         var id: Int { z }
     }
@@ -27,6 +28,17 @@ struct MapManifest: Codable, Equatable {
         let id: Int
         let name: String
         let defaultColor: String
+        var group: String? = nil
+    }
+
+    struct LandcoverSource: Codable, Equatable, Identifiable {
+        let name: String
+        let year: Int
+        let role: String
+        let license: String
+        let url: String
+
+        var id: String { "\(name)-\(year)" }
     }
 
     let version: Int
@@ -44,6 +56,7 @@ struct MapManifest: Codable, Equatable {
     let classes: [LandClass]
     var landcoverYears: [LandcoverYear]? = nil
     var landcoverProduct: LandcoverProduct? = nil
+    var sources: [LandcoverSource]? = nil
 
     var left: Double { bounds[0] }
     var bottom: Double { bounds[1] }
@@ -56,6 +69,10 @@ struct MapManifest: Codable, Equatable {
         landcoverProduct == nil && landcoverYears?.contains(where: { $0.year == 2020 }) == true
     }
 
+    func elevationTileSize(at level: Level) -> Int {
+        level.elevationTileSize ?? tileSize
+    }
+
     func validated() throws -> MapManifest {
         guard version == 1 else { throw ManifestError.unsupportedVersion(version) }
         guard bounds.count == 4, right > left, top > bottom else { throw ManifestError.invalidBounds }
@@ -64,10 +81,12 @@ struct MapManifest: Codable, Equatable {
         guard !levels.isEmpty, levels.map(\.z) == Array(minZoom...maxZoom) else {
             throw ManifestError.invalidLevels
         }
-        let expectedClassCount = landcoverProduct == nil ? 8 : 11
-        guard classes.count == expectedClassCount,
-              classes.map(\.id) == Array(0..<expectedClassCount) else {
+        guard (1...MapStyleDocument.colorCount).contains(classes.count),
+              classes.map(\.id) == Array(0..<classes.count) else {
             throw ManifestError.invalidClasses
+        }
+        guard levels.allSatisfy({ elevationTileSize(at: $0) > 0 }) else {
+            throw ManifestError.invalidTileLayout
         }
         return self
     }

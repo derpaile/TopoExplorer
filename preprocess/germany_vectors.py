@@ -130,6 +130,7 @@ class Level:
     height: int
     tilesX: int
     tilesY: int
+    elevationTileSize: int | None = None
 
 
 @dataclass(frozen=True)

@@ -17,6 +17,7 @@ struct MapExportRequest: Identifiable {
     let renderStyle: RenderStyle
     let renderLayers: RenderLayers
     let renderComparison: RenderComparison
+    let sources: [MapManifest.LandcoverSource]
 }
 
 @MainActor
@@ -32,7 +33,8 @@ final class MapExportController: ObservableObject {
         layers: LayerSettings,
         snapshot: ViewportSnapshot?,
         labels: [MapLabel],
-        comparison: ComparisonSettings
+        comparison: ComparisonSettings,
+        sources: [MapManifest.LandcoverSource] = []
     ) {
         guard let snapshot else {
             message = "Die Karte ist noch nicht vollständig gezeichnet."
@@ -54,7 +56,8 @@ final class MapExportController: ObservableObject {
             landcoverMode: comparison.mode,
             renderStyle: style.renderStyle,
             renderLayers: layers.renderLayers,
-            renderComparison: comparison.renderComparison
+            renderComparison: comparison.renderComparison,
+            sources: sources
         )
         message = "Export läuft …"
     }
@@ -125,10 +128,14 @@ enum MapExportWriter {
 
         let encodedStyle = try JSONEncoder().encode(request.styleDocument)
         let styleJSON = String(data: encodedStyle, encoding: .utf8) ?? "{}"
+        let landSources = request.sources.map {
+            "\($0.name) \($0.year): \($0.role), \($0.license)."
+        }.joined(separator: " ")
         let description = "TopoExplorer · Mittelpunkt E \(Int(request.snapshot.centerX)), N \(Int(request.snapshot.centerY)) · "
             + "Landbedeckung \(request.landcoverMode.title) · Stil \(request.styleDocument.name)\n"
-            + "Land 2015: DLR/EOC, DOI 10.15489/1ccmlap3mn39, CC BY-NC 4.0. "
-            + "Land 2020: mundialis, DL-DE/BY-2.0. "
+            + (landSources.isEmpty
+                ? "Land: DLR/EOC 2015, CC BY-NC 4.0; mundialis 2020, DL-DE/BY-2.0. "
+                : landSources + " ")
             + "Vektordaten: © OpenStreetMap contributors, ODbL, https://www.openstreetmap.org/copyright. "
             + (request.renderLayers.geonames ? "Geonamen: © BKG 2026, dl-de/by-2.0.\n" : "\n")
             + "TopoStyle: \(styleJSON)"
@@ -156,9 +163,14 @@ enum MapExportWriter {
     ) {
         let logicalWidth = request.snapshot.visibleWidthMeters / request.snapshot.metersPerPoint
         let pixelScale = max(1, CGFloat(width) / CGFloat(max(logicalWidth, 1)))
+        let landText = request.sources.isEmpty
+            ? "Land: DLR/EOC 2015 · CC BY-NC 4.0 | mundialis 2020 · DL-DE/BY-2.0"
+            : "Land: " + request.sources.prefix(4).map {
+                "\($0.name) \($0.year) · \($0.license)"
+            }.joined(separator: " | ")
         var texts = [
             "Vektor: © OpenStreetMap contributors · ODbL · https://www.openstreetmap.org/copyright",
-            "Land: DLR/EOC 2015 · CC BY-NC 4.0 | mundialis 2020 · DL-DE/BY-2.0",
+            landText,
         ]
         if request.renderLayers.geonames {
             texts.insert("Geonamen: © BKG 2026 · dl-de/by-2.0", at: 1)

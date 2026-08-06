@@ -83,7 +83,8 @@ enum ZlibDecoder {
 final class TileCache: NSObject, NSCacheDelegate {
     private let device: MTLDevice
     private let tileSize: Int
-    private let elevationSize: Int
+    private let elevationBorder: Int
+    private let elevationSizes: [Int: Int]
     private let landcoverSuffix: String
     private let cache = NSCache<NSString, TileTextures>()
     private let loadingQueue = DispatchQueue(label: "TopoExplorer.tile-loading", qos: .userInitiated, attributes: .concurrent)
@@ -95,11 +96,18 @@ final class TileCache: NSObject, NSCacheDelegate {
     private var hitCount = 0
     private var missCount = 0
 
-    init(device: MTLDevice, tileSize: Int, elevationBorder: Int, landcoverSuffix: String = "land.z") {
+    init(
+        device: MTLDevice,
+        tileSize: Int,
+        elevationBorder: Int,
+        elevationSizes: [Int: Int] = [:],
+        landcoverSuffix: String = "land.z"
+    ) {
         self.device = device
         self.tileSize = tileSize
+        self.elevationBorder = elevationBorder
+        self.elevationSizes = elevationSizes
         self.landcoverSuffix = landcoverSuffix
-        elevationSize = tileSize + elevationBorder * 2
         super.init()
         cache.totalCostLimit = 384 * 1024 * 1024
         cache.delegate = self
@@ -213,6 +221,7 @@ final class TileCache: NSObject, NSCacheDelegate {
         let landURL = levelDirectory.appendingPathComponent("\(key.filename).\(landcoverSuffix)")
         let land2020URL = levelDirectory.appendingPathComponent("\(key.filename).land2020.z")
         let elevationURL = levelDirectory.appendingPathComponent("\(key.filename).elev.z")
+        let elevationSize = (elevationSizes[key.z] ?? tileSize) + elevationBorder * 2
         guard
             let packedLand = try? Data(contentsOf: landURL, options: .mappedIfSafe),
             let packedElevation = try? Data(contentsOf: elevationURL, options: .mappedIfSafe),

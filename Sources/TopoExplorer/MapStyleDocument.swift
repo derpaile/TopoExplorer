@@ -2,8 +2,8 @@ import Foundation
 
 struct MapStyleDocument: Codable, Equatable, Identifiable {
     static let formatIdentifier = "de.topo-explorer.style"
-    static let currentVersion = 1
-    static let colorCount = 11
+    static let currentVersion = 2
+    static let colorCount = 40
 
     var format: String
     var version: Int
@@ -44,7 +44,8 @@ struct MapStyleDocument: Codable, Equatable, Identifiable {
 
         var result = self
         result.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        result.colors = Self.fusionColors(from: colors).map(\.clamped)
+        result.colors = Self.richColors(from: colors).map(\.clamped)
+        result.version = Self.currentVersion
         guard result.colors.count == Self.colorCount else {
             throw MapStyleFileError.wrongColorCount(colors.count)
         }
@@ -52,13 +53,26 @@ struct MapStyleDocument: Codable, Equatable, Identifiable {
         return result
     }
 
-    private static func fusionColors(from colors: [RGBAColor]) -> [RGBAColor] {
-        guard colors.count == 8 else { return colors }
+    private static func richColors(from colors: [RGBAColor]) -> [RGBAColor] {
+        if colors.count == 8 {
+            return richColors(from: [
+                colors[0], colors[1], colors[2], colors[5],
+                colors[5].mixed(with: colors[2]),
+                colors[3], colors[4], colors[3].mixed(with: colors[4]),
+                colors[4].mixed(with: colors[2]), colors[6], colors[7],
+            ])
+        }
+        guard colors.count == 11 else { return colors }
+        let snow = RGBAColor(red: 0.91, green: 0.94, blue: 0.92)
         return [
-            colors[0], colors[1], colors[2], colors[5],
-            colors[5].mixed(with: colors[2]),
-            colors[3], colors[4], colors[3].mixed(with: colors[4]),
-            colors[4].mixed(with: colors[2]), colors[6], colors[7],
+            colors[0], colors[1], colors[1], colors[1], colors[10],
+            colors[2], colors[9], colors[9], colors[9].mixed(with: colors[10]),
+            colors[9], snow, colors[3], colors[4],
+            colors[3], colors[3], colors[3], colors[3], colors[3], colors[3],
+            colors[3], colors[3], colors[3], colors[4], colors[4], colors[4],
+            colors[4], colors[3], colors[3], colors[4], colors[4], colors[9],
+            colors[6], colors[6], colors[6], colors[5], colors[5], colors[6],
+            colors[5], colors[7], colors[8],
         ]
     }
 }

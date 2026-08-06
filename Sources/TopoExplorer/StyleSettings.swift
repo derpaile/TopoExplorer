@@ -85,50 +85,85 @@ final class StyleSettings: ObservableObject {
         conformingTo: .json
     ) ?? .json
 
-    static let originalColors = [
-        "#000000", "#FF1111", "#FFD700", "#98FB98",
-        "#E6B94A", "#228B22", "#006400", "#277A45",
-        "#9A774A", "#32CD32", "#0066CC",
+    static let atlasColors = [
+        "#101612", "#9E3544", "#C85862", "#D97972", "#39779B",
+        "#B59B70", "#89985C", "#88AD69", "#5D9E91", "#A8AE83",
+        "#E7EEE9", "#C7B474", "#D5C990", "#C69252", "#A97850",
+        "#D6A34F", "#B78352", "#CEB06D", "#E3C83F", "#72AFC1",
+        "#B98C78", "#D0A88E", "#9A6C3E", "#805132", "#AA7B56",
+        "#B26670", "#D48372", "#D6B448", "#8C6F69", "#99A66B",
+        "#A7BC72", "#3E6848", "#1F5135", "#315E3B", "#669664",
+        "#779C65", "#3D6A49", "#79A875", "#50795A", "#947B55",
     ].map(RGBAColor.init(hex:))
 
-    static let sourceColors = [
-        "#000000", "#CC0B1E", "#BBAE6C", "#EFF2BE",
-        "#D4B86F", "#15B667", "#067647", "#4B8F67",
-        "#957B57", "#B8E1A4", "#256FA8",
+    static let agricultureColors = [
+        "#151611", "#9B5B5B", "#BC7772", "#D29A8C", "#3D7FA5",
+        "#AA9B7C", "#87936D", "#91A876", "#6E9C90", "#A6A98C",
+        "#E9EFEB", "#D7C884", "#E1D69E", "#E4A044", "#BD7744",
+        "#F0B53F", "#C98B3D", "#DCB55D", "#F0D52F", "#63B4C7",
+        "#C47F6B", "#D89F79", "#A86B37", "#884A2D", "#BD744C",
+        "#B75268", "#E47161", "#E8BB22", "#87636A", "#95A950",
+        "#A7C45A", "#56705A", "#385C47", "#48684E", "#778B70",
+        "#849477", "#4B6952", "#839A7A", "#617568", "#8A765F",
     ].map(RGBAColor.init(hex:))
 
-    static let mutedColors = [
-        "#101612", "#C84C55", "#C9A96E", "#B7CEA8",
-        "#D6BE78", "#6FAF7A", "#245C3A", "#47785A",
-        "#927A55", "#78A96D", "#39779B",
+    static let forestColors = [
+        "#111713", "#A54E56", "#C87676", "#DA9991", "#397CA4",
+        "#B8A982", "#819A63", "#94AE72", "#5A9F8E", "#A6B187",
+        "#EBF1ED", "#CBBB82", "#D5C797", "#C9A06E", "#BA9168",
+        "#D0A76B", "#BD956C", "#C9A879", "#D6B965", "#76AFC0",
+        "#BFA080", "#C9AA8B", "#9E754F", "#895F42", "#AA805E",
+        "#AE7680", "#C08477", "#C7A74F", "#92797B", "#98A379",
+        "#A5B886", "#5B7848", "#17492E", "#285C36", "#70A25F",
+        "#8AAE69", "#326D45", "#83B67A", "#527C5E", "#A17B4E",
+    ].map(RGBAColor.init(hex:))
+
+    static let contrastColors = [
+        "#080B0A", "#8F1730", "#DB3D4E", "#FF766D", "#1976B8",
+        "#C79550", "#7F8B3B", "#73B45C", "#2C9B87", "#B5B879",
+        "#F5FAF7", "#C6AE52", "#E6D478", "#E08A2E", "#B85E31",
+        "#F0A82D", "#A66A32", "#D5A64D", "#F1CB16", "#43A8C1",
+        "#B96D64", "#D08C71", "#8E5229", "#6D3420", "#A35D3A",
+        "#A73F5C", "#DA5C52", "#D8A915", "#785761", "#88A142",
+        "#9DBB4E", "#3F763E", "#063F24", "#1F5B2D", "#60A64F",
+        "#80A94F", "#277043", "#69B26B", "#3D7A50", "#A56D36",
     ].map(RGBAColor.init(hex:))
 
     static let presets = [
         MapStyleDocument(
-            id: "builtin.original",
-            name: "Original 2025",
-            colors: originalColors,
+            id: "builtin.atlas",
+            name: "Naturatlas",
+            colors: atlasColors,
             relief: ReliefStyle(
-                enabled: true, opacity: 0.50, exaggeration: 45,
-                contrast: 2.5, ambientLight: 0.08, sunAzimuthDegrees: 315
+                enabled: true, opacity: 0.40, exaggeration: 34,
+                contrast: 2.0, ambientLight: 0.09, sunAzimuthDegrees: 315
             )
         ),
         MapStyleDocument(
-            id: "builtin.dataset",
-            name: "Datensatz",
-            colors: sourceColors,
+            id: "builtin.agriculture",
+            name: "Kulturarten",
+            colors: agricultureColors,
             relief: ReliefStyle(
-                enabled: true, opacity: 0.42, exaggeration: 34,
-                contrast: 2.0, ambientLight: 0.08, sunAzimuthDegrees: 315
+                enabled: true, opacity: 0.30, exaggeration: 26,
+                contrast: 1.7, ambientLight: 0.11, sunAzimuthDegrees: 315
             )
         ),
         MapStyleDocument(
-            id: "builtin.muted",
-            name: "Gedämpft",
-            colors: mutedColors,
+            id: "builtin.forest",
+            name: "Waldarten",
+            colors: forestColors,
             relief: ReliefStyle(
-                enabled: true, opacity: 0.36, exaggeration: 28,
-                contrast: 1.8, ambientLight: 0.10, sunAzimuthDegrees: 315
+                enabled: true, opacity: 0.44, exaggeration: 38,
+                contrast: 2.2, ambientLight: 0.08, sunAzimuthDegrees: 315
+            )
+        ),
+        MapStyleDocument(
+            id: "builtin.contrast",
+            name: "Kontrastreich",
+            colors: contrastColors,
+            relief: ReliefStyle(
+                enabled: true, opacity: 0.36, exaggeration: 32,
+                contrast: 2.5, ambientLight: 0.06, sunAzimuthDegrees: 315
             )
         ),
     ]

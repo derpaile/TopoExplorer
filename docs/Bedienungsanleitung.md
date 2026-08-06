@@ -34,10 +34,10 @@ Ein abgebrochener Kachellauf kann mit demselben Befehl fortgesetzt werden.
 
 ## Darstellung
 
-Im rechten Bereich können Landklassenfarben, Relief und verfügbare
-Vektorebenen verändert werden. Ein Preset stellt einen vollständigen Stil
-wieder her. Stil-Dateien lassen sich speichern, weitergeben und wieder
-importieren. Sonnenrichtung, Reliefstärke und Überhöhung wirken sofort.
+Im rechten Bereich sind die 40 Landklassen in Grundlage, Siedlung, Natur,
+Landwirtschaft und Wald gegliedert. Jede Farbe ist veränderbar. Die Themen
+Naturatlas, Kulturarten, Waldarten und Kontrastreich setzen vollständige
+Paletten. Stil-Dateien lassen sich speichern, weitergeben und importieren.
 
 Straßen, Eisenbahnen, Flüsse, Grenzen und Ortsnamen erscheinen abhängig von
 der Zoomstufe. Nicht benötigte Ebenen können ausgeschaltet werden.
@@ -51,11 +51,11 @@ Lesezeichen gespeichert werden.
 
 ## Gesamt-Landbedeckung
 
-Die Gesamtkarte verbindet die komplementären Informationen der
-Landbedeckungsklassifikationen von 2015 und 2020. Sie unterscheidet insbesondere
-Laub- und Nadelwald, saisonale und unsichere Landwirtschaft sowie
-Nadelwald-Offenflächen. Die Karte zeigt diese Details gemeinsam und ist kein
-Zeitvergleich.
+Die Gesamtkarte verbindet ESA WorldCover 2021, JRC EUCROPMAP 2018 und die
+ForestPaths-Baumgattungen 2020. Land Cover DE 2015 ergänzt ausschließlich
+Nadelwald-Offenflächen. Unterschieden werden unter anderem Siedlungsdichte,
+Naturflächen, 20 Landwirtschaftsklassen und neun Waldklassen. Es ist eine
+artenreiche Ansicht, kein Zeitvergleich.
 
 ## Export
 
