@@ -34,15 +34,20 @@ Ein abgebrochener Kachellauf kann mit demselben Befehl fortgesetzt werden.
 
 ## Darstellung
 
-Im rechten Bereich sind die 40 Landklassen in Grundlage, Siedlung, Natur,
-Landwirtschaft und Wald gegliedert. Jede Farbe ist veränderbar. Das
+Im linken Bereich „Flächen“ sind die 40 Landklassen in Grundlage, Siedlung,
+Natur, Landwirtschaft und Wald gegliedert. Ein Klick auf das Farbfeld öffnet
+direkt darunter eine schnelle Palette. Haken schalten einzelne Klassen oder
+ganze Gruppen zwischen farbiger und ausgegrauter Darstellung um; die Suche
+findet beispielsweise Nutzpflanzen und Baumarten sofort. Das
 unveränderliche Profil **Standard · Erststart** stellt exakt die Darstellung
 des ersten Starts dieser Version wieder her. Dazu kommen Kulturarten,
 Waldarten, Kontrastreich, Satellitisch, Kupferstich, Nordlicht, Pastellfelder
 und Bauhaus. Stil-Dateien lassen sich speichern, weitergeben und importieren.
 
 Straßen, Eisenbahnen, Flüsse, Grenzen und Ortsnamen erscheinen abhängig von
-der Zoomstufe. Nicht benötigte Ebenen können ausgeschaltet werden.
+der Zoomstufe. Nicht benötigte Ebenen können ausgeschaltet werden. Natur- und
+Geländenamen besitzen eigene Farben und Schriften; größere Landschaftsnamen
+folgen einer leicht gedrehten kartografischen Ausrichtung.
 
 ## Suche und Informationen
 

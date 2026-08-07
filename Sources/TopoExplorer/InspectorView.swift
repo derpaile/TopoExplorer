@@ -10,7 +10,6 @@ struct InspectorView: View {
     @ObservedObject var viewport: ViewportController
     let onClose: () -> Void
     @State private var newStyleName = ""
-    @State private var showAdvancedRelief = false
     @State private var showStyleManagement = false
 
     var body: some View {
@@ -18,13 +17,13 @@ struct InspectorView: View {
             HStack(spacing: 10) {
                 ZStack {
                     Circle().fill(Color.green.opacity(0.12))
-                    Image(systemName: "slider.horizontal.3")
+                    Image(systemName: "paintpalette")
                         .foregroundStyle(Color(red: 0.18, green: 0.48, blue: 0.34))
                 }
                 .frame(width: 30, height: 30)
 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Kartendarstellung")
+                    Text("Stile & Export")
                         .font(.headline)
                     Text(style.activeStyleName)
                         .font(.caption2)
@@ -47,8 +46,6 @@ struct InspectorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     presetControls
-                    paletteControls
-                    reliefControls
                     exportControls
                     styleManagement
                     dataDetails
@@ -130,80 +127,6 @@ struct InspectorView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var paletteControls: some View {
-        panelSection(title: "Legende und Farben", symbol: "paintpalette.fill") {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Alle Oberflächen sind einzeln färbbar und nach Thema geordnet.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                ForEach(paletteGroups, id: \.name) { group in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(group.name)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                        LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3),
-                            spacing: 8
-                        ) {
-                            ForEach(group.classes) { landClass in
-                                VStack(spacing: 4) {
-                                    ColorPicker(
-                                        landClass.name,
-                                        selection: style.colorBinding(at: landClass.id),
-                                        supportsOpacity: false
-                                    )
-                                    .labelsHidden()
-                                    .frame(width: 28, height: 24)
-                                    .help(landClass.name)
-
-                                    Text(landClass.name)
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(2)
-                                        .multilineTextAlignment(.center)
-                                        .frame(maxWidth: .infinity, minHeight: 22)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var reliefControls: some View {
-        panelSection(title: "Relief", symbol: "mountain.2.fill") {
-            VStack(alignment: .leading, spacing: 10) {
-                Toggle("Gelände plastisch darstellen", isOn: $style.reliefEnabled)
-
-                valueSlider(
-                    "Stärke", value: $style.reliefOpacity,
-                    range: 0...1, format: "%.0f %%", multiplier: 100
-                )
-                .disabled(!style.reliefEnabled)
-
-                DisclosureGroup("Feinabstimmung", isExpanded: $showAdvancedRelief) {
-                    VStack(spacing: 10) {
-                        valueSlider("Überhöhung", value: $style.reliefExaggeration, range: 0...120, format: "%.0f×")
-                        valueSlider("Kontrast", value: $style.reliefContrast, range: 0.5...5, format: "%.1f")
-                        valueSlider(
-                            "Grundlicht", value: $style.ambientLight,
-                            range: 0...0.35, format: "%.0f %%", multiplier: 100
-                        )
-                        valueSlider(
-                            "Sonne · \(compassDirection)", value: $style.sunAzimuthDegrees,
-                            range: 0...360, format: "%.0f°"
-                        )
-                    }
-                    .padding(.top, 8)
-                }
-                .font(.subheadline)
-                .disabled(!style.reliefEnabled)
             }
         }
     }
@@ -323,24 +246,6 @@ struct InspectorView: View {
         .background(Color.primary.opacity(0.038), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private var compassDirection: String {
-        let names = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"]
-        let index = Int((style.sunAzimuthDegrees + 22.5).truncatingRemainder(dividingBy: 360) / 45)
-        return names[min(max(index, 0), names.count - 1)]
-    }
-
-    private var paletteGroups: [(name: String, classes: [MapManifest.LandClass])] {
-        let order = ["Grundlage", "Siedlung", "Natur", "Landwirtschaft", "Wald"]
-        let grouped = Dictionary(grouping: manifest.classes) { $0.group ?? "Oberflächen" }
-        let known = order.compactMap { name in
-            grouped[name].map { (name: name, classes: $0) }
-        }
-        let remaining = grouped.keys.filter { !order.contains($0) }.sorted().map {
-            (name: $0, classes: grouped[$0] ?? [])
-        }
-        return known + remaining
-    }
-
     private var errorIsPresented: Binding<Bool> {
         Binding(
             get: { style.errorMessage != nil },
@@ -354,23 +259,4 @@ struct InspectorView: View {
         if style.errorMessage == nil { newStyleName = "" }
     }
 
-    private func valueSlider(
-        _ title: String,
-        value: Binding<Double>,
-        range: ClosedRange<Double>,
-        format: String,
-        multiplier: Double = 1
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack {
-                Text(title)
-                    .font(.caption)
-                Spacer()
-                Text(String(format: format, value.wrappedValue * multiplier))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            Slider(value: value, in: range)
-        }
-    }
 }

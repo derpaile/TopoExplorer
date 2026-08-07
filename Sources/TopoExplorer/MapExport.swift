@@ -233,28 +233,68 @@ enum MapExportWriter {
         let viewHeight = request.snapshot.visibleHeightMeters / request.snapshot.metersPerPoint
         let pixelRatio = CGFloat(width) / CGFloat(max(viewWidth, 1))
         for label in request.labels {
-            let size = CGFloat(label.prominence >= 100_000 ? 13 : 11) * pixelRatio
-            let font = CTFontCreateWithName("Helvetica-Semibold" as CFString, size, nil)
+            let size = labelSize(label) * pixelRatio
+            let font = CTFontCreateWithName(labelFontName(label) as CFString, size, nil)
+            let text = label.kind == 7 ? "▲ \(label.name)" : label.name
+            var attributes: [CFString: Any] = [
+                kCTFontAttributeName: font,
+                kCTForegroundColorAttributeName: labelColor(label),
+                kCTStrokeColorAttributeName: labelHaloColor(label),
+                kCTStrokeWidthAttributeName: -3.2,
+            ]
+            if label.kind == 8 { attributes[kCTKernAttributeName] = 3.2 * pixelRatio }
             let attributed = CFAttributedStringCreate(
                 nil,
-                label.name as CFString,
-                [kCTFontAttributeName: font, kCTForegroundColorAttributeName: CGColor(gray: 1, alpha: 1)] as CFDictionary
+                text as CFString,
+                attributes as CFDictionary
             )!
             let line = CTLineCreateWithAttributedString(attributed)
             let bounds = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
             let x = CGFloat(label.point.x) / CGFloat(max(viewWidth, 1)) * CGFloat(width)
             let y = CGFloat(height) - CGFloat(label.point.y) / CGFloat(max(viewHeight, 1)) * CGFloat(height)
-            let background = CGRect(
-                x: x - bounds.width / 2 - 4 * pixelRatio,
-                y: y - bounds.height / 2 - 3 * pixelRatio,
-                width: bounds.width + 8 * pixelRatio,
-                height: bounds.height + 6 * pixelRatio
-            )
-            context.setFillColor(CGColor(gray: 0, alpha: 0.45))
-            context.fill(background)
-            context.textPosition = CGPoint(x: x - bounds.width / 2, y: y - bounds.height / 2)
+            context.saveGState()
+            context.translateBy(x: x, y: y)
+            context.rotate(by: CGFloat(-label.angleDegrees * .pi / 180))
+            context.textPosition = CGPoint(x: -bounds.midX, y: -bounds.midY)
             CTLineDraw(line, context)
+            context.restoreGState()
         }
+    }
+
+    private static func labelSize(_ label: MapLabel) -> CGFloat {
+        switch label.kind {
+        case 8: 20
+        case 9, 11: 13
+        case 7, 10: 12
+        case 12: 11
+        default: label.prominence >= 100_000 ? 13 : 11
+        }
+    }
+
+    private static func labelFontName(_ label: MapLabel) -> String {
+        switch label.kind {
+        case 8, 9, 10, 11: "TimesNewRomanPS-BoldItalicMT"
+        case 7, 12: "TimesNewRomanPS-BoldMT"
+        default: label.prominence >= 100_000 ? "Helvetica-Bold" : "Helvetica-Semibold"
+        }
+    }
+
+    private static func labelColor(_ label: MapLabel) -> CGColor {
+        switch label.kind {
+        case 7: CGColor(red: 0.26, green: 0.17, blue: 0.11, alpha: 1)
+        case 8: CGColor(red: 0.20, green: 0.25, blue: 0.10, alpha: 1)
+        case 9, 11: CGColor(red: 0.03, green: 0.27, blue: 0.50, alpha: 1)
+        case 10: CGColor(red: 0.10, green: 0.31, blue: 0.16, alpha: 1)
+        case 12: CGColor(red: 0.28, green: 0.19, blue: 0.14, alpha: 1)
+        default: CGColor(red: 0.045, green: 0.05, blue: 0.035, alpha: 1)
+        }
+    }
+
+    private static func labelHaloColor(_ label: MapLabel) -> CGColor {
+        if label.kind == 9 || label.kind == 11 {
+            return CGColor(red: 0.90, green: 0.96, blue: 0.92, alpha: 1)
+        }
+        return CGColor(red: 1, green: 0.98, blue: 0.86, alpha: 1)
     }
 
     private static func drawScaleBar(

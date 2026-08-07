@@ -96,6 +96,8 @@ struct MapLabel: Identifiable, Equatable {
     let name: String
     let point: CGPoint
     let prominence: Double
+    let kind: UInt8
+    let angleDegrees: Double
 }
 
 struct MapProbe: Equatable {

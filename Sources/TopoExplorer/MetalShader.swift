@@ -86,8 +86,13 @@ enum MetalShader {
             39u
         );
         float4 base = palette[classIndex];
+        bool muted = base.a < 0.5;
+        float luminance = dot(base.rgb, float3(0.2126, 0.7152, 0.0722));
+        float3 baseColor = muted
+            ? mix(float3(0.58, 0.60, 0.57), float3(luminance), 0.18)
+            : base.rgb;
         if (classIndex == 0u) {
-            return float4(base.rgb, 1.0);
+            return float4(baseColor, 1.0);
         }
 
         // Ein Pixel Überlappung je Kachel hält die lineare Reliefabtastung
@@ -126,7 +131,7 @@ enum MetalShader {
         float shade = clamp(max(shadeOne * 1.2, shadeTwo * 0.7), 0.0, 1.0);
         shade = pow(shade, max(relief.contrast, 0.01));
         float reliefGray = clamp((1.0 - shade) + relief.ambient, 0.0, 1.0);
-        float3 composed = mix(base.rgb, float3(reliefGray), relief.opacity);
+        float3 composed = mix(baseColor, float3(reliefGray), relief.opacity);
         return float4(composed, 1.0);
     }
 
@@ -144,7 +149,11 @@ enum MetalShader {
 
     float4 vectorCoreColor(uint layer, uint kind)
     {
-        if (layer == 1u) return float4(0.08, 0.06, 0.05, 0.88);
+        if (layer == 1u) {
+            if (kind == 1u) return float4(0.96, 0.84, 0.68, 0.96);
+            if (kind <= 3u) return float4(0.95, 0.76, 0.47, 0.92);
+            return float4(0.16, 0.12, 0.10, 0.82);
+        }
         if (layer == 2u) return float4(0.05, 0.04, 0.05, 0.86);
         if (layer == 3u) {
             float alpha = kind == 1u ? 0.76 : (kind == 2u ? 0.70 : (kind == 3u ? 0.70 : 0.58));
@@ -157,10 +166,10 @@ enum MetalShader {
     {
         if (layer == 1u) {
             return kind == 1u
-                ? float4(0.00, 0.36, 0.95, 0.95)
-                : float4(1.00, 0.75, 0.00, 0.90);
+                ? float4(0.70, 0.25, 0.23, 0.86)
+                : float4(0.76, 0.49, 0.19, 0.82);
         }
-        if (layer == 2u) return float4(0.92, 0.92, 0.88, 0.50);
+        if (layer == 2u) return float4(0.70, 0.25, 0.23, 0.86);
         return float4(0.05, 0.05, 0.05, 0.32);
     }
 
@@ -189,7 +198,7 @@ enum MetalShader {
         float width = vectorCoreWidth(uniforms.layer, kind);
         float4 color = vectorCoreColor(uniforms.layer, kind);
         if (uniforms.pass == 0u) {
-            width += 1.6;
+            width += (uniforms.layer == 1u || uniforms.layer == 2u) ? 0.9 : 1.4;
             color = vectorCasingColor(uniforms.layer, kind);
         }
         float2 normal = float2(-delta.y, delta.x) / segmentLength * (width * 0.5);

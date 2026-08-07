@@ -80,6 +80,7 @@ final class StyleSettings: ObservableObject {
     private static let legacyStorageKey = "TopoExplorer.style.v1"
     private static let currentStorageKey = "TopoExplorer.style.v2"
     private static let customStorageKey = "TopoExplorer.customStyles.v1"
+    private static let visibilityStorageKey = "TopoExplorer.surfaceVisibility.v1"
     private static let styleContentType = UTType(
         filenameExtension: "topostyle",
         conformingTo: .json
@@ -288,6 +289,7 @@ final class StyleSettings: ObservableObject {
     }
 
     @Published var colors: [RGBAColor] { didSet { propertyChanged() } }
+    @Published private(set) var visibleClasses: [Bool] { didSet { visibilityChanged() } }
     @Published var reliefEnabled: Bool { didSet { propertyChanged() } }
     @Published var reliefOpacity: Double { didSet { propertyChanged() } }
     @Published var reliefExaggeration: Double { didSet { propertyChanged() } }
@@ -305,6 +307,10 @@ final class StyleSettings: ObservableObject {
     init() {
         let original = Self.standardPreset
         colors = original.colors
+        let savedVisibility = UserDefaults.standard.array(forKey: Self.visibilityStorageKey) as? [Bool]
+        visibleClasses = savedVisibility?.count == MapStyleDocument.colorCount
+            ? savedVisibility!
+            : Array(repeating: true, count: MapStyleDocument.colorCount)
         reliefEnabled = original.relief.enabled
         reliefOpacity = original.relief.opacity
         reliefExaggeration = original.relief.exaggeration
@@ -362,6 +368,34 @@ final class StyleSettings: ObservableObject {
             get: { self.colors[index].color },
             set: { self.colors[index] = RGBAColor(color: $0) }
         )
+    }
+
+    func isClassVisible(_ index: Int) -> Bool {
+        visibleClasses.indices.contains(index) ? visibleClasses[index] : true
+    }
+
+    func toggleClassVisibility(_ index: Int) {
+        guard visibleClasses.indices.contains(index) else { return }
+        visibleClasses[index].toggle()
+    }
+
+    func setClassVisibility(_ indices: [Int], visible: Bool) {
+        var next = visibleClasses
+        for index in indices where next.indices.contains(index) { next[index] = visible }
+        visibleClasses = next
+    }
+
+    func isolateClass(_ index: Int, within availableIndices: [Int]) {
+        var next = visibleClasses
+        for candidate in availableIndices where next.indices.contains(candidate) {
+            next[candidate] = candidate == index
+        }
+        visibleClasses = next
+    }
+
+    func setColor(_ color: RGBAColor, at index: Int) {
+        guard colors.indices.contains(index) else { return }
+        colors[index] = color
     }
 
     func apply(_ document: MapStyleDocument) {
@@ -451,7 +485,11 @@ final class StyleSettings: ObservableObject {
 
     var renderStyle: RenderStyle {
         RenderStyle(
-            colors: colors.map(\.vector),
+            colors: colors.enumerated().map { index, color in
+                var vector = color.vector
+                vector.w = isClassVisible(index) ? 1 : 0
+                return vector
+            },
             reliefOpacity: reliefEnabled ? Float(reliefOpacity) : 0,
             reliefExaggeration: Float(reliefExaggeration),
             reliefContrast: Float(reliefContrast),
@@ -482,6 +520,11 @@ final class StyleSettings: ObservableObject {
         activeStyleName = "Angepasst"
         revision &+= 1
         persistCurrent()
+    }
+
+    private func visibilityChanged() {
+        UserDefaults.standard.set(visibleClasses, forKey: Self.visibilityStorageKey)
+        revision &+= 1
     }
 
     private func currentDocument(named name: String, id: String? = nil) -> MapStyleDocument {

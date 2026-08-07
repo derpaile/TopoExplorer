@@ -15,6 +15,9 @@ struct ContentView: View {
     @State private var showInspector = false
     @State private var showHelp = false
     @State private var sidebarVisible = true
+    @State private var sidebarMode = SidebarMode.explore
+    @State private var surfaceQuery = ""
+    @State private var selectedSurfaceID: Int?
 
     var body: some View {
         Group {
@@ -64,7 +67,7 @@ struct ContentView: View {
 
     private func sidebar(manifest: MapManifest) -> some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     ZStack {
                         Circle()
@@ -94,23 +97,31 @@ struct ContentView: View {
                 }
 
                 searchField
+
+                Picker("Seitenleiste", selection: $sidebarMode) {
+                    ForEach(SidebarMode.allCases) { mode in
+                        Label(mode.title, systemImage: mode.symbol).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
             .padding(.horizontal, 15)
             .padding(.top, 36)
             .padding(.bottom, 13)
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    discoverSection
-                    layerSection
-
-                    if manifest.hasLandcover2020 {
-                        landcoverSection
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    if sidebarMode == .explore {
+                        discoverSection
+                        layerSection
+                        if manifest.hasLandcover2020 { landcoverSection }
+                        bookmarkSection
+                    } else if sidebarMode == .surfaces {
+                        surfaceEditorSection(manifest: manifest)
                     } else {
-                        richLandcoverSection(manifest: manifest)
+                        sidebarReliefSection
                     }
-
-                    bookmarkSection
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -277,34 +288,104 @@ struct ContentView: View {
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func richLandcoverSection(manifest: MapManifest) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sidebarSectionTitle("Oberflächen", systemImage: "square.grid.3x3.fill")
-            Text("\(manifest.classes.count - 1) sichtbare Klassen · 10-m-Gesamtkarte")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            ForEach(["Siedlung", "Natur", "Landwirtschaft", "Wald"], id: \.self) { group in
-                let classes = manifest.classes.filter { $0.group == group }
-                if let first = classes.first {
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(RGBAColor(hex: first.defaultColor).color)
-                            .frame(width: 16, height: 12)
-                        Text(group)
-                            .font(.caption.weight(.medium))
-                        Spacer()
-                        Text("\(classes.count)")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+    private func surfaceEditorSection(manifest: MapManifest) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    sidebarSectionTitle("Farben & Sichtbarkeit", systemImage: "paintpalette.fill")
+                    Text("Farbfeld wählen oder Klassen ausgrauen")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 7) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Nutzpflanze oder Baumart", text: $surfaceQuery)
+                    .textFieldStyle(.plain)
+                if !surfaceQuery.isEmpty {
+                    Button { surfaceQuery = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
                     }
+                    .buttonStyle(.plain)
                 }
             }
-            Text("Alle Klassen und Themen unter Kartendarstellung.")
+            .padding(.horizontal, 9)
+            .frame(height: 32)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 9))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(.primary.opacity(0.08), lineWidth: 0.7)
+            }
+
+            HStack(spacing: 6) {
+                Button("Alle farbig") {
+                    style.setClassVisibility(manifest.classes.map(\.id), visible: true)
+                }
+                Button("Alle grau") {
+                    style.setClassVisibility(manifest.classes.map(\.id), visible: false)
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            ForEach(surfaceGroups(for: manifest), id: \.name) { group in
+                SurfaceGroupEditor(
+                    name: group.name,
+                    classes: group.classes,
+                    allClassIDs: manifest.classes.map(\.id),
+                    query: surfaceQuery,
+                    style: style,
+                    selectedID: $selectedSurfaceID
+                )
+            }
+        }
+    }
+
+    private var sidebarReliefSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sidebarSectionTitle("Relief", systemImage: "mountain.2.fill")
+
+            Toggle("Gelände plastisch darstellen", isOn: $style.reliefEnabled)
+                .font(.subheadline.weight(.medium))
+
+            Group {
+                reliefSlider(
+                    "Stärke", value: $style.reliefOpacity,
+                    range: 0...1, format: "%.0f %%", multiplier: 100
+                )
+                reliefSlider(
+                    "Überhöhung", value: $style.reliefExaggeration,
+                    range: 0...120, format: "%.0f×"
+                )
+                reliefSlider(
+                    "Kontrast", value: $style.reliefContrast,
+                    range: 0.5...5, format: "%.1f"
+                )
+                reliefSlider(
+                    "Grundlicht", value: $style.ambientLight,
+                    range: 0...0.35, format: "%.0f %%", multiplier: 100
+                )
+                reliefSlider(
+                    "Sonne · \(compassDirection)", value: $style.sunAzimuthDegrees,
+                    range: 0...360, format: "%.0f°"
+                )
+            }
+            .disabled(!style.reliefEnabled)
+
+            Text("Die Änderungen erscheinen ohne Dialog direkt auf der Karte.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+        .padding(12)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(.white.opacity(0.22), lineWidth: 0.7)
+        }
     }
 
     private var bookmarkSection: some View {
@@ -372,24 +453,14 @@ struct ContentView: View {
         VStack(spacing: 9) {
             Divider().opacity(0.55)
 
-            HStack(spacing: 7) {
-                Button {
-                    showInspector.toggle()
-                } label: {
-                    Label("Darstellung", systemImage: "slider.horizontal.3")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    exportVisibleMap()
-                } label: {
-                    Label("Export", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .disabled(viewport.snapshot == nil)
+            Button {
+                exportVisibleMap()
+            } label: {
+                Label("Kartenausschnitt exportieren", systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.bordered)
+            .disabled(viewport.snapshot == nil)
 
             Button {
                 session.isChoosingDirectory = true
@@ -510,7 +581,7 @@ struct ContentView: View {
                 .frame(width: 285, alignment: .leading)
             }
 
-            MapChromeButton(symbol: "slider.horizontal.3", help: "Kartendarstellung") {
+            MapChromeButton(symbol: "paintpalette", help: "Stile & Export") {
                 showInspector.toggle()
             }
         }
@@ -595,16 +666,13 @@ struct ContentView: View {
     }
 
     private var labelsOverlay: some View {
-        ZStack {
-            ForEach(viewport.labels) { label in
-                Text(label.name)
-                    .font(.system(size: label.prominence >= 100_000 ? 13 : 11, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.9), radius: 1.5)
-                    .padding(.horizontal, 3)
-                    .background(.black.opacity(0.20), in: RoundedRectangle(cornerRadius: 3))
-                    .position(label.point)
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                ForEach(viewport.labels) { label in
+                    AtlasMapLabel(label: label)
+                }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .allowsHitTesting(false)
     }
@@ -756,6 +824,44 @@ struct ContentView: View {
             .foregroundStyle(.secondary)
     }
 
+    private func surfaceGroups(
+        for manifest: MapManifest
+    ) -> [(name: String, classes: [MapManifest.LandClass])] {
+        let order = ["Grundlage", "Siedlung", "Natur", "Landwirtschaft", "Wald"]
+        let grouped = Dictionary(grouping: manifest.classes) { $0.group ?? "Oberflächen" }
+        let known = order.compactMap { name in
+            grouped[name].map { (name: name, classes: $0) }
+        }
+        return known + grouped.keys.filter { !order.contains($0) }.sorted().map {
+            (name: $0, classes: grouped[$0] ?? [])
+        }
+    }
+
+    private var compassDirection: String {
+        let names = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"]
+        let index = Int((style.sunAzimuthDegrees + 22.5).truncatingRemainder(dividingBy: 360) / 45)
+        return names[min(max(index, 0), names.count - 1)]
+    }
+
+    private func reliefSlider(
+        _ title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        format: String,
+        multiplier: Double = 1
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title).font(.caption)
+                Spacer()
+                Text(String(format: format, value.wrappedValue * multiplier))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: value, in: range)
+        }
+    }
+
     private func submitSearch() {
         if let reference = MapReference.all.first(where: {
             $0.name.compare(
@@ -856,6 +962,296 @@ struct ContentView: View {
         case "ruhrgebiet": "Städte & Industrie"
         default: "Felder & Siedlungen"
         }
+    }
+}
+
+private enum SidebarMode: String, CaseIterable, Identifiable {
+    case explore
+    case surfaces
+    case relief
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .explore: "Karte"
+        case .surfaces: "Flächen"
+        case .relief: "Relief"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .explore: "square.3.layers.3d"
+        case .surfaces: "paintpalette.fill"
+        case .relief: "mountain.2.fill"
+        }
+    }
+}
+
+private struct SurfaceGroupEditor: View {
+    let name: String
+    let classes: [MapManifest.LandClass]
+    let allClassIDs: [Int]
+    let query: String
+    @ObservedObject var style: StyleSettings
+    @Binding var selectedID: Int?
+    @State private var isExpanded: Bool
+
+    init(
+        name: String,
+        classes: [MapManifest.LandClass],
+        allClassIDs: [Int],
+        query: String,
+        style: StyleSettings,
+        selectedID: Binding<Int?>
+    ) {
+        self.name = name
+        self.classes = classes
+        self.allClassIDs = allClassIDs
+        self.query = query
+        self.style = style
+        _selectedID = selectedID
+        _isExpanded = State(initialValue: name == "Landwirtschaft" || name == "Wald")
+    }
+
+    private var filteredClasses: [MapManifest.LandClass] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return classes }
+        return classes.filter {
+            $0.name.range(
+                of: needle,
+                options: [.caseInsensitive, .diacriticInsensitive]
+            ) != nil
+        }
+    }
+
+    private var visibleCount: Int {
+        classes.reduce(0) { $0 + (style.isClassVisible($1.id) ? 1 : 0) }
+    }
+
+    private var visibilitySymbol: String {
+        visibleCount == classes.count ? "checkmark.square.fill"
+            : visibleCount == 0 ? "square" : "minus.square.fill"
+    }
+
+    var body: some View {
+        if !filteredClasses.isEmpty {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 7) {
+                    Button {
+                        style.setClassVisibility(
+                            classes.map(\.id), visible: visibleCount != classes.count
+                        )
+                    } label: {
+                        Image(systemName: visibilitySymbol)
+                            .foregroundStyle(visibleCount == 0 ? .secondary : Color.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help(visibleCount == classes.count ? "Gruppe ausgrauen" : "Gruppe farbig zeigen")
+
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
+                    } label: {
+                        HStack {
+                            Text(name).font(.caption.weight(.semibold))
+                            Spacer()
+                            Text("\(visibleCount)/\(classes.count)")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.tertiary)
+                                .rotationEffect(.degrees(isExpanded || !query.isEmpty ? 90 : 0))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if isExpanded || !query.isEmpty {
+                    VStack(spacing: 3) {
+                        ForEach(filteredClasses) { landClass in
+                            SurfaceClassEditor(
+                                landClass: landClass,
+                                allClassIDs: allClassIDs,
+                                style: style,
+                                isSelected: selectedID == landClass.id,
+                                onSelect: {
+                                    withAnimation(.snappy(duration: 0.18)) {
+                                        selectedID = selectedID == landClass.id ? nil : landClass.id
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(9)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(.white.opacity(0.20), lineWidth: 0.7)
+            }
+        }
+    }
+}
+
+private struct SurfaceClassEditor: View {
+    let landClass: MapManifest.LandClass
+    let allClassIDs: [Int]
+    @ObservedObject var style: StyleSettings
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    private static let quickColors = [
+        "#E8DFA8", "#D8C67A", "#E3C83F", "#D6A34F", "#C69252", "#9A6C3E",
+        "#A7BC72", "#779C65", "#50795A", "#315E3B", "#1F5135", "#5D9E91",
+        "#39779B", "#72AFC1", "#D97972", "#B26670", "#9E3544", "#8C6F69",
+    ].map(RGBAColor.init(hex:))
+
+    private var isVisible: Bool { style.isClassVisible(landClass.id) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 7) {
+                Button { style.toggleClassVisibility(landClass.id) } label: {
+                    Image(systemName: isVisible ? "checkmark.square.fill" : "square")
+                        .foregroundStyle(isVisible ? Color.accentColor : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help(isVisible ? "Ausgrauen" : "Farbig zeigen")
+
+                Button(action: onSelect) {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isVisible ? style.colors[landClass.id].color : Color.secondary.opacity(0.28))
+                        .frame(width: 21, height: 18)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                .stroke(.white.opacity(0.52), lineWidth: 0.7)
+                        }
+                        .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
+                }
+                .buttonStyle(.plain)
+                .help("Farbe direkt ändern")
+
+                Button(action: onSelect) {
+                    Text(landClass.name)
+                        .font(.caption)
+                        .foregroundStyle(isVisible ? .primary : .secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+
+                if isSelected {
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 5)
+            .frame(minHeight: 27)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.09) : .clear,
+                in: RoundedRectangle(cornerRadius: 7)
+            )
+
+            if isSelected {
+                VStack(alignment: .leading, spacing: 7) {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.fixed(22), spacing: 7), count: 7),
+                        alignment: .leading,
+                        spacing: 7
+                    ) {
+                        ForEach(Array(Self.quickColors.enumerated()), id: \.offset) { _, color in
+                            Button { style.setColor(color, at: landClass.id) } label: {
+                                Circle()
+                                    .fill(color.color)
+                                    .frame(width: 21, height: 21)
+                                    .overlay {
+                                        Circle().stroke(.white.opacity(0.65), lineWidth: 0.8)
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        Button("Nur diese") {
+                            style.isolateClass(landClass.id, within: allClassIDs)
+                        }
+                        Button("Standard") {
+                            style.setColor(RGBAColor(hex: landClass.defaultColor), at: landClass.id)
+                        }
+                        Spacer()
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .font(.caption2)
+                }
+                .padding(.horizontal, 5)
+                .padding(.bottom, 5)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+}
+
+private struct AtlasMapLabel: View {
+    let label: MapLabel
+
+    var body: some View {
+        styledText
+            .fixedSize()
+            .shadow(color: haloColor, radius: 0, x: -1, y: 0)
+            .shadow(color: haloColor, radius: 0, x: 1, y: 0)
+            .shadow(color: haloColor, radius: 0, x: 0, y: -1)
+            .shadow(color: haloColor, radius: 0, x: 0, y: 1)
+            .shadow(color: haloColor, radius: label.kind <= 6 ? 1.8 : 1.5)
+            .rotationEffect(.degrees(label.angleDegrees))
+            .position(label.point)
+    }
+
+    @ViewBuilder private var styledText: some View {
+        switch label.kind {
+        case 7:
+            Text("▲ \(label.name)")
+                .font(.system(size: 12, weight: .bold, design: .serif))
+                .foregroundStyle(Color(red: 0.26, green: 0.17, blue: 0.11))
+        case 8:
+            Text(label.name)
+                .font(.system(size: 20, weight: .semibold, design: .serif))
+                .italic()
+                .tracking(3.4)
+                .foregroundStyle(Color(red: 0.20, green: 0.25, blue: 0.10))
+        case 9, 11:
+            Text(label.name)
+                .font(.system(size: 13, weight: .semibold, design: .serif))
+                .italic()
+                .tracking(0.7)
+                .foregroundStyle(Color(red: 0.03, green: 0.27, blue: 0.50))
+        case 10:
+            Text(label.name)
+                .font(.system(size: 12, weight: .semibold, design: .serif))
+                .italic()
+                .foregroundStyle(Color(red: 0.10, green: 0.31, blue: 0.16))
+        case 12:
+            Text(label.name)
+                .font(.system(size: 11, weight: .semibold, design: .serif))
+                .foregroundStyle(Color(red: 0.28, green: 0.19, blue: 0.14))
+        default:
+            Text(label.name)
+                .font(.system(
+                    size: label.prominence >= 100_000 ? 13 : 11,
+                    weight: label.prominence >= 100_000 ? .bold : .semibold
+                ))
+                .foregroundStyle(Color(red: 0.045, green: 0.05, blue: 0.035))
+        }
+    }
+
+    private var haloColor: Color {
+        label.kind == 9 || label.kind == 11
+            ? Color(red: 0.90, green: 0.96, blue: 0.92)
+            : Color(red: 1.0, green: 0.98, blue: 0.86)
     }
 }
 

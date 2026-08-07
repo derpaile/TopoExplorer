@@ -57,11 +57,12 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Doppelklick: hineinzoomen
 - `0`: ganz Deutschland einpassen
 - `+` / `-`: zoomen
-- Legendenbereiche rechts: alle 40 Farben sofort ändern
+- Seitenleiste „Flächen“: 40 Klassen durchsuchen, direkt färben, einzeln oder gruppenweise ausgrauen
 - Themen: Naturatlas, Kulturarten, Waldarten und Kontrastreich
 - Reliefregler: Stärke, Überhöhung und Kontrast ändern
 - Referenzansichten: Harz, Alpen, Küste, Ruhrgebiet und Flachland direkt anspringen
 - Ebenen: Straßen, Bahn, Flüsse, Grenzen, Orte und Natur-/Geländenamen einzeln schalten
+- Beschriftung: Gewässer blau, Naturgebiete grün und Landschaften typografisch vom Ortsnamen getrennt
 - Suche: Ortsname oder EPSG:3035-Koordinaten eingeben
 - Mauszeiger: Koordinaten, Höhe und Landklasse ablesen
 - Gesamtkarte: Kulturarten, Baumgattungen, Naturflächen und Siedlungsdichte

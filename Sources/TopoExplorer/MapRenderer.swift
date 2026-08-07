@@ -863,31 +863,54 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         }
         var occupied: [CGRect] = []
         var labels: [MapLabel] = []
+        let visibleBounds = CGRect(origin: .zero, size: viewport.logicalSize)
+            .insetBy(dx: 6, dy: 6)
         for (place, worldX, worldY) in sorted {
             let x = (worldX - viewport.centerX) * viewport.pixelsPerMeter
                 + Double(viewport.logicalSize.width) / 2
             let y = (viewport.centerY - worldY) * viewport.pixelsPerMeter
                 + Double(viewport.logicalSize.height) / 2
-            guard
-                x > 20, y > 12,
-                x < Double(viewport.logicalSize.width) - 20,
-                y < Double(viewport.logicalSize.height) - 12
-            else { continue }
             let identity = "\(place.name)|\(Int(worldX / 100))|\(Int(worldY / 100))"
             guard seen.insert(identity).inserted else { continue }
-            let width = min(180, max(32, Double(place.name.count) * 7.2 + 12))
-            let rectangle = CGRect(x: x - width / 2, y: y - 10, width: width, height: 20).insetBy(dx: -3, dy: -2)
+            let isLandscape = place.kind == 8
+            let characterWidth = isLandscape ? 13.2 : (place.kind >= 7 ? 8.0 : 7.5)
+            let width = min(
+                isLandscape ? 280 : 190,
+                max(34, Double(place.name.count) * characterWidth + 14)
+            )
+            let height = isLandscape ? 32.0 : 24.0
+            let angle = labelAngle(for: place)
+            let radians = abs(angle) * .pi / 180
+            let rotatedWidth = abs(width * cos(radians)) + abs(height * sin(radians))
+            let rotatedHeight = abs(width * sin(radians)) + abs(height * cos(radians))
+            let rectangle = CGRect(
+                x: x - rotatedWidth / 2, y: y - rotatedHeight / 2,
+                width: rotatedWidth, height: rotatedHeight
+            ).insetBy(dx: -4, dy: -3)
+            guard visibleBounds.contains(rectangle) else { continue }
             guard !occupied.contains(where: { $0.intersects(rectangle) }) else { continue }
             occupied.append(rectangle)
             labels.append(
                 MapLabel(
                     id: identity, name: place.name,
-                    point: CGPoint(x: x, y: y), prominence: Double(place.population)
+                    point: CGPoint(x: x, y: y), prominence: Double(place.population),
+                    kind: place.kind, angleDegrees: angle
                 )
             )
             if labels.count >= 120 { break }
         }
         return labels
+    }
+
+    private func labelAngle(for place: VectorPlace) -> Double {
+        guard place.kind == 8 else { return 0 }
+        var hash: UInt32 = 2_166_136_261
+        for byte in place.name.utf8 {
+            hash = (hash ^ UInt32(byte)) &* 16_777_619
+        }
+        var angle = Double(Int(hash % 41) - 20)
+        if abs(angle) < 7 { angle = angle < 0 ? -9 : 9 }
+        return angle
     }
 
     private func prefetch(
