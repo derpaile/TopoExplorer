@@ -239,8 +239,6 @@ enum MapExportWriter {
             var attributes: [CFString: Any] = [
                 kCTFontAttributeName: font,
                 kCTForegroundColorAttributeName: labelColor(label),
-                kCTStrokeColorAttributeName: labelHaloColor(label),
-                kCTStrokeWidthAttributeName: -3.2,
             ]
             if label.kind == 8 { attributes[kCTKernAttributeName] = 3.2 * pixelRatio }
             let attributed = CFAttributedStringCreate(
@@ -263,38 +261,35 @@ enum MapExportWriter {
 
     private static func labelSize(_ label: MapLabel) -> CGFloat {
         switch label.kind {
-        case 8: 20
-        case 9, 11: 13
-        case 7, 10: 12
-        case 12: 11
-        default: label.prominence >= 100_000 ? 13 : 11
+        case 7: 11
+        case 8: 15
+        case 9, 11: 12
+        case 10: 11
+        case 12: 10
+        default:
+            if label.prominence >= 1_000_000 { 17 }
+            else if label.prominence >= 500_000 { 16 }
+            else if label.prominence >= 100_000 { 14 }
+            else if label.prominence >= 50_000 { 13 }
+            else if label.prominence >= 10_000 { 12 }
+            else { 10 }
         }
     }
 
     private static func labelFontName(_ label: MapLabel) -> String {
         switch label.kind {
-        case 8, 9, 10, 11: "TimesNewRomanPS-BoldItalicMT"
-        case 7, 12: "TimesNewRomanPS-BoldMT"
-        default: label.prominence >= 100_000 ? "Helvetica-Bold" : "Helvetica-Semibold"
+        case 7: "TimesNewRomanPS-ItalicMT"
+        case 8: "Baskerville"
+        case 9: "HelveticaNeue-LightItalic"
+        case 10: "AvenirNext-UltraLight"
+        case 11: "Baskerville-Italic"
+        case 12: "Menlo-Regular"
+        default: "HelveticaNeue-Thin"
         }
     }
 
-    private static func labelColor(_ label: MapLabel) -> CGColor {
-        switch label.kind {
-        case 7: CGColor(red: 0.26, green: 0.17, blue: 0.11, alpha: 1)
-        case 8: CGColor(red: 0.20, green: 0.25, blue: 0.10, alpha: 1)
-        case 9, 11: CGColor(red: 0.03, green: 0.27, blue: 0.50, alpha: 1)
-        case 10: CGColor(red: 0.10, green: 0.31, blue: 0.16, alpha: 1)
-        case 12: CGColor(red: 0.28, green: 0.19, blue: 0.14, alpha: 1)
-        default: CGColor(red: 0.045, green: 0.05, blue: 0.035, alpha: 1)
-        }
-    }
-
-    private static func labelHaloColor(_ label: MapLabel) -> CGColor {
-        if label.kind == 9 || label.kind == 11 {
-            return CGColor(red: 0.90, green: 0.96, blue: 0.92, alpha: 1)
-        }
-        return CGColor(red: 1, green: 0.98, blue: 0.86, alpha: 1)
+    private static func labelColor(_: MapLabel) -> CGColor {
+        CGColor(gray: 1, alpha: 0.96)
     }
 
     private static func drawScaleBar(

@@ -294,14 +294,14 @@ def place_min_zoom(place_type: str, population: int) -> int:
             return 1
         if population >= 100_000:
             return 2
-        return 3
+        return 3 if population >= 20_000 else 4
     if place_type == "town":
-        return 3 if population >= 50_000 else 4
+        return 3 if population >= 50_000 else 4 if population >= 10_000 else 5
     if place_type in {"suburb", "quarter", "borough"}:
-        return 5
+        return 6
     if place_type == "village":
-        return 5
-    return 6
+        return 6 if population >= 5_000 else 7
+    return 8 if place_type in {"hamlet", "isolated_dwelling"} else 9
 
 
 def geometry_lines(geometry: dict | None) -> Iterator[list[tuple[float, float]]]:

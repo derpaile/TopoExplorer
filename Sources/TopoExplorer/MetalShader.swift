@@ -45,7 +45,7 @@ enum MetalShader {
         uint layer;
         uint pass;
         uint zoom;
-        uint padding;
+        uint kindMask;
     };
 
     struct VectorOut {
@@ -126,12 +126,25 @@ enum MetalShader {
             sin(altitude)
         ));
 
-        float shadeOne = clamp(dot(normal, lightOne) * 0.5 + 0.5, 0.0, 1.0);
-        float shadeTwo = clamp(dot(normal, lightTwo) * 0.5 + 0.5, 0.0, 1.0);
-        float shade = clamp(max(shadeOne * 1.2, shadeTwo * 0.7), 0.0, 1.0);
-        shade = pow(shade, max(relief.contrast, 0.01));
-        float reliefGray = clamp((1.0 - shade) + relief.ambient, 0.0, 1.0);
-        float3 composed = mix(baseColor, float3(reliefGray), relief.opacity);
+        // Gegenlicht entfernt die konstante Helligkeit ebener Flächen. Das
+        // Reliefsignal ist dadurch exakt um neutrales 50-%-Grau zentriert.
+        float directionalShade = (dot(normal, lightOne) - dot(normal, lightTwo))
+            / (2.0 * cos(altitude));
+        float shapedShade = tanh(directionalShade * max(relief.contrast, 0.01) * 1.35);
+        float reliefTone = 0.5 + 0.5 * shapedShade;
+        reliefTone = mix(reliefTone, 1.0, clamp(relief.ambient, 0.0, 1.0));
+
+        // Farberhaltendes "Weiches Licht": Das Relief moduliert die vorhandene
+        // Oberflächenfarbe, statt sie wie zuvor mit grauen Pixeln zu ersetzen.
+        float3 softLight;
+        if (reliefTone <= 0.5) {
+            softLight = (1.0 - 2.0 * reliefTone) * baseColor * baseColor
+                + 2.0 * reliefTone * baseColor;
+        } else {
+            softLight = 2.0 * (1.0 - reliefTone) * baseColor
+                + (2.0 * reliefTone - 1.0) * sqrt(max(baseColor, float3(0.0)));
+        }
+        float3 composed = mix(baseColor, softLight, clamp(relief.opacity, 0.0, 1.0));
         return float4(composed, 1.0);
     }
 
@@ -208,7 +221,8 @@ enum MetalShader {
             1.0 - point.y / uniforms.viewport.y * 2.0
         );
         VectorOut out;
-        out.position = minimumZoom <= uniforms.zoom
+        bool kindEnabled = (uniforms.kindMask & (1u << kind)) != 0u;
+        out.position = minimumZoom <= uniforms.zoom && kindEnabled
             ? float4(clip, 0.0, 1.0)
             : float4(2.0, 2.0, 0.0, 1.0);
         out.color = color;

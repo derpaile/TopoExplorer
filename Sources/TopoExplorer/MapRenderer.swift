@@ -29,7 +29,7 @@ private struct VectorUniforms {
     var layer: UInt32
     var pass: UInt32
     var zoom: UInt32
-    var padding: UInt32 = 0
+    var kindMask: UInt32
 }
 
 private struct RenderViewport {
@@ -58,8 +58,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         ambientLight: 0.08, sunAzimuthRadians: 5.4977871438
     )
     private var layers = RenderLayers(
-        roads: true, railways: true, waterways: true, boundaries: true,
-        places: true, geonames: true
+        roads: true, roadKinds: .max, railways: true, railwayKinds: .max,
+        waterways: true, boundaries: true, places: true,
+        geonames: true, geonameKinds: .max
     )
     private var comparison = RenderComparison(mode: 0, splitPosition: 0.5)
     private var centerX = 0.0
@@ -737,13 +738,15 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     ),
                     layer: 0,
                     pass: 0,
-                    zoom: UInt32(max(0, visibleZoom))
+                    zoom: UInt32(max(0, visibleZoom)),
+                    kindMask: .max
                 )
 
                 // Casings first, then cores: intersections retain the previous visual hierarchy.
                 for layer in layerOrder where layerEnabled(layer, in: renderLayers) {
                     guard let layerSegments = tile.layers[layer] else { continue }
                     uniforms.layer = UInt32(layer.rawValue)
+                    uniforms.kindMask = kindMask(for: layer, in: renderLayers)
                     uniforms.pass = 0
                     for group in layerSegments.zoomLevels where group.minimumZoom <= visibleZoom {
                         drawVectorBuffer(
@@ -754,6 +757,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 for layer in layerOrder where layerEnabled(layer, in: renderLayers) {
                     guard let layerSegments = tile.layers[layer] else { continue }
                     uniforms.layer = UInt32(layer.rawValue)
+                    uniforms.kindMask = kindMask(for: layer, in: renderLayers)
                     uniforms.pass = 1
                     for group in layerSegments.zoomLevels where group.minimumZoom <= visibleZoom {
                         drawVectorBuffer(
@@ -766,8 +770,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             }
 
             if renderLayers.places || renderLayers.geonames {
-                for place in tile.places where Int(place.minZoom) <= visibleZoom
-                    && (place.kind <= 6 ? renderLayers.places : renderLayers.geonames)
+                for place in tile.places where effectiveMinimumZoom(for: place) <= visibleZoom
+                    && labelKindEnabled(place.kind, in: renderLayers)
                 {
                     let point = world(place.point)
                     places.append((place, point.x, point.y))
@@ -784,6 +788,37 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         case .waterway: layers.waterways
         case .boundary: layers.boundaries
         }
+    }
+
+    private func kindMask(for layer: VectorLayer, in layers: RenderLayers) -> UInt32 {
+        switch layer {
+        case .road: layers.roadKinds
+        case .railway: layers.railwayKinds
+        case .waterway, .boundary: .max
+        }
+    }
+
+    private func labelKindEnabled(_ kind: UInt8, in layers: RenderLayers) -> Bool {
+        if kind <= 6 { return layers.places }
+        return layers.geonames && (layers.geonameKinds & (UInt32(1) << UInt32(kind))) != 0
+    }
+
+    private func effectiveMinimumZoom(for place: VectorPlace) -> Int {
+        guard place.kind <= 6 else { return Int(place.minZoom) }
+        let population = Int(place.population)
+        let populationZoom: Int
+        switch place.kind {
+        case 1:
+            populationZoom = population >= 500_000 ? 1 : population >= 100_000 ? 2 : population >= 20_000 ? 3 : 4
+        case 2:
+            populationZoom = population >= 50_000 ? 3 : population >= 10_000 ? 4 : 5
+        case 3:
+            populationZoom = population >= 5_000 ? 6 : 7
+        case 4: populationZoom = 6
+        case 5: populationZoom = 8
+        default: populationZoom = 9
+        }
+        return max(Int(place.minZoom), populationZoom)
     }
 
     private func drawVectorBuffer(
@@ -873,16 +908,16 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             let identity = "\(place.name)|\(Int(worldX / 100))|\(Int(worldY / 100))"
             guard seen.insert(identity).inserted else { continue }
             let isLandscape = place.kind == 8
-            let characterWidth = isLandscape ? 13.2 : (place.kind >= 7 ? 8.0 : 7.5)
+            let populationWidth = place.population >= 500_000 ? 9.2 : place.population >= 100_000 ? 8.2 : 7.0
+            let characterWidth = isLandscape ? 9.5 : (place.kind >= 7 ? 7.5 : populationWidth)
             let width = min(
-                isLandscape ? 280 : 190,
+                isLandscape ? 220 : 190,
                 max(34, Double(place.name.count) * characterWidth + 14)
             )
-            let height = isLandscape ? 32.0 : 24.0
-            let angle = labelAngle(for: place)
-            let radians = abs(angle) * .pi / 180
-            let rotatedWidth = abs(width * cos(radians)) + abs(height * sin(radians))
-            let rotatedHeight = abs(width * sin(radians)) + abs(height * cos(radians))
+            let height = isLandscape ? 25.0 : 22.0
+            let angle = 0.0
+            let rotatedWidth = width
+            let rotatedHeight = height
             let rectangle = CGRect(
                 x: x - rotatedWidth / 2, y: y - rotatedHeight / 2,
                 width: rotatedWidth, height: rotatedHeight
@@ -897,20 +932,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     kind: place.kind, angleDegrees: angle
                 )
             )
-            if labels.count >= 120 { break }
+            if labels.count >= 80 { break }
         }
         return labels
-    }
-
-    private func labelAngle(for place: VectorPlace) -> Double {
-        guard place.kind == 8 else { return 0 }
-        var hash: UInt32 = 2_166_136_261
-        for byte in place.name.utf8 {
-            hash = (hash ^ UInt32(byte)) &* 16_777_619
-        }
-        var angle = Double(Int(hash % 41) - 20)
-        if abs(angle) < 7 { angle = angle < 0 ? -9 : 9 }
-        return angle
     }
 
     private func prefetch(

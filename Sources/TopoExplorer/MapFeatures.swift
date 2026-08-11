@@ -3,49 +3,70 @@ import SwiftUI
 
 struct RenderLayers {
     let roads: Bool
+    let roadKinds: UInt32
     let railways: Bool
+    let railwayKinds: UInt32
     let waterways: Bool
     let boundaries: Bool
     let places: Bool
     let geonames: Bool
+    let geonameKinds: UInt32
 }
 
 @MainActor
 final class LayerSettings: ObservableObject {
     @Published var roads: Bool { didSet { save() } }
+    @Published var roadKinds: UInt32 { didSet { save() } }
     @Published var railways: Bool { didSet { save() } }
+    @Published var railwayKinds: UInt32 { didSet { save() } }
     @Published var waterways: Bool { didSet { save() } }
     @Published var boundaries: Bool { didSet { save() } }
     @Published var places: Bool { didSet { save() } }
     @Published var geonames: Bool { didSet { save() } }
+    @Published var geonameKinds: UInt32 { didSet { save() } }
 
     private static let key = "TopoExplorer.layers.v1"
 
     init() {
-        let saved = UserDefaults.standard.dictionary(forKey: Self.key) as? [String: Bool] ?? [:]
-        roads = saved["roads"] ?? true
-        railways = saved["railways"] ?? true
-        waterways = saved["waterways"] ?? true
-        boundaries = saved["boundaries"] ?? true
-        places = saved["places"] ?? true
-        geonames = saved["geonames"] ?? true
+        let saved = UserDefaults.standard.dictionary(forKey: Self.key) ?? [:]
+        func boolean(_ key: String) -> Bool {
+            (saved[key] as? NSNumber)?.boolValue ?? true
+        }
+        func mask(_ key: String) -> UInt32 {
+            guard let number = saved[key] as? NSNumber else { return .max }
+            return number.uint32Value
+        }
+        roads = boolean("roads")
+        roadKinds = mask("roadKinds")
+        railways = boolean("railways")
+        railwayKinds = mask("railwayKinds")
+        waterways = boolean("waterways")
+        boundaries = boolean("boundaries")
+        places = boolean("places")
+        geonames = boolean("geonames")
+        geonameKinds = mask("geonameKinds")
     }
 
     var renderLayers: RenderLayers {
         RenderLayers(
             roads: roads,
+            roadKinds: roadKinds,
             railways: railways,
+            railwayKinds: railwayKinds,
             waterways: waterways,
             boundaries: boundaries,
             places: places,
-            geonames: geonames
+            geonames: geonames,
+            geonameKinds: geonameKinds
         )
     }
 
     private func save() {
         UserDefaults.standard.set(
-            ["roads": roads, "railways": railways, "waterways": waterways,
-             "boundaries": boundaries, "places": places, "geonames": geonames],
+            ["roads": roads, "roadKinds": roadKinds,
+             "railways": railways, "railwayKinds": railwayKinds,
+             "waterways": waterways, "boundaries": boundaries,
+             "places": places, "geonames": geonames, "geonameKinds": geonameKinds],
             forKey: Self.key
         )
     }

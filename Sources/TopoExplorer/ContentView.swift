@@ -113,7 +113,6 @@ struct ContentView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     if sidebarMode == .explore {
-                        discoverSection
                         layerSection
                         if manifest.hasLandcover2020 { landcoverSection }
                         bookmarkSection
@@ -228,18 +227,50 @@ struct ContentView: View {
                 title: "Orte & Namen", detail: "Städte und Siedlungen",
                 symbol: "building.2.fill", tint: .orange, isOn: $layers.places
             )
-            AtlasLayerRow(
-                title: "Natur & Gelände", detail: "Berge, Landschaften und Gewässer",
+            AtlasLayerGroup(
+                title: "Natur & Gelände", detail: "Nach Themen filtern",
                 symbol: "mountain.2.fill", tint: .green, isOn: $layers.geonames
-            )
-            AtlasLayerRow(
-                title: "Straßen", detail: "Autobahn bis Landstraße",
+            ) {
+                AtlasLayerSubheading("Relief")
+                layerKindRow("Gipfel & Höhenpunkte", kind: 7, mask: \.geonameKinds)
+                layerKindRow("Landschaften", kind: 8, mask: \.geonameKinds)
+                layerKindRow("Höhlen", kind: 12, mask: \.geonameKinds)
+                AtlasLayerSubheading("Wasser & Natur")
+                layerKindRow("Gewässer & Seen", kind: 9, mask: \.geonameKinds)
+                layerKindRow("Moore & Schutzgebiete", kind: 10, mask: \.geonameKinds)
+                layerKindRow("Inseln", kind: 11, mask: \.geonameKinds)
+            }
+            AtlasLayerGroup(
+                title: "Straßen", detail: "Nach Straßenklasse filtern",
                 symbol: "road.lanes", tint: .red, isOn: $layers.roads
-            )
-            AtlasLayerRow(
-                title: "Eisenbahn", detail: "Schienennetz",
+            ) {
+                AtlasLayerSubheading("Überregional")
+                layerKindRow("Autobahnen", kind: 1, mask: \.roadKinds)
+                layerKindRow("Fernstraßen", kind: 2, mask: \.roadKinds)
+                layerKindRow("Bundesstraßen", kind: 3, mask: \.roadKinds)
+                AtlasLayerSubheading("Regional")
+                layerKindRow("Landesstraßen", kind: 4, mask: \.roadKinds)
+                layerKindRow("Kreisstraßen", kind: 5, mask: \.roadKinds)
+                AtlasLayerSubheading("Lokal")
+                layerKindRow("Ortsstraßen", kind: 6, mask: \.roadKinds)
+                layerKindRow("Erschließungswege", kind: 7, mask: \.roadKinds)
+                layerKindRow("Feldwege", kind: 8, mask: \.roadKinds)
+            }
+            AtlasLayerGroup(
+                title: "Schienen", detail: "Nach Verkehrssystem filtern",
                 symbol: "tram.fill", tint: .purple, isOn: $layers.railways
-            )
+            ) {
+                AtlasLayerSubheading("Fern & regional")
+                layerKindRow("Eisenbahn", kind: 1, mask: \.railwayKinds)
+                layerKindRow("Schmalspurbahn", kind: 2, mask: \.railwayKinds)
+                AtlasLayerSubheading("Stadtverkehr")
+                layerKindRow("Stadtbahn", kind: 3, mask: \.railwayKinds)
+                layerKindRow("U-Bahn", kind: 4, mask: \.railwayKinds)
+                layerKindRow("Straßenbahn", kind: 5, mask: \.railwayKinds)
+                AtlasLayerSubheading("Sonderverkehr")
+                layerKindRow("Sonderbahnen", kind: 6, mask: \.railwayKinds)
+                layerKindRow("Im Bau", kind: 7, mask: \.railwayKinds)
+            }
             AtlasLayerRow(
                 title: "Flüsse", detail: "Fließgewässer",
                 symbol: "water.waves", tint: .blue, isOn: $layers.waterways
@@ -250,6 +281,25 @@ struct ContentView: View {
                 isOn: $layers.boundaries
             )
         }
+    }
+
+    private func layerKindRow(
+        _ title: String,
+        kind: UInt8,
+        mask keyPath: ReferenceWritableKeyPath<LayerSettings, UInt32>
+    ) -> some View {
+        let bit = UInt32(1) << UInt32(kind)
+        return AtlasLayerKindRow(
+            title: title,
+            isOn: Binding(
+                get: { (layers[keyPath: keyPath] & bit) != 0 },
+                set: { enabled in
+                    if enabled { layers[keyPath: keyPath] |= bit }
+                    else { layers[keyPath: keyPath] &= ~bit }
+                }
+            ),
+            isolate: { layers[keyPath: keyPath] = bit }
+        )
     }
 
     private var landcoverSection: some View {
@@ -666,15 +716,48 @@ struct ContentView: View {
     }
 
     private var labelsOverlay: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .topLeading) {
-                ForEach(viewport.labels) { label in
-                    AtlasMapLabel(label: label)
-                }
+        Canvas(rendersAsynchronously: true) { context, _ in
+            for label in viewport.labels {
+                context.draw(mapLabelText(label), at: label.point, anchor: .center)
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .allowsHitTesting(false)
+    }
+
+    private func mapLabelText(_ label: MapLabel) -> Text {
+        let text = Text(label.kind == 7 ? "▲ \(label.name)" : label.name)
+        switch label.kind {
+        case 7:
+            return text.font(.system(size: 12, weight: .light, design: .serif))
+                .italic().foregroundColor(.white.opacity(0.96))
+        case 8:
+            return text.font(.system(size: 15, weight: .light, design: .serif))
+                .tracking(1.6).foregroundColor(.white.opacity(0.96))
+        case 9:
+            return text.font(.system(size: 12, weight: .light, design: .rounded))
+                .italic().foregroundColor(.white.opacity(0.96))
+        case 10:
+            return text.font(.system(size: 11, weight: .light, design: .rounded))
+                .foregroundColor(.white.opacity(0.96))
+        case 11:
+            return text.font(.system(size: 12, weight: .light, design: .serif))
+                .italic().foregroundColor(.white.opacity(0.96))
+        case 12:
+            return text.font(.system(size: 10, weight: .light, design: .monospaced))
+                .foregroundColor(.white.opacity(0.96))
+        default:
+            return text.font(placeFont(population: label.prominence))
+                .foregroundColor(.white.opacity(0.96))
+        }
+    }
+
+    private func placeFont(population: Double) -> Font {
+        if population >= 1_000_000 { return .system(size: 17, weight: .light, design: .rounded) }
+        if population >= 500_000 { return .system(size: 16, weight: .light, design: .rounded) }
+        if population >= 100_000 { return .system(size: 14, weight: .light, design: .rounded) }
+        if population >= 50_000 { return .system(size: 13, weight: .light, design: .rounded) }
+        if population >= 10_000 { return .system(size: 12, weight: .light, design: .rounded) }
+        return .system(size: 10, weight: .light, design: .rounded)
     }
 
     private var searchField: some View {
@@ -1196,65 +1279,6 @@ private struct SurfaceClassEditor: View {
     }
 }
 
-private struct AtlasMapLabel: View {
-    let label: MapLabel
-
-    var body: some View {
-        styledText
-            .fixedSize()
-            .shadow(color: haloColor, radius: 0, x: -1, y: 0)
-            .shadow(color: haloColor, radius: 0, x: 1, y: 0)
-            .shadow(color: haloColor, radius: 0, x: 0, y: -1)
-            .shadow(color: haloColor, radius: 0, x: 0, y: 1)
-            .shadow(color: haloColor, radius: label.kind <= 6 ? 1.8 : 1.5)
-            .rotationEffect(.degrees(label.angleDegrees))
-            .position(label.point)
-    }
-
-    @ViewBuilder private var styledText: some View {
-        switch label.kind {
-        case 7:
-            Text("▲ \(label.name)")
-                .font(.system(size: 12, weight: .bold, design: .serif))
-                .foregroundStyle(Color(red: 0.26, green: 0.17, blue: 0.11))
-        case 8:
-            Text(label.name)
-                .font(.system(size: 20, weight: .semibold, design: .serif))
-                .italic()
-                .tracking(3.4)
-                .foregroundStyle(Color(red: 0.20, green: 0.25, blue: 0.10))
-        case 9, 11:
-            Text(label.name)
-                .font(.system(size: 13, weight: .semibold, design: .serif))
-                .italic()
-                .tracking(0.7)
-                .foregroundStyle(Color(red: 0.03, green: 0.27, blue: 0.50))
-        case 10:
-            Text(label.name)
-                .font(.system(size: 12, weight: .semibold, design: .serif))
-                .italic()
-                .foregroundStyle(Color(red: 0.10, green: 0.31, blue: 0.16))
-        case 12:
-            Text(label.name)
-                .font(.system(size: 11, weight: .semibold, design: .serif))
-                .foregroundStyle(Color(red: 0.28, green: 0.19, blue: 0.14))
-        default:
-            Text(label.name)
-                .font(.system(
-                    size: label.prominence >= 100_000 ? 13 : 11,
-                    weight: label.prominence >= 100_000 ? .bold : .semibold
-                ))
-                .foregroundStyle(Color(red: 0.045, green: 0.05, blue: 0.035))
-        }
-    }
-
-    private var haloColor: Color {
-        label.kind == 9 || label.kind == 11
-            ? Color(red: 0.90, green: 0.96, blue: 0.92)
-            : Color(red: 1.0, green: 0.98, blue: 0.86)
-    }
-}
-
 private struct CursorInfoGlassOverlay: View {
     let probe: MapProbe
     let crs: String
@@ -1392,6 +1416,90 @@ private struct AtlasLayerRow: View {
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+}
+
+private struct AtlasLayerGroup<Content: View>: View {
+    let title: String
+    let detail: String
+    let symbol: String
+    let tint: Color
+    @Binding var isOn: Bool
+    let content: Content
+
+    init(
+        title: String, detail: String, symbol: String, tint: Color,
+        isOn: Binding<Bool>, @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.detail = detail
+        self.symbol = symbol
+        self.tint = tint
+        _isOn = isOn
+        self.content = content()
+    }
+
+    var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 2) {
+                content
+            }
+            .padding(.leading, 19)
+            .padding(.bottom, 5)
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isOn ? tint : .secondary)
+                    .frame(width: 28, height: 28)
+                    .background(tint.opacity(isOn ? 0.12 : 0.05), in: RoundedRectangle(cornerRadius: 8))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).font(.subheadline.weight(.medium))
+                    Text(detail).font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 4)
+                Toggle(title, isOn: $isOn)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+            }
+            .padding(.vertical, 4)
+        }
+        .padding(.horizontal, 7)
+    }
+}
+
+private struct AtlasLayerSubheading: View {
+    let title: String
+
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 8, weight: .bold))
+            .tracking(0.7)
+            .foregroundStyle(.tertiary)
+            .padding(.top, 5)
+    }
+}
+
+private struct AtlasLayerKindRow: View {
+    let title: String
+    @Binding var isOn: Bool
+    let isolate: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Toggle(title, isOn: $isOn)
+                .toggleStyle(.checkbox)
+                .font(.caption)
+            Spacer()
+            Button("Nur", action: isolate)
+                .buttonStyle(.borderless)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(minHeight: 22)
     }
 }
 
