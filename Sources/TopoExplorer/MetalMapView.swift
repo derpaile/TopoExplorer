@@ -4,6 +4,9 @@ import SwiftUI
 
 final class MapCanvasView: MTKView {
     weak var mapRenderer: MapRenderer?
+    var analysisMode = false {
+        didSet { if analysisMode != oldValue { window?.invalidateCursorRects(for: self) } }
+    }
     private var lastDragPoint: CGPoint?
     private var pointerTrackingArea: NSTrackingArea?
 
@@ -42,6 +45,11 @@ final class MapCanvasView: MTKView {
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
+        if analysisMode {
+            lastDragPoint = nil
+            mapRenderer?.beginAreaSelection(at: point)
+            return
+        }
         if event.clickCount == 2 {
             mapRenderer?.zoom(factor: 2, around: point)
         }
@@ -50,6 +58,10 @@ final class MapCanvasView: MTKView {
 
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        if analysisMode {
+            mapRenderer?.updateAreaSelection(to: point)
+            return
+        }
         if let previous = lastDragPoint {
             mapRenderer?.pan(deltaX: point.x - previous.x, deltaY: point.y - previous.y)
         }
@@ -57,7 +69,14 @@ final class MapCanvasView: MTKView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if analysisMode {
+            mapRenderer?.finishAreaSelection(at: convert(event.locationInWindow, from: nil))
+        }
         lastDragPoint = nil
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: analysisMode ? .crosshair : .openHand)
     }
 
     override func scrollWheel(with event: NSEvent) {
@@ -90,10 +109,12 @@ struct MetalMapView: NSViewRepresentable {
     @ObservedObject var comparison: ComparisonSettings
     @ObservedObject var export: MapExportController
     @ObservedObject var viewport: ViewportController
+    let analysisMode: Bool
 
     final class Coordinator {
         var renderer: MapRenderer?
         var lastExportID = -1
+        var lastAnalysisMode = false
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -105,6 +126,11 @@ struct MetalMapView: NSViewRepresentable {
     }
 
     func updateNSView(_ view: MapCanvasView, context: Context) {
+        view.analysisMode = analysisMode
+        if context.coordinator.lastAnalysisMode && !analysisMode {
+            context.coordinator.renderer?.cancelAreaSelection()
+        }
+        context.coordinator.lastAnalysisMode = analysisMode
         context.coordinator.renderer?.update(
             manifest: manifest,
             dataDirectory: dataDirectory,

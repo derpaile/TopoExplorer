@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var sidebarMode = SidebarMode.explore
     @State private var surfaceQuery = ""
     @State private var selectedSurfaceID: Int?
+    @State private var analysisMode = false
 
     var body: some View {
         Group {
@@ -544,10 +545,23 @@ struct ContentView: View {
                 layers: layers,
                 comparison: comparison,
                 export: export,
-                viewport: viewport
+                viewport: viewport,
+                analysisMode: analysisMode
             )
 
             labelsOverlay
+
+            if let rect = viewport.analysisScreenRect, rect.width > 0, rect.height > 0 {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.cyan.opacity(0.14))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(Color.cyan, style: StrokeStyle(lineWidth: 2, dash: [7, 4]))
+                    }
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+                    .allowsHitTesting(false)
+            }
 
             if manifest.hasLandcover2020 && comparison.mode == .comparison {
                 comparisonOverlay
@@ -556,8 +570,37 @@ struct ContentView: View {
             mapTopBar(manifest: manifest)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-            mapBottomBar(manifest: manifest)
+            mapBottomBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+
+            if let probe = viewport.probe, viewport.analysisSelection == nil {
+                CursorInfoGlassOverlay(
+                    probe: probe,
+                    crs: manifest.crs,
+                    surfaceColor: probe.classID.flatMap { id in
+                        style.colors.indices.contains(id) ? style.colors[id].color : nil
+                    }
+                )
+                .padding(.top, 76)
+                .padding(.leading, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .allowsHitTesting(false)
+            }
+
+            if viewport.analysisSelection != nil {
+                AreaStatisticsPanel(
+                    statistics: viewport.areaStatistics,
+                    isLoading: viewport.isAnalyzing,
+                    message: viewport.analysisMessage,
+                    onClose: { analysisMode = false }
+                )
+                .frame(width: 380)
+                .padding(.top, 76)
+                .padding(.trailing, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
 
             if showInspector {
                 InspectorView(
@@ -625,42 +668,42 @@ struct ContentView: View {
                     Label("Mausrad oder Trackpad zum Zoomen", systemImage: "plus.magnifyingglass")
                     Label("Doppelklick zum Hineinzoomen", systemImage: "cursorarrow.click.2")
                     Label("Mauszeiger zeigt Höhe und Landklasse", systemImage: "info.circle")
+                    Label("Analyseknopf: Rechteck ziehen und Fläche auswerten", systemImage: "rectangle.dashed")
                 }
                 .font(.subheadline)
                 .padding(15)
                 .frame(width: 285, alignment: .leading)
             }
 
+
+            MapChromeButton(
+                symbol: analysisMode ? "xmark" : "rectangle.dashed",
+                help: analysisMode ? "Flächenanalyse beenden" : "Fläche analysieren"
+            ) {
+                analysisMode.toggle()
+                if analysisMode {
+                    showInspector = false
+                    viewport.clearAnalysis()
+                }
+            }
+
             MapChromeButton(symbol: "paintpalette", help: "Stile & Export") {
+                if !showInspector { analysisMode = false }
                 showInspector.toggle()
             }
         }
         .padding(12)
     }
 
-    private func mapBottomBar(manifest: MapManifest) -> some View {
+    private var mapBottomBar: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            VStack(alignment: .leading, spacing: 6) {
-                if let probe = viewport.probe {
-                    CursorInfoGlassOverlay(
-                        probe: probe,
-                        crs: manifest.crs,
-                        surfaceColor: probe.classID.flatMap { id in
-                            style.colors.indices.contains(id) ? style.colors[id].color : nil
-                        }
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .allowsHitTesting(false)
-                }
-
-                if !viewport.status.isEmpty {
-                    Text(viewport.status)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .atlasGlass(cornerRadius: 10)
-                }
+            if !viewport.status.isEmpty {
+                Text(viewport.status)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .atlasGlass(cornerRadius: 10)
             }
 
             Spacer()
@@ -1279,6 +1322,169 @@ private struct SurfaceClassEditor: View {
     }
 }
 
+private struct AreaStatisticsPanel: View {
+    let statistics: AreaStatistics?
+    let isLoading: Bool
+    let message: String?
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack {
+                Label("Flächenanalyse", systemImage: "chart.bar.xaxis")
+                    .font(.headline)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if isLoading {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Einwohner und Flächen werden berechnet …")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
+                .padding(.vertical, 8)
+            } else if let statistics {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 9) {
+                    metric(
+                        "Einwohner",
+                        statistics.population?.formatted(.number) ?? "—",
+                        symbol: "person.3.fill"
+                    )
+                    metric(
+                        "Einwohner / km²",
+                        statistics.populationDensity.map { Int($0.rounded()).formatted(.number) } ?? "—",
+                        symbol: "building.2.fill"
+                    )
+                    metric(
+                        "Auswahl",
+                        area(statistics.selection.squareKilometers),
+                        symbol: "square.dashed"
+                    )
+                    metric(
+                        "Rasteranalyse",
+                        "≈ \(Int(statistics.sampledResolution)) m",
+                        symbol: "square.grid.3x3"
+                    )
+                }
+
+                VStack(spacing: 6) {
+                    groupRow("Landwirtschaft", value: statistics.squareKilometers(in: "Landwirtschaft"), color: .yellow)
+                    groupRow("Wald", value: statistics.squareKilometers(in: "Wald"), color: .green)
+                    groupRow("Siedlung", value: statistics.squareKilometers(in: "Siedlung"), color: .red)
+                    groupRow("Natur", value: statistics.squareKilometers(in: "Natur"), color: .blue)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Vorkommende Flächen und Arten")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Kultur- und Waldarten werden als Fläche ausgewiesen; Ertragsdaten können später ergänzt werden.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    ScrollView {
+                        LazyVStack(spacing: 5) {
+                            ForEach(statistics.classes) { item in
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(groupColor(item.group))
+                                        .frame(width: 7, height: 7)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(item.name).lineLimit(1)
+                                        Text(item.group)
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    Spacer()
+                                    Text("\(area(item.squareKilometers)) · \(item.share.formatted(.percent.precision(.fractionLength(1))))")
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
+                                .font(.caption)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 205)
+                }
+
+                HStack(spacing: 5) {
+                    Image(systemName: statistics.population == nil ? "exclamationmark.triangle" : "checkmark.circle")
+                    Text(populationNote(statistics))
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            } else {
+                Label(message ?? "Auf der Karte ein Rechteck ziehen.", systemImage: "cursorarrow.motionlines")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+            }
+        }
+        .padding(15)
+        .atlasGlass(cornerRadius: 17)
+        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+    }
+
+    private func metric(_ title: String, _ value: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(title, systemImage: symbol)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(9)
+        .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func groupRow(_ title: String, value: Double, color: Color) -> some View {
+        HStack {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(title)
+            Spacer()
+            Text(area(value)).monospacedDigit().foregroundStyle(.secondary)
+        }
+        .font(.caption)
+    }
+
+    private func groupColor(_ group: String) -> Color {
+        switch group {
+        case "Landwirtschaft": .yellow
+        case "Wald": .green
+        case "Siedlung": .red
+        case "Natur": .blue
+        default: .secondary
+        }
+    }
+
+    private func area(_ squareKilometers: Double) -> String {
+        if squareKilometers < 1 {
+            return "\(Int((squareKilometers * 100).rounded()).formatted(.number)) ha"
+        }
+        return "\(squareKilometers.formatted(.number.precision(.fractionLength(1)))) km²"
+    }
+
+    private func populationNote(_ statistics: AreaStatistics) -> String {
+        guard let source = statistics.populationSource else {
+            return "Bevölkerungsraster fehlt im Kartendatenordner."
+        }
+        if statistics.populationCoverage < 0.999 {
+            return "\(source) deckt \(statistics.populationCoverage.formatted(.percent.precision(.fractionLength(0)))) der Auswahl ab."
+        }
+        return source
+    }
+}
+
 private struct CursorInfoGlassOverlay: View {
     let probe: MapProbe
     let crs: String
@@ -1287,44 +1493,44 @@ private struct CursorInfoGlassOverlay: View {
     private var accent: Color { surfaceColor ?? .secondary }
 
     var body: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
                 Label("HÖHE", systemImage: "mountain.2.fill")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .tracking(0.8)
                     .foregroundStyle(.secondary)
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text(probe.elevation.map(String.init) ?? "—")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .font(.system(size: 38, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .contentTransition(.numericText())
                     Text("m")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(width: 82, alignment: .leading)
+            .frame(width: 110, alignment: .leading)
 
             Rectangle()
                 .fill(.primary.opacity(0.10))
-                .frame(width: 1, height: 52)
+                .frame(width: 1, height: 70)
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 6) {
                     Circle()
                         .fill(accent)
-                        .frame(width: 8, height: 8)
+                        .frame(width: 11, height: 11)
                         .overlay(Circle().stroke(.white.opacity(0.65), lineWidth: 0.7))
                         .shadow(color: accent.opacity(0.45), radius: 3)
                     Text("OBERFLÄCHE")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .tracking(0.8)
                         .foregroundStyle(.secondary)
                 }
 
                 Text(probe.className ?? "Keine Kartendaten")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
                     .lineLimit(1)
                     .contentTransition(.interpolate)
 
@@ -1334,13 +1540,13 @@ private struct CursorInfoGlassOverlay: View {
                     Text(crs.replacingOccurrences(of: "EPSG:", with: "EPSG "))
                         .foregroundStyle(.tertiary)
                 }
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.secondary)
             }
-            .frame(width: 236, alignment: .leading)
+            .frame(width: 292, alignment: .leading)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 15)
         .background {
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)

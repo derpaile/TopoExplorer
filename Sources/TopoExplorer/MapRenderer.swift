@@ -71,6 +71,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     private var lastNavigationToken = -1
     private var pendingTarget: ViewportController.Target?
     private var probeGeneration = 0
+    private var analysisGeneration = 0
+    private var analysisStartPoint: CGPoint?
+    private var analysisSelection: MapSelection?
 
     init?(view: MapCanvasView, manifest: MapManifest, viewport: ViewportController) {
         guard
@@ -292,10 +295,14 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             visibleWidthMeters: Double(view.bounds.width) / pixelsPerMeter,
             visibleHeightMeters: Double(view.bounds.height) / pixelsPerMeter
         )
+        let selectionRect = analysisSelection.map { selection in
+            screenRect(for: selection, in: view.bounds.size)
+        }
         Task { @MainActor [weak viewport] in
             viewport?.updateStatus(status)
             viewport?.updateLabels(vectorResult.labels)
             viewport?.updateSnapshot(snapshot)
+            viewport?.updateAnalysisScreenRect(selectionRect)
         }
     }
 
@@ -349,6 +356,78 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     func clearInspection() {
         probeGeneration &+= 1
         Task { @MainActor [weak viewport] in viewport?.updateProbe(nil) }
+    }
+
+    func beginAreaSelection(at point: CGPoint) {
+        guard manifest != nil else { return }
+        analysisGeneration &+= 1
+        analysisStartPoint = point
+        updateAreaSelection(to: point)
+    }
+
+    func updateAreaSelection(to point: CGPoint) {
+        guard let view, let start = analysisStartPoint else { return }
+        let startWorld = worldPoint(for: start, in: view.bounds.size)
+        let endWorld = worldPoint(for: point, in: view.bounds.size)
+        let selection = MapSelection(
+            x1: startWorld.x, y1: startWorld.y,
+            x2: endWorld.x, y2: endWorld.y
+        )
+        analysisSelection = selection
+        let rect = CGRect(
+            x: min(start.x, point.x), y: min(start.y, point.y),
+            width: abs(point.x - start.x), height: abs(point.y - start.y)
+        )
+        Task { @MainActor [weak viewport] in
+            viewport?.updateAnalysisSelection(selection, screenRect: rect)
+        }
+    }
+
+    func finishAreaSelection(at point: CGPoint) {
+        updateAreaSelection(to: point)
+        guard
+            let start = analysisStartPoint,
+            abs(point.x - start.x) >= 8,
+            abs(point.y - start.y) >= 8,
+            let selection = analysisSelection,
+            let queryService
+        else {
+            cancelAreaSelection()
+            return
+        }
+        analysisStartPoint = nil
+        analysisGeneration &+= 1
+        let generation = analysisGeneration
+        let use2020 = comparison.mode == UInt32(LandcoverMode.year2020.rawValue)
+        Task { @MainActor [weak viewport] in viewport?.beginAnalysis() }
+        queryService.queryStatistics(selection: selection, year2020: use2020) { [weak self] result, message in
+            guard let self, self.analysisGeneration == generation else { return }
+            Task { @MainActor [weak viewport] in
+                viewport?.finishAnalysis(result, message: message)
+            }
+        }
+    }
+
+    func cancelAreaSelection() {
+        analysisGeneration &+= 1
+        analysisStartPoint = nil
+        analysisSelection = nil
+        Task { @MainActor [weak viewport] in viewport?.clearAnalysis() }
+    }
+
+    private func worldPoint(for point: CGPoint, in size: CGSize) -> CGPoint {
+        CGPoint(
+            x: centerX + (point.x - size.width / 2) / pixelsPerMeter,
+            y: centerY - (point.y - size.height / 2) / pixelsPerMeter
+        )
+    }
+
+    private func screenRect(for selection: MapSelection, in size: CGSize) -> CGRect {
+        let x1 = size.width / 2 + (selection.minX - centerX) * pixelsPerMeter
+        let x2 = size.width / 2 + (selection.maxX - centerX) * pixelsPerMeter
+        let y1 = size.height / 2 + (centerY - selection.maxY) * pixelsPerMeter
+        let y2 = size.height / 2 + (centerY - selection.minY) * pixelsPerMeter
+        return CGRect(x: x1, y: y1, width: x2 - x1, height: y2 - y1)
     }
 
     func export(_ request: MapExportRequest, completion: @escaping (Result<URL, Error>) -> Void) {

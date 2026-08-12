@@ -136,6 +136,52 @@ struct MapProbe: Equatable {
     }
 }
 
+struct MapSelection: Equatable {
+    let minX: Double
+    let minY: Double
+    let maxX: Double
+    let maxY: Double
+
+    init(x1: Double, y1: Double, x2: Double, y2: Double) {
+        minX = min(x1, x2)
+        minY = min(y1, y2)
+        maxX = max(x1, x2)
+        maxY = max(y1, y2)
+    }
+
+    var width: Double { maxX - minX }
+    var height: Double { maxY - minY }
+    var squareKilometers: Double { width * height / 1_000_000 }
+}
+
+struct AreaClassStatistic: Identifiable, Equatable {
+    let classID: Int
+    let name: String
+    let group: String
+    let squareKilometers: Double
+    let share: Double
+
+    var id: Int { classID }
+}
+
+struct AreaStatistics: Equatable {
+    let selection: MapSelection
+    let population: Int?
+    let populationSource: String?
+    let populationCoverage: Double
+    let sampledResolution: Double
+    let classes: [AreaClassStatistic]
+
+    var populationDensity: Double? {
+        guard let population, selection.squareKilometers > 0 else { return nil }
+        return Double(population) / selection.squareKilometers
+    }
+
+    func squareKilometers(in group: String) -> Double {
+        classes.filter { $0.group == group }.reduce(0) { $0 + $1.squareKilometers }
+    }
+}
+
 struct ViewportSnapshot: Equatable {
     let centerX: Double
     let centerY: Double

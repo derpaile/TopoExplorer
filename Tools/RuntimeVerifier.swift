@@ -97,10 +97,47 @@ struct RuntimeVerifier {
             )
             print("Zeitvergleich: \(comparisonURL.path)")
         }
+        try verifyAreaAnalysis(root: root, manifest: manifest)
         try verifyVectors(root: root, device: device, queue: queue, library: library)
         try verifyExport()
         try verifyHighResolutionExport(root: root, manifest: manifest)
         print("Kacheldekompression, Metal-Shader und Referenzbilder OK.")
+    }
+
+    @MainActor
+    private static func verifyAreaAnalysis(root: URL, manifest: MapManifest) throws {
+        let metadata = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: root.appendingPathComponent("Analysis/population.json"))
+        ) as? [String: Any]
+        guard let expectedPopulation = metadata?["totalPopulation"] as? Int else {
+            throw VerificationError.analysis
+        }
+        let service = RasterQueryService(manifest: manifest, directory: root)
+        let selection = MapSelection(
+            x1: manifest.left, y1: manifest.bottom,
+            x2: manifest.right, y2: manifest.top
+        )
+        var result: AreaStatistics?
+        var failure: String?
+        service.queryStatistics(selection: selection, year2020: false) { statistics, message in
+            result = statistics
+            failure = message
+        }
+        let deadline = Date().addingTimeInterval(30)
+        while result == nil, failure == nil, Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+        guard
+            failure == nil,
+            let result,
+            result.population == expectedPopulation,
+            result.classes.contains(where: { $0.group == "Landwirtschaft" }),
+            result.classes.contains(where: { $0.group == "Wald" })
+        else { throw VerificationError.analysis }
+        print(
+            "Flächenanalyse OK: \(expectedPopulation) Einwohner, "
+                + "\(result.classes.count) Flächenklassen"
+        )
     }
 
     private static func verifyVectors(
@@ -274,7 +311,8 @@ struct RuntimeVerifier {
             labels: [
                 MapLabel(
                     id: "harz", name: "Harz",
-                    point: CGPoint(x: 48, y: 32), prominence: 100_000
+                    point: CGPoint(x: 48, y: 32), prominence: 100_000,
+                    kind: 0, angleDegrees: 0
                 )
             ],
             styleDocument: style,
@@ -285,8 +323,10 @@ struct RuntimeVerifier {
                 reliefContrast: 2.5, ambientLight: 0.08
             ),
             renderLayers: RenderLayers(
-                roads: true, railways: true, waterways: true,
-                boundaries: true, places: true, geonames: true
+                roads: true, roadKinds: .max,
+                railways: true, railwayKinds: .max,
+                waterways: true, boundaries: true, places: true,
+                geonames: true, geonameKinds: .max
             ),
             renderComparison: RenderComparison(mode: 0, splitPosition: 0.5),
             sources: []
@@ -329,8 +369,10 @@ struct RuntimeVerifier {
             reliefContrast: 2.5, ambientLight: 0.08
         )
         let renderLayers = RenderLayers(
-            roads: true, railways: true, waterways: true,
-            boundaries: true, places: true, geonames: true
+            roads: true, roadKinds: .max,
+            railways: true, railwayKinds: .max,
+            waterways: true, boundaries: true, places: true,
+            geonames: true, geonameKinds: .max
         )
         let renderComparison = RenderComparison(mode: 2, splitPosition: 0.42)
         renderer.update(
@@ -371,7 +413,8 @@ struct RuntimeVerifier {
             labels: [
                 MapLabel(
                     id: "harz-export", name: "Harz",
-                    point: CGPoint(x: 160, y: 120), prominence: 100_000
+                    point: CGPoint(x: 160, y: 120), prominence: 100_000,
+                    kind: 0, angleDegrees: 0
                 )
             ],
             styleDocument: document,
@@ -637,4 +680,5 @@ private enum VerificationError: Error {
     case outsideMap
     case style
     case vector
+    case analysis
 }

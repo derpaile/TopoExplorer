@@ -171,6 +171,11 @@ final class ViewportController: ObservableObject {
     @Published private(set) var labels: [MapLabel] = []
     @Published private(set) var probe: MapProbe?
     @Published private(set) var snapshot: ViewportSnapshot?
+    @Published private(set) var analysisSelection: MapSelection?
+    @Published private(set) var analysisScreenRect: CGRect?
+    @Published private(set) var areaStatistics: AreaStatistics?
+    @Published private(set) var isAnalyzing = false
+    @Published private(set) var analysisMessage: String?
 
     func fitGermany() {
         activeReference = nil
@@ -209,5 +214,37 @@ final class ViewportController: ObservableObject {
 
     func updateSnapshot(_ value: ViewportSnapshot) {
         if snapshot != value { snapshot = value }
+    }
+
+    func updateAnalysisSelection(_ selection: MapSelection?, screenRect: CGRect?) {
+        analysisSelection = selection
+        analysisScreenRect = screenRect
+        areaStatistics = nil
+        analysisMessage = nil
+        isAnalyzing = false
+    }
+
+    func beginAnalysis() {
+        areaStatistics = nil
+        analysisMessage = nil
+        isAnalyzing = true
+    }
+
+    func updateAnalysisScreenRect(_ screenRect: CGRect?) {
+        if analysisScreenRect != screenRect { analysisScreenRect = screenRect }
+    }
+
+    func finishAnalysis(_ statistics: AreaStatistics?, message: String? = nil) {
+        areaStatistics = statistics
+        analysisMessage = message
+        isAnalyzing = false
+    }
+
+    func clearAnalysis() {
+        analysisSelection = nil
+        analysisScreenRect = nil
+        areaStatistics = nil
+        analysisMessage = nil
+        isAnalyzing = false
     }
 }

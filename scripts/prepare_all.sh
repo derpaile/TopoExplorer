@@ -23,6 +23,7 @@ fi
   --manifest MapData/Germany-10m/manifest.json \
   --output MapData/Germany-10m/Vectors
 ./scripts/activate_landcover_10m.sh
+./scripts/preprocess_population.sh
 ./scripts/verify_vectors.sh
 ./scripts/verify_image_quality.sh
 

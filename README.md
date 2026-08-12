@@ -34,6 +34,7 @@ Data/Raw/LandCover/Land_Cover_DE_2015.tif
 Data/Raw/Elevation/gmted2010_mean_7p5arcsec.tiff
 Data/Raw/OSM/germany-latest.osm.pbf
 Data/Raw/BKG/gn250/GN250.csv
+Data/Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif
 ```
 
 Die amtlichen Deutschland-Geonamen GN250 werden bei `prepare_all.sh` automatisch
@@ -65,6 +66,7 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Beschriftung: Gewässer blau, Naturgebiete grün und Landschaften typografisch vom Ortsnamen getrennt
 - Suche: Ortsname oder EPSG:3035-Koordinaten eingeben
 - Mauszeiger: Koordinaten, Höhe und Landklasse ablesen
+- Flächenanalyse: Analyseknopf aktivieren, Rechteck ziehen und Einwohner, Dichte sowie alle vorkommenden Kultur-, Wald- und sonstigen Flächen auswerten
 - Gesamtkarte: Kulturarten, Baumgattungen, Naturflächen und Siedlungsdichte
 - Export: echter Metal-Neuaufbau bis 4× mit feineren Kacheln, Maßstab und Stil-Datei
 

@@ -7,6 +7,7 @@
 - `OSM/`: Deutschland-PBF sowie Orts- und Bahncache
 - `BKG/`: amtliche geografische Namen GN250 samt Quelldokumentation
 - `Boundaries/`: präzise Ländergrenzen in EPSG:3035
+- `Population/`: Zensus-Bevölkerung als 100-m-Gitter für Flächenstatistiken
 
 `../MapData/Germany/` enthält die daraus erzeugte Kachelpyramide und wird ebenfalls nicht eingecheckt. Beide Verzeichnisse lassen sich lokal sichern oder neu erzeugen.
 
@@ -55,3 +56,11 @@ gegen das Manifest prüfen:
 ```sh
 ./scripts/verify_vectors.sh
 ```
+
+## Bevölkerung und Flächenanalyse
+
+`scripts/preprocess_population.sh` wandelt
+`Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif` in kleine, komprimierte
+Analysekacheln unter `MapData/Germany/Analysis/` um. Diese Ebene wird nicht
+gezeichnet. Die App summiert daraus Einwohner für ein gezogenes Rechteck und
+kombiniert sie mit den vorhandenen Kultur-, Wald-, Siedlungs- und Naturklassen.
