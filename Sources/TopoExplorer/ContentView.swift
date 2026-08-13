@@ -10,6 +10,7 @@ struct ContentView: View {
     @EnvironmentObject private var search: SearchController
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var export: MapExportController
+    @EnvironmentObject private var geoScience: GeoScienceSettings
     @FocusState private var searchFocused: Bool
     @State private var showSearchResults = false
     @State private var showInspector = false
@@ -36,6 +37,9 @@ struct ContentView: View {
         }
         .onChange(of: session.dataDirectory?.path) { _, _ in
             search.load(from: session.dataDirectory)
+        }
+        .onChange(of: session.manifest) { _, manifest in
+            if let manifest { geoScience.reconcile(with: manifest) }
         }
         .fileImporter(
             isPresented: $session.isChoosingDirectory,
@@ -119,6 +123,8 @@ struct ContentView: View {
                         bookmarkSection
                     } else if sidebarMode == .surfaces {
                         surfaceEditorSection(manifest: manifest)
+                    } else if sidebarMode == .geoscience {
+                        geoScienceSection(manifest: manifest)
                     } else {
                         sidebarReliefSection
                     }
@@ -396,6 +402,10 @@ struct ContentView: View {
         }
     }
 
+    private func geoScienceSection(manifest: MapManifest) -> some View {
+        GeoScienceSidebar(manifest: manifest, settings: geoScience, style: style)
+    }
+
     private var sidebarReliefSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sidebarSectionTitle("Relief", systemImage: "mountain.2.fill")
@@ -544,6 +554,7 @@ struct ContentView: View {
                 style: style,
                 layers: layers,
                 comparison: comparison,
+                geoScience: geoScience,
                 export: export,
                 viewport: viewport,
                 analysisMode: analysisMode
@@ -576,9 +587,10 @@ struct ContentView: View {
             if let probe = viewport.probe, viewport.analysisSelection == nil {
                 CursorInfoGlassOverlay(
                     probe: probe,
-                    crs: manifest.crs,
-                    surfaceColor: probe.classID.flatMap { id in
-                        style.colors.indices.contains(id) ? style.colors[id].color : nil
+                    thematicProduct: visibleGeoProduct(in: manifest),
+                    showsElevation: style.reliefEnabled,
+                    contentColor: probe.classID.flatMap { id in
+                        probeColor(probe, landClassID: id, manifest: manifest)
                     }
                 )
                 .padding(.top, 76)
@@ -667,7 +679,7 @@ struct ContentView: View {
                     Label("Ziehen zum Verschieben", systemImage: "hand.draw")
                     Label("Mausrad oder Trackpad zum Zoomen", systemImage: "plus.magnifyingglass")
                     Label("Doppelklick zum Hineinzoomen", systemImage: "cursorarrow.click.2")
-                    Label("Mauszeiger zeigt Höhe und Landklasse", systemImage: "info.circle")
+                    Label("Mauszeiger erklärt die sichtbare Kartenklasse", systemImage: "info.circle")
                     Label("Analyseknopf: Rechteck ziehen und Fläche auswerten", systemImage: "rectangle.dashed")
                 }
                 .font(.subheadline)
@@ -693,6 +705,25 @@ struct ContentView: View {
             }
         }
         .padding(12)
+    }
+
+    private func probeColor(
+        _ probe: MapProbe,
+        landClassID: Int,
+        manifest: MapManifest
+    ) -> Color? {
+        if let product = visibleGeoProduct(in: manifest) {
+            guard let thematic = probe.thematic,
+                  let item = product.classes.first(where: { $0.id == thematic.classID })
+            else { return nil }
+            return RGBAColor(hex: item.defaultColor).color
+        }
+        return style.colors.indices.contains(landClassID) ? style.colors[landClassID].color : nil
+    }
+
+    private func visibleGeoProduct(in manifest: MapManifest) -> MapManifest.ThematicRaster? {
+        guard geoScience.presentation == .baseMap || geoScience.opacity > 0 else { return nil }
+        return geoScience.product(in: manifest)
     }
 
     private var mapBottomBar: some View {
@@ -1091,9 +1122,239 @@ struct ContentView: View {
     }
 }
 
+private struct GeoScienceSidebar: View {
+    let manifest: MapManifest
+    @ObservedObject var settings: GeoScienceSettings
+    @ObservedObject var style: StyleSettings
+    @State private var showAllClasses = false
+    @State private var showSources = false
+
+    private var product: MapManifest.ThematicRaster? {
+        settings.product(in: manifest)
+    }
+
+    private var legendClasses: [MapManifest.LandClass] {
+        product?.classes.filter { $0.id != 0 } ?? []
+    }
+
+    private var displayedClasses: [MapManifest.LandClass] {
+        showAllClasses ? legendClasses : Array(legendClasses.prefix(6))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Label("Geowissenschaften", systemImage: "fossil.shell.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("Untergrund und Gesteinsarten")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            if manifest.availableThematicRasters.isEmpty {
+                panel {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Keine geologischen Flächenkarten", systemImage: "externaldrive.badge.exclamationmark")
+                            .font(.subheadline.weight(.medium))
+                        Text("Erzeuge Substrat und Geologie mit der Geowissenschafts-Pipeline.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } else {
+                layerSelection
+
+                if let product {
+                    displayControls
+                    legend(for: product)
+                    if !product.sources.isEmpty { sources(for: product) }
+                }
+            }
+        }
+        .onChange(of: settings.selectedRasterID) { _, _ in
+            showAllClasses = false
+            showSources = false
+        }
+    }
+
+    private var layerSelection: some View {
+        panel {
+            VStack(alignment: .leading, spacing: 7) {
+                sectionLabel("Flächenkarte", symbol: "square.3.layers.3d")
+                Picker("Flächenkarte", selection: $settings.selectedRasterID) {
+                    Text("Landbedeckung").tag(String?.none)
+                    Divider()
+                    ForEach(manifest.availableThematicRasters) { product in
+                        Text(product.name).tag(Optional(product.id))
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("Flächenkarte")
+
+                Text(product == nil ? "Die normale Atlas-Karte bleibt sichtbar." : "Die gewählte Karte wird direkt im Atlas dargestellt.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var displayControls: some View {
+        panel {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("Darstellung", symbol: "circle.lefthalf.filled")
+
+                Picker("Darstellung", selection: $settings.presentation) {
+                    Text("Überlagern").tag(ThematicPresentation.overlay)
+                    Text("Basiskarte").tag(ThematicPresentation.baseMap)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Divider()
+
+                Toggle(isOn: $style.reliefEnabled) {
+                    Label("Geländerelief", systemImage: "mountain.2.fill")
+                        .font(.caption.weight(.medium))
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+                if style.reliefEnabled {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Text("Reliefstärke")
+                            Spacer()
+                            Text(style.reliefOpacity.formatted(.percent.precision(.fractionLength(0))))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.caption)
+                        Slider(value: $style.reliefOpacity, in: 0...1)
+                    }
+                }
+
+                if settings.presentation == .overlay {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Text("Deckkraft")
+                            Spacer()
+                            Text(settings.opacity.formatted(.percent.precision(.fractionLength(0))))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.caption)
+                        Slider(value: $settings.opacity, in: 0...1)
+                    }
+                } else {
+                    Text("Landbedeckung wird vollständig durch die Flächenkarte ersetzt.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func legend(for product: MapManifest.ThematicRaster) -> some View {
+        panel {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    sectionLabel("Legende", symbol: "list.bullet.rectangle")
+                    Spacer()
+                    Text("\(legendClasses.count) Klassen")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
+
+                VStack(spacing: 6) {
+                    ForEach(displayedClasses) { item in
+                        HStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .fill(RGBAColor(hex: item.defaultColor).color)
+                                .frame(width: 20, height: 13)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                        .stroke(.white.opacity(0.35), lineWidth: 0.5)
+                                }
+                            Text(item.name)
+                                .font(.caption)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+
+                if legendClasses.count > 6 {
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) { showAllClasses.toggle() }
+                    } label: {
+                        HStack {
+                            Text(showAllClasses ? "Weniger anzeigen" : "Alle Klassen anzeigen")
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .font(.caption2.weight(.bold))
+                                .rotationEffect(.degrees(showAllClasses ? 180 : 0))
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Color.accentColor)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
+            }
+        }
+    }
+
+    private func sources(for product: MapManifest.ThematicRaster) -> some View {
+        panel {
+            DisclosureGroup(isExpanded: $showSources) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(product.sources) { source in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(source.name)
+                                .font(.caption.weight(.medium))
+                            Text(source.scale.map { "Maßstab 1:\($0.formatted()) · \(source.license)" } ?? source.license)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.top, 8)
+            } label: {
+                sectionLabel("Datenquellen", symbol: "checkmark.seal")
+            }
+        }
+    }
+
+    private func sectionLabel(_ title: String, symbol: String) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+
+    private func panel<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(.white.opacity(0.20), lineWidth: 0.7)
+            }
+    }
+}
+
 private enum SidebarMode: String, CaseIterable, Identifiable {
     case explore
     case surfaces
+    case geoscience
     case relief
 
     var id: String { rawValue }
@@ -1101,6 +1362,7 @@ private enum SidebarMode: String, CaseIterable, Identifiable {
         switch self {
         case .explore: "Karte"
         case .surfaces: "Flächen"
+        case .geoscience: "Geologie"
         case .relief: "Relief"
         }
     }
@@ -1108,6 +1370,7 @@ private enum SidebarMode: String, CaseIterable, Identifiable {
         switch self {
         case .explore: "square.3.layers.3d"
         case .surfaces: "paintpalette.fill"
+        case .geoscience: "fossil.shell.fill"
         case .relief: "mountain.2.fill"
         }
     }
@@ -1374,19 +1637,21 @@ private struct AreaStatisticsPanel: View {
                     )
                 }
 
-                VStack(spacing: 6) {
-                    groupRow("Landwirtschaft", value: statistics.squareKilometers(in: "Landwirtschaft"), color: .yellow)
-                    groupRow("Wald", value: statistics.squareKilometers(in: "Wald"), color: .green)
-                    groupRow("Siedlung", value: statistics.squareKilometers(in: "Siedlung"), color: .red)
-                    groupRow("Natur", value: statistics.squareKilometers(in: "Natur"), color: .blue)
+                if statistics.subjectName == "Landbedeckung" {
+                    VStack(spacing: 6) {
+                        groupRow("Landwirtschaft", value: statistics.squareKilometers(in: "Landwirtschaft"), color: .yellow)
+                        groupRow("Wald", value: statistics.squareKilometers(in: "Wald"), color: .green)
+                        groupRow("Siedlung", value: statistics.squareKilometers(in: "Siedlung"), color: .red)
+                        groupRow("Natur", value: statistics.squareKilometers(in: "Natur"), color: .blue)
+                    }
                 }
 
                 Divider()
 
                 VStack(alignment: .leading, spacing: 7) {
-                    Text("Vorkommende Flächen und Arten")
+                    Text("Vorkommende Klassen · \(statistics.subjectName)")
                         .font(.subheadline.weight(.semibold))
-                    Text("Kultur- und Waldarten werden als Fläche ausgewiesen; Ertragsdaten können später ergänzt werden.")
+                    Text("Anteile beziehen sich auf die ausgewählte Fläche und die angegebene Rasterabtastung.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
 
@@ -1487,66 +1752,61 @@ private struct AreaStatisticsPanel: View {
 
 private struct CursorInfoGlassOverlay: View {
     let probe: MapProbe
-    let crs: String
-    let surfaceColor: Color?
+    let thematicProduct: MapManifest.ThematicRaster?
+    let showsElevation: Bool
+    let contentColor: Color?
 
-    private var accent: Color { surfaceColor ?? .secondary }
+    private var accent: Color { contentColor ?? .secondary }
+    private var title: String { thematicProduct?.name ?? "Oberfläche" }
+    private var symbol: String { thematicProduct == nil ? "leaf.fill" : "fossil.shell.fill" }
+    private var className: String {
+        thematicProduct == nil
+            ? probe.className ?? "Keine Kartendaten"
+            : probe.thematic?.className ?? "Keine Geologiedaten"
+    }
 
     var body: some View {
-        HStack(spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
-                Label("HÖHE", systemImage: "mountain.2.fill")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .tracking(0.8)
-                    .foregroundStyle(.secondary)
-
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(probe.elevation.map(String.init) ?? "—")
-                        .font(.system(size: 38, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                    Text("m")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 110, alignment: .leading)
-
-            Rectangle()
-                .fill(.primary.opacity(0.10))
-                .frame(width: 1, height: 70)
-
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(accent)
-                        .frame(width: 11, height: 11)
-                        .overlay(Circle().stroke(.white.opacity(0.65), lineWidth: 0.7))
-                        .shadow(color: accent.opacity(0.45), radius: 3)
-                    Text("OBERFLÄCHE")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .tracking(0.8)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(probe.className ?? "Keine Kartendaten")
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 11, height: 11)
+                    .overlay(Circle().stroke(.white.opacity(0.65), lineWidth: 0.7))
+                    .shadow(color: accent.opacity(0.35), radius: 3)
+                Label(title, systemImage: symbol)
+                    .font(.caption.weight(.semibold))
                     .lineLimit(1)
-                    .contentTransition(.interpolate)
-
-                HStack(spacing: 7) {
-                    Text("E \(coordinate(probe.worldX))")
-                    Text("N \(coordinate(probe.worldY))")
-                    Text(crs.replacingOccurrences(of: "EPSG:", with: "EPSG "))
-                        .foregroundStyle(.tertiary)
-                }
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary)
             }
-            .frame(width: 292, alignment: .leading)
+
+            Text(className)
+                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                .lineLimit(2)
+                .contentTransition(.interpolate)
+
+            if thematicProduct != nil, let thematic = probe.thematic {
+                if let quality = thematic.qualitySummary {
+                    Label(quality, systemImage: "checkmark.seal")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            } else if thematicProduct != nil {
+                Text("Für diesen Kartenpunkt liegt keine Klassifikation vor.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if showsElevation, let elevation = probe.elevation {
+                Label("\(elevation.formatted()) m Höhe", systemImage: "mountain.2.fill")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+            }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 15)
+        .frame(width: 286, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background {
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -1580,11 +1840,16 @@ private struct CursorInfoGlassOverlay: View {
         }
         .shadow(color: .black.opacity(0.18), radius: 16, y: 7)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(probe.summary)
+        .accessibilityLabel(accessibilitySummary)
     }
 
-    private func coordinate(_ value: Double) -> String {
-        Int(value.rounded()).formatted(.number.grouping(.automatic))
+    private var accessibilitySummary: String {
+        var parts = [title, className]
+        if let quality = probe.thematic?.qualitySummary, thematicProduct != nil {
+            parts.append(quality)
+        }
+        if showsElevation, let elevation = probe.elevation { parts.append("\(elevation) Meter Höhe") }
+        return parts.joined(separator: ", ")
     }
 }
 

@@ -127,12 +127,22 @@ struct MapProbe: Equatable {
     let elevation: Int?
     let classID: Int?
     let className: String?
+    let thematic: ThematicProbe?
 
-    var summary: String {
-        var parts = ["E (Int(worldX)) · N (Int(worldY))"]
-        if let elevation { parts.append("\(elevation) m") }
-        if let className { parts.append(className) }
-        return parts.joined(separator: " · ")
+}
+
+struct ThematicProbe: Equatable {
+    let productID: String
+    let productName: String
+    let classID: Int
+    let className: String
+    let sourceName: String?
+    let sourceScale: Int?
+
+    var qualitySummary: String? {
+        guard let sourceName else { return nil }
+        if let sourceScale { return "\(sourceName) · Maßstab 1:\(sourceScale.formatted())" }
+        return sourceName
     }
 }
 
@@ -171,6 +181,7 @@ struct AreaStatistics: Equatable {
     let populationCoverage: Double
     let sampledResolution: Double
     let classes: [AreaClassStatistic]
+    let subjectName: String
 
     var populationDensity: Double? {
         guard let population, selection.squareKilometers > 0 else { return nil }

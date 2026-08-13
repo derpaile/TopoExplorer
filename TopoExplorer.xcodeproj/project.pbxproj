@@ -7,6 +7,7 @@
 
 /* Begin PBXBuildFile section */
 		CD485E41D9D4B2D91D35D6F8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087BD4D49CCBB61F6644EC79 /* ContentView.swift */; };
+		26B47C6F329AF7B49859EA19 /* GeoScience.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB2E1DD5928BDE5E4D0A62A /* GeoScience.swift */; };
 		B8EB27A9954853E13CD463A7 /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95823F7FB89505016ED180E3 /* InspectorView.swift */; };
 		CD446BC705DF6C2F3229E40C /* MapExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BE2C7C2D6AA026D62B6A3C /* MapExport.swift */; };
 		2E09A0DA397FB41536D86DBE /* MapFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CCD0ABDF5CA7ACFF4715A13 /* MapFeatures.swift */; };
@@ -54,6 +55,7 @@
 		535033033B7F7930338493E3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		55D065C4A04DF290E3175AD0 /* TopoExplorer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TopoExplorer.entitlements; sourceTree = "<group>"; };
 		087BD4D49CCBB61F6644EC79 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		5DB2E1DD5928BDE5E4D0A62A /* GeoScience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeoScience.swift; sourceTree = "<group>"; };
 		95823F7FB89505016ED180E3 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
 		31BE2C7C2D6AA026D62B6A3C /* MapExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapExport.swift; sourceTree = "<group>"; };
 		0CCD0ABDF5CA7ACFF4715A13 /* MapFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapFeatures.swift; sourceTree = "<group>"; };
@@ -126,6 +128,7 @@
 			isa = PBXGroup;
 			children = (
 				087BD4D49CCBB61F6644EC79 /* ContentView.swift */,
+				5DB2E1DD5928BDE5E4D0A62A /* GeoScience.swift */,
 				95823F7FB89505016ED180E3 /* InspectorView.swift */,
 				31BE2C7C2D6AA026D62B6A3C /* MapExport.swift */,
 				0CCD0ABDF5CA7ACFF4715A13 /* MapFeatures.swift */,
@@ -250,6 +253,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CD485E41D9D4B2D91D35D6F8 /* ContentView.swift in Sources */,
+				26B47C6F329AF7B49859EA19 /* GeoScience.swift in Sources */,
 				B8EB27A9954853E13CD463A7 /* InspectorView.swift in Sources */,
 				CD446BC705DF6C2F3229E40C /* MapExport.swift in Sources */,
 				2E09A0DA397FB41536D86DBE /* MapFeatures.swift in Sources */,

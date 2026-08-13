@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "products": [
+    {
+      "id": "substrate",
+      "name": "Oberflächensubstrat",
+      "suffix": "substrate.z",
+      "qualitySuffix": "substrate.quality.z",
+      "classes": [
+        {"id": 0, "name": "Keine Daten", "defaultColor": "#000000", "group": "Grundlage"},
+        {"id": 1, "name": "Sand", "defaultColor": "#E8D39A", "group": "Lockersediment", "pattern": "(^|[^a-z])sand"},
+        {"id": 2, "name": "Kies / Kiessand", "defaultColor": "#C9A86A", "group": "Lockersediment", "pattern": "kies|schotter"},
+        {"id": 3, "name": "Schluff", "defaultColor": "#D9BF8C", "group": "Feinsediment", "pattern": "schluff|silt"},
+        {"id": 4, "name": "Lehm", "defaultColor": "#B98B61", "group": "Feinsediment", "pattern": "(^|[^a-z])lehm"},
+        {"id": 5, "name": "Ton", "defaultColor": "#9A6756", "group": "Feinsediment", "pattern": "(^|[^a-z])ton|clay"},
+        {"id": 6, "name": "Löss", "defaultColor": "#E7CA72", "group": "Äolisch", "pattern": "löss(?!lehm)|loess(?!lehm)"},
+        {"id": 7, "name": "Lösslehm", "defaultColor": "#D2AA61", "group": "Äolisch", "pattern": "lösslehm|loesslehm"},
+        {"id": 8, "name": "Geschiebelehm / -mergel", "defaultColor": "#9D8A70", "group": "Glazial", "pattern": "geschiebe(lehm|mergel)|till"},
+        {"id": 9, "name": "Auenablagerungen", "defaultColor": "#AFC6A2", "group": "Fluviatil", "pattern": "aue|alluvial|fluviatil"},
+        {"id": 10, "name": "Torf", "defaultColor": "#5D493D", "group": "Organisch", "pattern": "torf|peat"},
+        {"id": 11, "name": "Organische Sedimente", "defaultColor": "#716052", "group": "Organisch", "pattern": "organisch|mudde"},
+        {"id": 12, "name": "Verwitterungslehm", "defaultColor": "#A97455", "group": "Verwitterung", "pattern": "verwitterungs|zersatz"},
+        {"id": 13, "name": "Schutt / Hangsediment", "defaultColor": "#8E806F", "group": "Hang", "pattern": "hang|schutt|kolluvi"},
+        {"id": 14, "name": "Festgestein oberflächennah", "defaultColor": "#77736D", "group": "Festgestein", "pattern": "festgestein|fels"}
+      ],
+      "sources": [
+        {"id": "bgr-buek250", "name": "BGR BÜK250 V6.0", "path": "Data/Raw/Geoscience/BGR/BUEK250.gpkg", "scale": 250000, "priority": 0, "role": "Bundesweiter Fallback", "license": "BGR-Nutzungsbedingungen", "url": "https://www.bgr.bund.de/DE/Themen/Boden/Projekte/Informationsgrundlagen-laufend/BUEK250/BUEK250.html"},
+        {"id": "by-uebk25", "name": "Bayern ÜBK25", "path": "Data/Raw/Geoscience/Bayern/UEBK25.gpkg", "scale": 25000, "priority": 10, "role": "Landes-Override", "license": "CC BY 4.0", "url": "https://www.lfu.bayern.de/boden/boden_daten/uebk25/index.htm"}
+      ]
+    },
+    {
+      "id": "geology",
+      "name": "Oberflächennahe Geologie",
+      "suffix": "geology.z",
+      "qualitySuffix": "geology.quality.z",
+      "classes": [
+        {"id": 0, "name": "Keine Daten", "defaultColor": "#000000", "group": "Grundlage"},
+        {"id": 1, "name": "Kalkstein / Dolomit", "defaultColor": "#B8C8D2", "group": "Sedimentgestein", "pattern": "kalk|dolomit|karbonat"},
+        {"id": 2, "name": "Mergel", "defaultColor": "#AAB89A", "group": "Sedimentgestein", "pattern": "mergel"},
+        {"id": 3, "name": "Sandstein", "defaultColor": "#D39B68", "group": "Sedimentgestein", "pattern": "sandstein"},
+        {"id": 4, "name": "Ton- / Schluffstein", "defaultColor": "#8E6D68", "group": "Sedimentgestein", "pattern": "tonstein|schluffstein|siltstone"},
+        {"id": 5, "name": "Konglomerat / Grauwacke", "defaultColor": "#8A7968", "group": "Sedimentgestein", "pattern": "konglomerat|grauwacke|brekzie"},
+        {"id": 6, "name": "Schiefer", "defaultColor": "#5F6871", "group": "Metamorphit", "pattern": "schiefer"},
+        {"id": 7, "name": "Granit / Plutonit", "defaultColor": "#D48B91", "group": "Magmatit", "pattern": "granit|plutonit|diorit|gabbro"},
+        {"id": 8, "name": "Basalt / Vulkanit", "defaultColor": "#655A69", "group": "Magmatit", "pattern": "basalt|vulkanit|rhyolith|andesit"},
+        {"id": 9, "name": "Gneis", "defaultColor": "#B98DA4", "group": "Metamorphit", "pattern": "gneis"},
+        {"id": 10, "name": "Sonstige Metamorphite", "defaultColor": "#987A9D", "group": "Metamorphit", "pattern": "metamorph|quarzit|amphibolit"},
+        {"id": 11, "name": "Sand / Kies", "defaultColor": "#E7D59D", "group": "Lockergestein", "pattern": "sand|kies|schotter"},
+        {"id": 12, "name": "Schluff / Ton", "defaultColor": "#C4AA83", "group": "Lockergestein", "pattern": "schluff|ton|lehm"},
+        {"id": 13, "name": "Torf / organisch", "defaultColor": "#594A3E", "group": "Lockergestein", "pattern": "torf|organisch"}
+      ],
+      "sources": [
+        {"id": "bgr-guek250", "name": "BGR GÜK250", "path": "Data/Raw/Geoscience/BGR/GUEK250.shp", "scale": 250000, "priority": 0, "role": "Bundesweiter Fallback", "license": "BGR-Nutzungsbedingungen", "url": "https://www.bgr.bund.de/DE/Themen/Sammlungen-Grundlagen/GG_geol_Info/Karten/Deutschland/GUEK250/guek250_inhalt.html"},
+        {"id": "by-dgk25", "name": "Bayern dGK25", "path": "Data/Raw/Geoscience/Bayern/dGK25.gpkg", "scale": 25000, "priority": 10, "role": "Landes-Override", "license": "Bayerische Geodaten-Nutzungsbedingungen", "url": "https://www.lfu.bayern.de/geologie/geologische_karte_daten/dgk25/index.htm"}
+      ]
+    }
+  ]
+}

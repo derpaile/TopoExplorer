@@ -15,12 +15,23 @@ final class TileTextures: NSObject {
     let landcover: MTLTexture
     let landcover2020: MTLTexture?
     let elevation: MTLTexture
+    let thematic: MTLTexture?
+    let thematicUV: SIMD4<Float>
     let byteCount: Int
 
-    init(landcover: MTLTexture, landcover2020: MTLTexture?, elevation: MTLTexture, byteCount: Int) {
+    init(
+        landcover: MTLTexture,
+        landcover2020: MTLTexture?,
+        elevation: MTLTexture,
+        thematic: MTLTexture?,
+        thematicUV: SIMD4<Float>,
+        byteCount: Int
+    ) {
         self.landcover = landcover
         self.landcover2020 = landcover2020
         self.elevation = elevation
+        self.thematic = thematic
+        self.thematicUV = thematicUV
         self.byteCount = byteCount
     }
 }
@@ -86,6 +97,7 @@ final class TileCache: NSObject, NSCacheDelegate {
     private let elevationBorder: Int
     private let elevationSizes: [Int: Int]
     private let landcoverSuffix: String
+    private let thematicSuffix: String?
     private let cache = NSCache<NSString, TileTextures>()
     private let loadingQueue = DispatchQueue(label: "TopoExplorer.tile-loading", qos: .userInitiated, attributes: .concurrent)
     private let stateLock = NSLock()
@@ -101,13 +113,15 @@ final class TileCache: NSObject, NSCacheDelegate {
         tileSize: Int,
         elevationBorder: Int,
         elevationSizes: [Int: Int] = [:],
-        landcoverSuffix: String = "land.z"
+        landcoverSuffix: String = "land.z",
+        thematicSuffix: String? = nil
     ) {
         self.device = device
         self.tileSize = tileSize
         self.elevationBorder = elevationBorder
         self.elevationSizes = elevationSizes
         self.landcoverSuffix = landcoverSuffix
+        self.thematicSuffix = thematicSuffix
         super.init()
         cache.totalCostLimit = 384 * 1024 * 1024
         cache.delegate = self
@@ -235,6 +249,7 @@ final class TileCache: NSObject, NSCacheDelegate {
             ? (try? Data(contentsOf: land2020URL, options: .mappedIfSafe))
                 .flatMap { ZlibDecoder.decode($0, expectedSize: tileSize * tileSize) }
             : nil
+        let thematic = loadThematic(key, from: directory)
 
         let landDescriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .r8Uint,
@@ -259,6 +274,7 @@ final class TileCache: NSObject, NSCacheDelegate {
             let elevationTexture = device.makeTexture(descriptor: elevationDescriptor)
         else { return nil }
         let land2020Texture = land2020.flatMap { _ in device.makeTexture(descriptor: landDescriptor) }
+        let thematicTexture = thematic.flatMap { _ in device.makeTexture(descriptor: landDescriptor) }
 
         land.withUnsafeBytes { bytes in
             guard let address = bytes.baseAddress else { return }
@@ -280,6 +296,17 @@ final class TileCache: NSObject, NSCacheDelegate {
                 )
             }
         }
+        if let thematic, let thematicTexture {
+            thematic.data.withUnsafeBytes { bytes in
+                guard let address = bytes.baseAddress else { return }
+                thematicTexture.replace(
+                    region: MTLRegionMake2D(0, 0, tileSize, tileSize),
+                    mipmapLevel: 0,
+                    withBytes: address,
+                    bytesPerRow: tileSize
+                )
+            }
+        }
         elevation.withUnsafeBytes { bytes in
             guard let address = bytes.baseAddress else { return }
             elevationTexture.replace(
@@ -294,8 +321,39 @@ final class TileCache: NSObject, NSCacheDelegate {
             landcover: landTexture,
             landcover2020: land2020Texture,
             elevation: elevationTexture,
+            thematic: thematicTexture,
+            thematicUV: thematic?.uv ?? SIMD4<Float>(0, 0, 1, 1),
             byteCount: land.count + (land2020?.count ?? 0) + elevation.count
+                + (thematic?.data.count ?? 0)
         )
+    }
+
+    private func loadThematic(
+        _ key: TileKey,
+        from directory: URL
+    ) -> (data: Data, uv: SIMD4<Float>)? {
+        guard let thematicSuffix else { return nil }
+        var ancestor = key
+        var difference = 0
+        while ancestor.z >= 0 {
+            let url = directory
+                .appendingPathComponent("z\(ancestor.z)", isDirectory: true)
+                .appendingPathComponent("\(ancestor.filename).\(thematicSuffix)")
+            if
+                let packed = try? Data(contentsOf: url, options: .mappedIfSafe),
+                let decoded = ZlibDecoder.decode(packed, expectedSize: tileSize * tileSize)
+            {
+                let factor = 1 << difference
+                let scale = 1 / Float(factor)
+                let offsetX = Float(key.x - ancestor.x * factor) * scale
+                let offsetY = Float(key.y - ancestor.y * factor) * scale
+                return (decoded, SIMD4(offsetX, offsetY, scale, scale))
+            }
+            guard ancestor.z > 0 else { break }
+            ancestor = TileKey(z: ancestor.z - 1, x: ancestor.x / 2, y: ancestor.y / 2)
+            difference += 1
+        }
+        return nil
     }
 }
 

@@ -121,25 +121,55 @@ enum VectorTileDecoder {
         guard let data = ZlibDecoder.decodeUnknown(packed) else { return nil }
         do {
             var reader = VectorDataReader(data: data)
-            guard try reader.string(4) == "TVT1" else { throw VectorTileError.format }
-            guard try reader.uint16() == 1 else { throw VectorTileError.version }
+            let magic = try reader.string(4)
+            guard magic == "TVT1" || magic == "TVT2" else { throw VectorTileError.format }
+            let version = try reader.uint16()
+            guard (magic == "TVT1" && version == 1) || (magic == "TVT2" && version == 2)
+            else { throw VectorTileError.version }
             let extent = Int(try reader.uint16())
             let buffer = Int(try reader.uint16())
             let lineCount = Int(try reader.uint32())
             let placeCount = Int(try reader.uint32())
-            guard extent > 0, lineCount < 1_000_000, placeCount < 1_000_000 else {
+            let featureCount = magic == "TVT2" ? Int(try reader.uint32()) : 0
+            guard extent > 0, lineCount < 1_000_000, placeCount < 1_000_000,
+                  featureCount < 1_000_000 else {
                 throw VectorTileError.format
             }
 
             let zoomSlots = 256
-            let groupCount = 5 * zoomSlots
+            let layerSlots = Int(VectorLayer.allCases.map(\.rawValue).max() ?? 0) + 1
+            let groupCount = layerSlots * zoomSlots
             var casedSegments = Array(repeating: [VectorSegment](), count: groupCount)
             var plainSegments = Array(repeating: [VectorSegment](), count: groupCount)
             var lineCounts = Array(repeating: 0, count: groupCount)
-            for _ in 0..<lineCount {
-                guard let layer = VectorLayer(rawValue: try reader.uint8()) else {
-                    throw VectorTileError.format
+            func append(
+                _ points: [SIMD2<Int16>],
+                layer: VectorLayer,
+                kind: UInt8,
+                minZoom: UInt8,
+                flags: UInt8,
+                close: Bool = false
+            ) {
+                guard !points.isEmpty else { return }
+                let attributes = UInt32(kind) | (UInt32(minZoom) << 8) | (UInt32(flags) << 16)
+                let groupIndex = Int(layer.rawValue) * zoomSlots + Int(minZoom)
+                let usesCasing = hasCasing(layer: layer, kind: kind)
+                let pairs: [(SIMD2<Int16>, SIMD2<Int16>)]
+                if points.count == 1 {
+                    pairs = [(points[0], points[0])]
+                } else {
+                    pairs = Array(zip(points, points.dropFirst()))
+                        + (close && points.last != points.first ? [(points.last!, points.first!)] : [])
                 }
+                for (start, end) in pairs where start != end || points.count == 1 {
+                    let segment = VectorSegment(start: start, end: end, attributes: attributes)
+                    if usesCasing { casedSegments[groupIndex].append(segment) }
+                    else { plainSegments[groupIndex].append(segment) }
+                }
+                lineCounts[groupIndex] += 1
+            }
+            for _ in 0..<lineCount {
+                let layer = VectorLayer(rawValue: try reader.uint8())
                 let kind = try reader.uint8()
                 let minZoom = try reader.uint8()
                 let flags = try reader.uint8()
@@ -147,12 +177,12 @@ enum VectorTileDecoder {
                 let nameLength = Int(try reader.uint16())
                 guard pointCount >= 2 else { throw VectorTileError.format }
                 let attributes = UInt32(kind) | (UInt32(minZoom) << 8) | (UInt32(flags) << 16)
-                let groupIndex = Int(layer.rawValue) * zoomSlots + Int(minZoom)
-                let usesCasing = hasCasing(layer: layer, kind: kind)
+                let groupIndex = layer.map { Int($0.rawValue) * zoomSlots + Int(minZoom) }
+                let usesCasing = layer.map { hasCasing(layer: $0, kind: kind) } ?? false
                 var previous = SIMD2(try reader.int16(), try reader.int16())
                 for _ in 1..<pointCount {
                     let current = SIMD2(try reader.int16(), try reader.int16())
-                    if current != previous {
+                    if current != previous, let groupIndex {
                         let segment = VectorSegment(start: previous, end: current, attributes: attributes)
                         if usesCasing {
                             casedSegments[groupIndex].append(segment)
@@ -163,7 +193,7 @@ enum VectorTileDecoder {
                     previous = current
                 }
                 try reader.skip(nameLength)
-                lineCounts[groupIndex] += 1
+                if let groupIndex { lineCounts[groupIndex] += 1 }
             }
 
             var places: [VectorPlace] = []
@@ -182,6 +212,31 @@ enum VectorTileDecoder {
                         population: population, name: try reader.string(nameLength)
                     )
                 )
+            }
+            for _ in 0..<featureCount {
+                let layer = VectorLayer(rawValue: try reader.uint8())
+                let kind = try reader.uint8()
+                let geometryType = try reader.uint8()
+                let minZoom = try reader.uint8()
+                let pointCount = Int(try reader.uint16())
+                let nameLength = Int(try reader.uint16())
+                let attributeLength = Int(try reader.uint16())
+                guard (1...65_535).contains(pointCount), (1...3).contains(geometryType) else {
+                    throw VectorTileError.format
+                }
+                var points: [SIMD2<Int16>] = []
+                points.reserveCapacity(pointCount)
+                for _ in 0..<pointCount {
+                    points.append(SIMD2(try reader.int16(), try reader.int16()))
+                }
+                try reader.skip(nameLength + attributeLength)
+                if let layer {
+                    append(
+                        points, layer: layer, kind: kind, minZoom: minZoom,
+                        flags: geometryType == 1 ? 4 : 0,
+                        close: geometryType == 3
+                    )
+                }
             }
             guard reader.offset == data.count else { throw VectorTileError.trailingData }
 

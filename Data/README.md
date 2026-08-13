@@ -8,6 +8,7 @@
 - `BKG/`: amtliche geografische Namen GN250 samt Quelldokumentation
 - `Boundaries/`: präzise Ländergrenzen in EPSG:3035
 - `Population/`: Zensus-Bevölkerung als 100-m-Gitter für Flächenstatistiken
+- `Geoscience/`: BÜK250, GÜK250 und freigegebene geologische Landes-Overrides
 
 `../MapData/Germany/` enthält die daraus erzeugte Kachelpyramide und wird ebenfalls nicht eingecheckt. Beide Verzeichnisse lassen sich lokal sichern oder neu erzeugen.
 
@@ -64,3 +65,6 @@ gegen das Manifest prüfen:
 Analysekacheln unter `MapData/Germany/Analysis/` um. Diese Ebene wird nicht
 gezeichnet. Die App summiert daraus Einwohner für ein gezogenes Rechteck und
 kombiniert sie mit den vorhandenen Kultur-, Wald-, Siedlungs- und Naturklassen.
+
+Geowissenschaftliche COG-Master, Provenance-Raster und TVT2-Fachobjekte sind in
+`docs/Geowissenschaften.md` beschrieben.

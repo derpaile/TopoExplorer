@@ -1,6 +1,32 @@
 import Foundation
 
 struct MapManifest: Codable, Equatable {
+    struct GeoSource: Codable, Equatable, Identifiable {
+        let id: String
+        let name: String
+        let license: String
+        let url: String
+        var scale: Int? = nil
+        var role: String? = nil
+    }
+
+    struct ThematicRaster: Codable, Equatable, Identifiable {
+        let id: String
+        let name: String
+        let suffix: String
+        let qualitySuffix: String
+        let classes: [LandClass]
+        var sources: [GeoSource] = []
+
+        var palette: [SIMD4<Float>] {
+            var result = Array(repeating: SIMD4<Float>(0, 0, 0, 0), count: 256)
+            for item in classes where result.indices.contains(item.id) {
+                result[item.id] = RGBAColor(hex: item.defaultColor).vector
+            }
+            return result
+        }
+    }
+
     struct LandcoverProduct: Codable, Equatable {
         let name: String
         let suffix: String
@@ -57,6 +83,7 @@ struct MapManifest: Codable, Equatable {
     var landcoverYears: [LandcoverYear]? = nil
     var landcoverProduct: LandcoverProduct? = nil
     var sources: [LandcoverSource]? = nil
+    var thematicRasters: [ThematicRaster]? = nil
 
     var left: Double { bounds[0] }
     var bottom: Double { bounds[1] }
@@ -67,6 +94,9 @@ struct MapManifest: Codable, Equatable {
     var landcoverSuffix: String { landcoverProduct?.suffix ?? "land.z" }
     var hasLandcover2020: Bool {
         landcoverProduct == nil && landcoverYears?.contains(where: { $0.year == 2020 }) == true
+    }
+    var availableThematicRasters: [ThematicRaster] {
+        (thematicRasters ?? []).filter { $0.id != "resources" }
     }
 
     func elevationTileSize(at level: Level) -> Int {
@@ -88,6 +118,16 @@ struct MapManifest: Codable, Equatable {
         guard levels.allSatisfy({ elevationTileSize(at: $0) > 0 }) else {
             throw ManifestError.invalidTileLayout
         }
+        let thematic = availableThematicRasters
+        guard Set(thematic.map(\.id)).count == thematic.count,
+              thematic.allSatisfy({ product in
+                  !product.id.isEmpty && !product.name.isEmpty
+                      && !product.suffix.isEmpty && !product.qualitySuffix.isEmpty
+                      && !product.classes.isEmpty
+                      && Set(product.classes.map(\.id)).count == product.classes.count
+                      && product.classes.allSatisfy { (0...255).contains($0.id) }
+              })
+        else { throw ManifestError.invalidThematicRasters }
         return self
     }
 }
@@ -99,6 +139,7 @@ enum ManifestError: LocalizedError {
     case unsupportedCompression(String)
     case invalidLevels
     case invalidClasses
+    case invalidThematicRasters
 
     var errorDescription: String? {
         switch self {
@@ -108,6 +149,7 @@ enum ManifestError: LocalizedError {
         case .unsupportedCompression(let compression): "Kompression \(compression) wird nicht unterstützt."
         case .invalidLevels: "Die Zoomstufen sind unvollständig."
         case .invalidClasses: "Die Landklassen sind unvollständig."
+        case .invalidThematicRasters: "Die geowissenschaftlichen Rasterprodukte sind ungültig."
         }
     }
 }

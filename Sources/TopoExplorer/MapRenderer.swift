@@ -23,6 +23,14 @@ private struct ComparisonUniforms {
     var padding: Float = 0
 }
 
+private struct ThematicUniforms {
+    var active: UInt32
+    var replacesBase: UInt32
+    var opacity: Float
+    var padding: Float = 0
+    var uv: SIMD4<Float>
+}
+
 private struct VectorUniforms {
     var tile: SIMD4<Float>
     var viewport: SIMD4<Float>
@@ -63,6 +71,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         geonames: true, geonameKinds: .max
     )
     private var comparison = RenderComparison(mode: 0, splitPosition: 0.5)
+    private var geoScience = GeoScienceRenderOptions.disabled
     private var centerX = 0.0
     private var centerY = 0.0
     private var pixelsPerMeter = 0.001
@@ -118,7 +127,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     ($0.z, manifest.elevationTileSize(at: $0))
                 }
             ),
-            landcoverSuffix: manifest.landcoverSuffix
+            landcoverSuffix: manifest.landcoverSuffix,
+            thematicSuffix: nil
         )
         vectorCache = VectorTileCache(device: device)
         self.manifest = manifest
@@ -142,13 +152,15 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         style newStyle: RenderStyle,
         layers newLayers: RenderLayers,
         comparison newComparison: RenderComparison,
+        geoScience newGeoScience: GeoScienceRenderOptions,
         fitToken: Int,
         navigationToken: Int,
         target: ViewportController.Target?
     ) {
         let dataChanged = manifest != newManifest
             || dataDirectory?.standardizedFileURL != newDirectory.standardizedFileURL
-        if dataChanged {
+        let thematicChanged = geoScience.productID != newGeoScience.productID
+        if dataChanged || thematicChanged {
             manifest = newManifest
             dataDirectory = newDirectory
             tileCache = TileCache(
@@ -160,15 +172,19 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                         ($0.z, newManifest.elevationTileSize(at: $0))
                     }
                 ),
-                landcoverSuffix: newManifest.landcoverSuffix
+                landcoverSuffix: newManifest.landcoverSuffix,
+                thematicSuffix: newGeoScience.suffix
             )
-            vectorCache = VectorTileCache(device: commandQueue.device)
-            queryService = RasterQueryService(manifest: newManifest, directory: newDirectory)
-            needsFit = true
+            if dataChanged {
+                vectorCache = VectorTileCache(device: commandQueue.device)
+                queryService = RasterQueryService(manifest: newManifest, directory: newDirectory)
+                needsFit = true
+            }
         }
         style = newStyle
         layers = newLayers
         comparison = newComparison
+        geoScience = newGeoScience
         if let color = newStyle.colors.first {
             view?.clearColor = MTLClearColorMake(Double(color.x), Double(color.y), Double(color.z), 1)
         }
@@ -226,6 +242,11 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 encoder.setFragmentBytes(address, length: bytes.count, index: 0)
             }
         }
+        geoScience.palette.withUnsafeBytes { bytes in
+            if let address = bytes.baseAddress {
+                encoder.setFragmentBytes(address, length: bytes.count, index: 3)
+            }
+        }
         var relief = ReliefUniforms(
             opacity: style.reliefOpacity,
             exaggeration: style.reliefExaggeration,
@@ -264,6 +285,18 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             encoder.setFragmentTexture(textures.landcover, index: 0)
             encoder.setFragmentTexture(textures.elevation, index: 1)
             encoder.setFragmentTexture(textures.landcover2020 ?? textures.landcover, index: 2)
+            encoder.setFragmentTexture(textures.thematic ?? textures.landcover, index: 3)
+            var thematicUniforms = ThematicUniforms(
+                active: textures.thematic == nil ? 0 : 1,
+                replacesBase: geoScience.replacesBase ? 1 : 0,
+                opacity: geoScience.opacity,
+                uv: textures.thematicUV
+            )
+            encoder.setFragmentBytes(
+                &thematicUniforms,
+                length: MemoryLayout<ThematicUniforms>.stride,
+                index: 4
+            )
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertices.count)
         }
 
@@ -347,7 +380,10 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 && point.x >= view.bounds.width * CGFloat(comparison.splitPosition))
         probeGeneration &+= 1
         let generation = probeGeneration
-        queryService.query(worldX: worldX, worldY: worldY, year2020: use2020) { [weak self] probe in
+        let thematic = manifest?.availableThematicRasters.first { $0.id == geoScience.productID }
+        queryService.query(
+            worldX: worldX, worldY: worldY, year2020: use2020, thematic: thematic
+        ) { [weak self] probe in
             guard let self, self.probeGeneration == generation else { return }
             Task { @MainActor [weak viewport] in viewport?.updateProbe(probe) }
         }
@@ -400,7 +436,10 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         let generation = analysisGeneration
         let use2020 = comparison.mode == UInt32(LandcoverMode.year2020.rawValue)
         Task { @MainActor [weak viewport] in viewport?.beginAnalysis() }
-        queryService.queryStatistics(selection: selection, year2020: use2020) { [weak self] result, message in
+        let thematic = manifest?.availableThematicRasters.first { $0.id == geoScience.productID }
+        queryService.queryStatistics(
+            selection: selection, year2020: use2020, thematic: thematic
+        ) { [weak self] result, message in
             guard let self, self.analysisGeneration == generation else { return }
             Task { @MainActor [weak viewport] in
                 viewport?.finishAnalysis(result, message: message)
@@ -559,6 +598,11 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 encoder.setFragmentBytes(address, length: bytes.count, index: 0)
             }
         }
+        geoScience.palette.withUnsafeBytes { bytes in
+            if let address = bytes.baseAddress {
+                encoder.setFragmentBytes(address, length: bytes.count, index: 3)
+            }
+        }
         var relief = ReliefUniforms(
             opacity: request.renderStyle.reliefOpacity,
             exaggeration: request.renderStyle.reliefExaggeration,
@@ -595,6 +639,18 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             encoder.setFragmentTexture(
                 textures.landcover2020 ?? textures.landcover,
                 index: 2
+            )
+            encoder.setFragmentTexture(textures.thematic ?? textures.landcover, index: 3)
+            var thematicUniforms = ThematicUniforms(
+                active: textures.thematic == nil ? 0 : 1,
+                replacesBase: geoScience.replacesBase ? 1 : 0,
+                opacity: geoScience.opacity,
+                uv: textures.thematicUV
+            )
+            encoder.setFragmentBytes(
+                &thematicUniforms,
+                length: MemoryLayout<ThematicUniforms>.stride,
+                index: 4
             )
             encoder.drawPrimitives(
                 type: .triangle, vertexStart: 0, vertexCount: tileVertices.count
@@ -767,7 +823,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         let visibleZoom = semanticZoom ?? level.z
         let lineLayersEnabled = renderLayers.roads || renderLayers.railways
             || renderLayers.waterways || renderLayers.boundaries
-        let layerOrder: [VectorLayer] = [.boundary, .waterway, .railway, .road]
+        let layerOrder: [VectorLayer] = [
+            .boundary, .waterway, .railway, .road,
+        ]
         if lineLayersEnabled { encoder.setRenderPipelineState(vectorPipeline) }
 
         for key in keys {

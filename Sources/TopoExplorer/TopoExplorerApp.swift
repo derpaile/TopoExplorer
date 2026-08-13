@@ -10,6 +10,7 @@ struct TopoExplorerApp: App {
     @StateObject private var search = SearchController()
     @StateObject private var bookmarks = BookmarkStore()
     @StateObject private var export = MapExportController()
+    @StateObject private var geoScience = GeoScienceSettings()
 
     var body: some Scene {
         WindowGroup {
@@ -22,6 +23,7 @@ struct TopoExplorerApp: App {
                 .environmentObject(search)
                 .environmentObject(bookmarks)
                 .environmentObject(export)
+                .environmentObject(geoScience)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {

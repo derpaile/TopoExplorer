@@ -31,6 +31,14 @@ enum MetalShader {
         float padding;
     };
 
+    struct ThematicUniforms {
+        uint active;
+        uint replacesBase;
+        float opacity;
+        float padding;
+        float4 uv;
+    };
+
     struct VectorSegment {
         short2 start;
         short2 end;
@@ -68,9 +76,12 @@ enum MetalShader {
         texture2d<uint, access::read> landcover2015 [[texture(0)]],
         texture2d<float, access::sample> elevation [[texture(1)]],
         texture2d<uint, access::read> landcover2020 [[texture(2)]],
+        texture2d<uint, access::read> thematicRaster [[texture(3)]],
         constant float4 *palette [[buffer(0)]],
         constant ReliefUniforms &relief [[buffer(1)]],
-        constant ComparisonUniforms &comparison [[buffer(2)]])
+        constant ComparisonUniforms &comparison [[buffer(2)]],
+        constant float4 *thematicPalette [[buffer(3)]],
+        constant ThematicUniforms &thematic [[buffer(4)]])
     {
         uint landWidth = landcover2015.get_width();
         uint landHeight = landcover2015.get_height();
@@ -91,8 +102,20 @@ enum MetalShader {
         float3 baseColor = muted
             ? mix(float3(0.58, 0.60, 0.57), float3(luminance), 0.18)
             : base.rgb;
+        float2 thematicUV = thematic.uv.xy + in.uv * thematic.uv.zw;
+        uint2 thematicPosition = min(
+            uint2(thematicUV * float2(thematicRaster.get_width(), thematicRaster.get_height())),
+            uint2(thematicRaster.get_width() - 1, thematicRaster.get_height() - 1)
+        );
+        uint thematicIndex = thematic.active == 0u
+            ? 0u : thematicRaster.read(thematicPosition).r;
+        float thematicAmount = thematic.replacesBase != 0u
+            ? 1.0 : clamp(thematic.opacity, 0.0, 1.0);
+        float3 mapColor = thematicIndex == 0u
+            ? baseColor
+            : mix(baseColor, thematicPalette[thematicIndex].rgb, thematicAmount);
         if (classIndex == 0u) {
-            return float4(baseColor, 1.0);
+            return float4(mapColor, 1.0);
         }
 
         // Ein Pixel Überlappung je Kachel hält die lineare Reliefabtastung
@@ -134,17 +157,17 @@ enum MetalShader {
         float reliefTone = 0.5 + 0.5 * shapedShade;
         reliefTone = mix(reliefTone, 1.0, clamp(relief.ambient, 0.0, 1.0));
 
-        // Farberhaltendes "Weiches Licht": Das Relief moduliert die vorhandene
-        // Oberflächenfarbe, statt sie wie zuvor mit grauen Pixeln zu ersetzen.
+        // Geologie und Substrat werden vor dem Relief zusammengesetzt. Dadurch
+        // bleibt das Gelände auch bei einer vollständig ersetzten Basiskarte sichtbar.
         float3 softLight;
         if (reliefTone <= 0.5) {
-            softLight = (1.0 - 2.0 * reliefTone) * baseColor * baseColor
-                + 2.0 * reliefTone * baseColor;
+            softLight = (1.0 - 2.0 * reliefTone) * mapColor * mapColor
+                + 2.0 * reliefTone * mapColor;
         } else {
-            softLight = 2.0 * (1.0 - reliefTone) * baseColor
-                + (2.0 * reliefTone - 1.0) * sqrt(max(baseColor, float3(0.0)));
+            softLight = 2.0 * (1.0 - reliefTone) * mapColor
+                + (2.0 * reliefTone - 1.0) * sqrt(max(mapColor, float3(0.0)));
         }
-        float3 composed = mix(baseColor, softLight, clamp(relief.opacity, 0.0, 1.0));
+        float3 composed = mix(mapColor, softLight, clamp(relief.opacity, 0.0, 1.0));
         return float4(composed, 1.0);
     }
 
@@ -206,6 +229,7 @@ enum MetalShader {
         float scale = uniforms.tile.z / uniforms.tile.w;
         float2 a = uniforms.tile.xy + float2(segment.start) * scale;
         float2 b = uniforms.tile.xy + float2(segment.end) * scale;
+        bool isPoint = all(segment.start == segment.end);
         float2 delta = b - a;
         float segmentLength = max(length(delta), 0.0001);
         float width = vectorCoreWidth(uniforms.layer, kind);
@@ -215,7 +239,13 @@ enum MetalShader {
             color = vectorCasingColor(uniforms.layer, kind);
         }
         float2 normal = float2(-delta.y, delta.x) / segmentLength * (width * 0.5);
-        float2 point = (endpoint[vertexID] == 0u ? a : b) + normal * side[vertexID];
+        constexpr float2 pointCorner[6] = {
+            float2(-1.0, -1.0), float2(-1.0, 1.0), float2(1.0, 1.0),
+            float2(-1.0, -1.0), float2(1.0, 1.0), float2(1.0, -1.0)
+        };
+        float2 point = isPoint
+            ? a + pointCorner[vertexID] * max(width, 2.0)
+            : (endpoint[vertexID] == 0u ? a : b) + normal * side[vertexID];
         float2 clip = float2(
             point.x / uniforms.viewport.x * 2.0 - 1.0,
             1.0 - point.y / uniforms.viewport.y * 2.0

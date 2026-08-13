@@ -36,6 +36,7 @@ final class RasterQueryService {
     private let directory: URL
     private let level: MapManifest.Level
     private let cache = NSCache<NSString, RasterQueryTile>()
+    private let thematicCache = NSCache<NSString, NSData>()
     private let populationCache = NSCache<NSString, NSData>()
     private let queue = DispatchQueue(label: "TopoExplorer.map-query", qos: .userInteractive)
     private let populationGrid: PopulationGrid?
@@ -49,12 +50,14 @@ final class RasterQueryService {
             PopulationGrid.self, from: Data(contentsOf: metadataURL)
         )
         cache.totalCostLimit = 48 * 1024 * 1024
+        thematicCache.totalCostLimit = 48 * 1024 * 1024
         populationCache.totalCostLimit = 24 * 1024 * 1024
     }
 
     func queryStatistics(
         selection: MapSelection,
         year2020: Bool,
+        thematic product: MapManifest.ThematicRaster?,
         completion: @escaping (AreaStatistics?, String?) -> Void
     ) {
         queue.async { [weak self] in
@@ -74,22 +77,43 @@ final class RasterQueryService {
                 x2: clippedMaxX, y2: clippedMaxY
             )
 
-            let land = self.landStatistics(in: clipped, year2020: year2020)
+            let categorical = product.map { self.thematicStatistics(in: clipped, product: $0) }
+                ?? self.landStatistics(in: clipped, year2020: year2020)
             let population = self.population(in: clipped)
             let statistics = AreaStatistics(
                 selection: clipped,
                 population: population.value,
                 populationSource: self.populationGrid?.source,
                 populationCoverage: population.coverage,
-                sampledResolution: land.resolution,
-                classes: land.classes
+                sampledResolution: categorical.resolution,
+                classes: categorical.classes,
+                subjectName: product?.name ?? "Landbedeckung"
             )
             DispatchQueue.main.async { completion(statistics, nil) }
         }
     }
 
+    private func thematicStatistics(
+        in selection: MapSelection,
+        product: MapManifest.ThematicRaster
+    ) -> (resolution: Double, classes: [AreaClassStatistic]) {
+        categoricalStatistics(in: selection, classes: product.classes) { key in
+            self.thematicData(key, suffix: product.suffix)
+        }
+    }
+
     private func landStatistics(
         in selection: MapSelection, year2020: Bool
+    ) -> (resolution: Double, classes: [AreaClassStatistic]) {
+        categoricalStatistics(in: selection, classes: manifest.classes) { key in
+            self.landData(key, year2020: year2020)
+        }
+    }
+
+    private func categoricalStatistics(
+        in selection: MapSelection,
+        classes: [MapManifest.LandClass],
+        dataForKey: (TileKey) -> Data?
     ) -> (resolution: Double, classes: [AreaClassStatistic]) {
         let maximumSamples = 900_000.0
         let selectedLevel = manifest.levels.reversed().first { candidate in
@@ -104,7 +128,7 @@ final class RasterQueryService {
             width: selectedLevel.width,
             height: selectedLevel.height
         )
-        var counts = Array(repeating: 0.0, count: manifest.classes.count)
+        var counts = Array(repeating: 0.0, count: 256)
         var sampled = 0.0
         guard !range.x.isEmpty, !range.y.isEmpty else {
             return (selectedLevel.resolution, [])
@@ -117,7 +141,7 @@ final class RasterQueryService {
         for tileY in firstTileY...lastTileY {
             for tileX in firstTileX...lastTileX {
                 let key = TileKey(z: selectedLevel.z, x: tileX, y: tileY)
-                guard let data = landData(key, year2020: year2020) else { continue }
+                guard let data = dataForKey(key) else { continue }
                 let startX = max(range.x.lowerBound, tileX * manifest.tileSize)
                 let endX = min(range.x.upperBound, (tileX + 1) * manifest.tileSize)
                 let startY = max(range.y.lowerBound, tileY * manifest.tileSize)
@@ -148,7 +172,7 @@ final class RasterQueryService {
 
         guard sampled > 0 else { return (selectedLevel.resolution, []) }
         let area = selection.squareKilometers
-        let classes = manifest.classes.compactMap { landClass -> AreaClassStatistic? in
+        let result = classes.compactMap { landClass -> AreaClassStatistic? in
             guard landClass.id != 0, counts[landClass.id] > 0 else { return nil }
             let share = counts[landClass.id] / sampled
             return AreaClassStatistic(
@@ -159,7 +183,7 @@ final class RasterQueryService {
                 share: share
             )
         }.sorted { $0.squareKilometers > $1.squareKilometers }
-        return (selectedLevel.resolution, classes)
+        return (selectedLevel.resolution, result)
     }
 
     private func population(in selection: MapSelection) -> (value: Int?, coverage: Double) {
@@ -272,6 +296,59 @@ final class RasterQueryService {
         return ZlibDecoder.decode(packed, expectedSize: manifest.tileSize * manifest.tileSize)
     }
 
+    private func thematicData(_ key: TileKey, suffix: String) -> Data? {
+        let cacheKey = "\(suffix)/\(key.z)/\(key.x)/\(key.y)" as NSString
+        if let cached = thematicCache.object(forKey: cacheKey) { return cached as Data }
+        var ancestor = key
+        var difference = 0
+        while ancestor.z >= 0 {
+            let url = directory
+                .appendingPathComponent("z\(ancestor.z)", isDirectory: true)
+                .appendingPathComponent("\(ancestor.filename).\(suffix)")
+            if
+                let packed = try? Data(contentsOf: url),
+                let source = ZlibDecoder.decode(
+                    packed, expectedSize: manifest.tileSize * manifest.tileSize
+                )
+            {
+                if difference == 0 {
+                    thematicCache.setObject(source as NSData, forKey: cacheKey, cost: source.count)
+                    return source
+                }
+                let factor = 1 << difference
+                let offsetX = (key.x - ancestor.x * factor) * manifest.tileSize / factor
+                let offsetY = (key.y - ancestor.y * factor) * manifest.tileSize / factor
+                var expanded = Data(count: manifest.tileSize * manifest.tileSize)
+                expanded.withUnsafeMutableBytes { destination in
+                    guard let bytes = destination.bindMemory(to: UInt8.self).baseAddress else { return }
+                    for y in 0..<manifest.tileSize {
+                        let sourceY = min(
+                            manifest.tileSize - 1,
+                            offsetY + y / factor
+                        )
+                        for x in 0..<manifest.tileSize {
+                            let sourceX = min(
+                                manifest.tileSize - 1,
+                                offsetX + x / factor
+                            )
+                            bytes[y * manifest.tileSize + x] = source[
+                                sourceY * manifest.tileSize + sourceX
+                            ]
+                        }
+                    }
+                }
+                thematicCache.setObject(
+                    expanded as NSData, forKey: cacheKey, cost: expanded.count
+                )
+                return expanded
+            }
+            guard ancestor.z > 0 else { break }
+            ancestor = TileKey(z: ancestor.z - 1, x: ancestor.x / 2, y: ancestor.y / 2)
+            difference += 1
+        }
+        return nil
+    }
+
     private func populationTile(x: Int, y: Int, grid: PopulationGrid) -> Data? {
         let key = "\(x)_\(y)" as NSString
         if let cached = populationCache.object(forKey: key) { return cached as Data }
@@ -288,14 +365,20 @@ final class RasterQueryService {
         return decoded
     }
 
-    func query(worldX: Double, worldY: Double, year2020: Bool, completion: @escaping (MapProbe) -> Void) {
+    func query(
+        worldX: Double,
+        worldY: Double,
+        year2020: Bool,
+        thematic product: MapManifest.ThematicRaster?,
+        completion: @escaping (MapProbe) -> Void
+    ) {
         guard
             worldX >= manifest.left, worldX < manifest.right,
             worldY >= manifest.bottom, worldY < manifest.top
         else {
             completion(MapProbe(
                 worldX: worldX, worldY: worldY,
-                elevation: nil, classID: nil, className: nil
+                elevation: nil, classID: nil, className: nil, thematic: nil
             ))
             return
         }
@@ -327,11 +410,36 @@ final class RasterQueryService {
             let meters = self.manifest.elevationMin
                 + normalized * (self.manifest.elevationMax - self.manifest.elevationMin)
             let className = self.manifest.classes.first(where: { $0.id == classID })?.name
+            let thematicProbe: ThematicProbe?
+            if
+                let product,
+                let thematic = self.thematicData(key, suffix: product.suffix)
+            {
+                let thematicID = Int(thematic[localY * self.manifest.tileSize + localX])
+                let thematicClass = product.classes.first { $0.id == thematicID }
+                let quality = self.thematicData(key, suffix: product.qualitySuffix)
+                let sourceIndex = quality.map {
+                    Int($0[localY * self.manifest.tileSize + localX])
+                } ?? 0
+                let source = sourceIndex > 0 && product.sources.indices.contains(sourceIndex - 1)
+                    ? product.sources[sourceIndex - 1] : nil
+                thematicProbe = thematicID == 0 || thematicClass == nil ? nil : ThematicProbe(
+                    productID: product.id,
+                    productName: product.name,
+                    classID: thematicID,
+                    className: thematicClass!.name,
+                    sourceName: source?.name,
+                    sourceScale: source?.scale
+                )
+            } else {
+                thematicProbe = nil
+            }
             let result = MapProbe(
                 worldX: worldX, worldY: worldY,
                 elevation: classID == 0 ? nil : Int(meters.rounded()),
                 classID: classID == 0 ? nil : classID,
-                className: classID == 0 ? nil : className
+                className: classID == 0 ? nil : className,
+                thematic: thematicProbe
             )
             DispatchQueue.main.async { completion(result) }
         }

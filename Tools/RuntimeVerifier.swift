@@ -119,7 +119,9 @@ struct RuntimeVerifier {
         )
         var result: AreaStatistics?
         var failure: String?
-        service.queryStatistics(selection: selection, year2020: false) { statistics, message in
+        service.queryStatistics(
+            selection: selection, year2020: false, thematic: nil
+        ) { statistics, message in
             result = statistics
             failure = message
         }

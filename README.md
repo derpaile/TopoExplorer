@@ -4,6 +4,10 @@ Native macOS-Karte mit 10-m-Landbedeckung für Deutschland. Die App lädt nur
 sichtbare Kacheln, berechnet das Relief in Metal und lässt 40 Oberflächenfarben
 live verändern.
 
+Optional ergänzt eine eigenständige geowissenschaftliche Produktfamilie
+Oberflächensubstrat und oberflächennahe Geologie, ohne die 40
+Landbedeckungsklassen zu verändern.
+
 ## Projektstruktur
 
 - `Sources/TopoExplorer/`: native SwiftUI-/Metal-App
@@ -41,6 +45,10 @@ Die amtlichen Deutschland-Geonamen GN250 werden bei `prepare_all.sh` automatisch
 geladen. Sie ergänzen die OSM-Orte um Berge, Landschaften, Gewässer, Naturgebiete,
 Inseln und Höhlen.
 
+Die optionalen Behörden- und Landesdaten werden nach lokaler Lizenzprüfung mit
+`scripts/preprocess_geoscience.sh` aufbereitet. Konfiguration, COG-Master,
+Quellenqualität und TVT2 sind in `docs/Geowissenschaften.md` beschrieben.
+
 ## App bauen und starten
 
 ```sh
@@ -66,6 +74,7 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Beschriftung: Gewässer blau, Naturgebiete grün und Landschaften typografisch vom Ortsnamen getrennt
 - Suche: Ortsname oder EPSG:3035-Koordinaten eingeben
 - Mauszeiger: Koordinaten, Höhe und Landklasse ablesen
+- Geologie: Themenraster als Overlay/Basiskarte, eigene Legenden sowie Quelle und Erfassungsmaßstab je Rasterzelle
 - Flächenanalyse: Analyseknopf aktivieren, Rechteck ziehen und Einwohner, Dichte sowie alle vorkommenden Kultur-, Wald- und sonstigen Flächen auswerten
 - Gesamtkarte: Kulturarten, Baumgattungen, Naturflächen und Siedlungsdichte
 - Export: echter Metal-Neuaufbau bis 4× mit feineren Kacheln, Maßstab und Stil-Datei

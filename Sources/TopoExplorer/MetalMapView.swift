@@ -107,6 +107,7 @@ struct MetalMapView: NSViewRepresentable {
     @ObservedObject var style: StyleSettings
     @ObservedObject var layers: LayerSettings
     @ObservedObject var comparison: ComparisonSettings
+    @ObservedObject var geoScience: GeoScienceSettings
     @ObservedObject var export: MapExportController
     @ObservedObject var viewport: ViewportController
     let analysisMode: Bool
@@ -137,6 +138,7 @@ struct MetalMapView: NSViewRepresentable {
             style: style.renderStyle,
             layers: layers.renderLayers,
             comparison: comparison.renderComparison,
+            geoScience: geoScience.renderOptions(in: manifest),
             fitToken: viewport.fitToken,
             navigationToken: viewport.navigationToken,
             target: viewport.target

@@ -9,6 +9,10 @@ Die App selbst enthält keine Kartendaten. Lokal erzeugte Karten verwenden:
 - Höhenmodell: USGS/NGA, GMTED2010 Mean, öffentlich verfügbar; Einzelheiten stehen in den mitgelieferten Quelldaten-Metadaten.
 - Straßen, Eisenbahnen, Fließgewässer, Grenzen und Orte: © OpenStreetMap-Mitwirkende, Open Database License 1.0.
 - Berge, Landschaften, Gewässer-, Naturgebiets-, Insel- und Höhlennamen: Bundesamt für Kartographie und Geodäsie (BKG), „Geographische Namen 1:250 000 (GN250)“, Datenlizenz Deutschland – Namensnennung – Version 2.0 (`DL-DE/BY-2.0`), Quellenvermerk `© BKG 2026`.
+- Oberflächensubstrat: BGR BÜK250 V6.0; Landes-Overrides nur gemäß ihrer ausgewiesenen Lizenz.
+- Oberflächensubstrat: BGR BÜK250 V6.0 plus BÜK250-Datenbank V1.0;
+  die Zuordnung erfolgt über `GEN_ID` und die Hierarchie des Bodenausgangsgesteins.
+- Oberflächennahe Geologie: BGR GÜK250; in Bayern optional dGK25.
 
 Links:
 
@@ -19,6 +23,8 @@ Links:
 - https://www.openstreetmap.org/copyright
 - https://osmfoundation.org/wiki/Licence/Attribution_Guidelines
 - https://gdz.bkg.bund.de/index.php/default/geographische-namen-1-250-000-gn250.html
+- https://www.bgr.bund.de/DE/Themen/Boden/Projekte/Informationsgrundlagen-laufend/BUEK250/BUEK250.html
+- https://www.bgr.bund.de/DE/Themen/Sammlungen-Grundlagen/GG_geol_Info/Karten/Deutschland/GUEK250/guek250_inhalt.html
 
 Die Quellen- und Lizenznennungen bleiben in der interaktiven Karte und in
 PNG-Exporten sichtbar; vollständige Angaben liegen außerdem in den
