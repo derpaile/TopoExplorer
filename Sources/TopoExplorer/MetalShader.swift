@@ -59,6 +59,8 @@ enum MetalShader {
     struct VectorOut {
         float4 position [[position]];
         float4 color;
+        float2 markerUV;
+        float markerKind;
     };
 
     vertex RasterOut tileVertex(
@@ -180,6 +182,11 @@ enum MetalShader {
         if (layer == 3u) {
             return kind == 1u ? 1.45 : (kind == 2u ? 1.05 : (kind == 3u ? 0.52 : 0.38));
         }
+        if (layer == 8u) {
+            if (kind <= 3u) return kind == 1u ? 2.35 : (kind == 2u ? 1.9 : 1.45);
+            if (kind == 6u) return 6.2;
+            return kind == 5u ? 4.6 : 5.2;
+        }
         return kind == 1u ? 2.0 : (kind == 2u ? 1.4 : 0.8);
     }
 
@@ -195,6 +202,16 @@ enum MetalShader {
             float alpha = kind == 1u ? 0.76 : (kind == 2u ? 0.70 : (kind == 3u ? 0.70 : 0.58));
             return float4(0.04, 0.36, 0.68, alpha);
         }
+        if (layer == 8u) {
+            if (kind == 1u) return float4(0.72, 0.07, 0.22, 0.94);
+            if (kind == 2u) return float4(0.88, 0.29, 0.09, 0.94);
+            if (kind == 3u) return float4(0.39, 0.24, 0.68, 0.92);
+            if (kind == 4u) return float4(0.08, 0.55, 0.68, 0.96);
+            if (kind == 5u) return float4(0.88, 0.66, 0.08, 0.98);
+            if (kind == 6u) return float4(0.04, 0.58, 0.49, 0.98);
+            if (kind == 7u) return float4(0.96, 0.62, 0.06, 0.98);
+            return float4(0.76, 0.20, 0.10, 0.98);
+        }
         return float4(0.96, 0.96, 0.94, kind <= 2u ? 0.72 : 0.42);
     }
 
@@ -206,6 +223,7 @@ enum MetalShader {
                 : float4(0.76, 0.49, 0.19, 0.82);
         }
         if (layer == 2u) return float4(0.70, 0.25, 0.23, 0.86);
+        if (layer == 8u) return float4(0.98, 0.96, 0.91, 0.88);
         return float4(0.05, 0.05, 0.05, 0.32);
     }
 
@@ -256,11 +274,50 @@ enum MetalShader {
             ? float4(clip, 0.0, 1.0)
             : float4(2.0, 2.0, 0.0, 1.0);
         out.color = color;
+        out.markerUV = isPoint ? pointCorner[vertexID] : float2(0.0);
+        out.markerKind = isPoint && uniforms.layer == 8u ? float(kind) : 0.0;
         return out;
     }
 
     fragment float4 vectorFragment(VectorOut in [[stage_in]])
     {
+        uint markerKind = uint(in.markerKind + 0.5);
+        if (markerKind >= 4u) {
+            float2 p = in.markerUV;
+            float edge = 0.0;
+            bool visible = true;
+
+            if (markerKind == 4u) {
+                // Umspannwerk: kompakte Raute mit dunklem Innenfeld.
+                edge = abs(p.x) + abs(p.y);
+                visible = edge <= 1.0;
+                if (edge < 0.58) return float4(in.color.rgb * 0.52, in.color.a);
+            } else if (markerKind == 5u) {
+                // Transformator: Ring mit hellem Kern.
+                edge = length(p);
+                visible = edge <= 1.0;
+                if (edge < 0.46) return float4(1.0, 0.94, 0.66, 1.0);
+            } else if (markerKind == 6u) {
+                // Windenergie: Nabe und drei Rotorblätter.
+                float radius = length(p);
+                float angle = atan2(p.y, p.x);
+                float blade = abs(sin(1.5 * (angle + M_PI_F * 0.5)));
+                visible = radius <= 0.22 || (radius <= 1.0 && blade <= 0.18);
+            } else if (markerKind == 7u) {
+                // Photovoltaik: Modul mit angedeutetem Zellenraster.
+                edge = max(abs(p.x), abs(p.y));
+                visible = edge <= 0.92;
+                if (abs(p.x) < 0.09 || abs(p.y) < 0.09) {
+                    return float4(in.color.rgb * 0.58, in.color.a);
+                }
+            } else {
+                // Konventioneller Erzeuger: aufrechtes Kraftwerksdreieck.
+                visible = p.y >= -0.82 && p.y <= 0.92
+                    && abs(p.x) <= (0.92 - p.y) * 0.58;
+            }
+
+            if (!visible) discard_fragment();
+        }
         return in.color;
     }
     """#

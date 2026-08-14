@@ -38,7 +38,7 @@ SOURCE_CRS = "EPSG:4326"
 GEONAMES_CRS = "EPSG:25832"
 MAGIC = b"TVT1"
 FORMAT_VERSION = 1
-PIPELINE_VERSION = 5
+PIPELINE_VERSION = 6
 EXTENT = 8192
 BUFFER = 128  # 8 screen pixels for a 512 pixel raster tile
 TILE_HEADER = struct.Struct("<4sHHHII")
@@ -52,6 +52,7 @@ LAYER_ROAD = 1
 LAYER_RAIL = 2
 LAYER_WATER = 3
 LAYER_BOUNDARY = 4
+LAYER_ENERGY = 8
 
 ROAD_TYPES = {
     "motorway": (1, 1),
@@ -119,6 +120,8 @@ OSMIUM_FILTERS = [
     "w/highway=" + ",".join(ROAD_TYPES),
     "w/waterway=" + ",".join(WATER_TYPES),
     "r/boundary=administrative",
+    "w/power=line,minor_line",
+    "nwr/power=substation,transformer,generator,plant",
 ]
 
 
@@ -146,6 +149,12 @@ class LineStyle:
 class RawLine:
     style: LineStyle
     coordinates: list[tuple[float, float]]
+
+
+@dataclass(frozen=True)
+class RawMarker:
+    style: LineStyle
+    coordinate: tuple[float, float]
 
 
 @dataclass(frozen=True)
@@ -252,11 +261,79 @@ def feature_name(properties: dict) -> str:
     return str(properties.get("name:de") or properties.get("name") or "").strip()
 
 
+def voltage_kind(value: object) -> tuple[int, int] | None:
+    values: list[int] = []
+    for part in str(value or "").replace(",", ";").split(";"):
+        digits = "".join(character for character in part if character.isdigit())
+        if digits:
+            values.append(int(digits))
+    if not values:
+        return None
+    voltage = max(values)
+    if voltage >= 300_000:
+        return 1, 2
+    if voltage >= 180_000:
+        return 2, 3
+    if voltage >= 100_000:
+        return 3, 4
+    return None
+
+
+def energy_marker_style(properties: dict) -> LineStyle | None:
+    power = str(properties.get("power") or "")
+    name = feature_name(properties)
+    if power == "substation":
+        return LineStyle(LAYER_ENERGY, 4, 5, 0, name)
+    if power == "transformer":
+        return LineStyle(LAYER_ENERGY, 5, 8, 0, name)
+    if power not in {"generator", "plant"}:
+        return None
+    source = str(
+        properties.get("generator:source") or properties.get("plant:source") or ""
+    ).casefold()
+    sources = {part.strip() for part in source.replace(",", ";").split(";") if part.strip()}
+    if "wind" in sources:
+        return LineStyle(LAYER_ENERGY, 6, 6, 0, name) if power == "generator" else None
+    if "solar" in sources:
+        return LineStyle(LAYER_ENERGY, 7, 7, 0, name) if power == "plant" else None
+    return LineStyle(LAYER_ENERGY, 8, 5, 0, name) if power == "plant" else None
+
+
+def geometry_center(geometry: dict) -> tuple[float, float] | None:
+    coordinates = geometry.get("coordinates")
+    if geometry.get("type") == "Point" and isinstance(coordinates, list) and len(coordinates) >= 2:
+        return float(coordinates[0]), float(coordinates[1])
+    points: list[tuple[float, float]] = []
+
+    def collect(value: object) -> None:
+        if isinstance(value, list) and len(value) >= 2 and all(
+            isinstance(item, (int, float)) for item in value[:2]
+        ):
+            points.append((float(value[0]), float(value[1])))
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+
+    collect(coordinates)
+    if not points:
+        return None
+    return (
+        (min(point[0] for point in points) + max(point[0] for point in points)) * 0.5,
+        (min(point[1] for point in points) + max(point[1] for point in points)) * 0.5,
+    )
+
+
 def classify_line(properties: dict) -> LineStyle | None:
     name = feature_name(properties)
     flags = (1 if truthy_tag(properties.get("bridge")) else 0) | (
         2 if truthy_tag(properties.get("tunnel")) else 0
     )
+    if properties.get("power") in {"line", "minor_line"}:
+        classified_voltage = voltage_kind(properties.get("voltage"))
+        if classified_voltage is None:
+            return None
+        kind, min_zoom = classified_voltage
+        return LineStyle(LAYER_ENERGY, kind, min_zoom, flags, name)
     highway = properties.get("highway")
     if highway in ROAD_TYPES:
         kind, min_zoom = ROAD_TYPES[str(highway)]
@@ -607,6 +684,28 @@ class VectorBuilder:
                             continue
                         self._write_line_parts(level.z, tile_x, tile_y, style, quantized)
 
+    def add_projected_marker(self, style: LineStyle, x_value: float, y_value: float) -> None:
+        left, bottom, right, top = self.bounds
+        if not (left <= x_value <= right and bottom <= y_value <= top):
+            return
+        self.source_parts[style.layer] += 1
+        name = style.name.encode("utf-8")[:MAX_NAME_BYTES]
+        for level in self.levels:
+            if level.z < style.min_zoom:
+                continue
+            span = level.resolution * self.tile_size
+            tile_x = min(level.tilesX - 1, max(0, int((x_value - left) // span)))
+            tile_y = min(level.tilesY - 1, max(0, int((top - y_value) // span)))
+            tile_left = left + tile_x * span
+            tile_top = top - tile_y * span
+            x = min(EXTENT, max(0, round((x_value - tile_left) / span * EXTENT)))
+            y = min(EXTENT, max(0, round((tile_top - y_value) / span * EXTENT)))
+            point_bytes = struct.pack("<hhhh", x, y, x, y)
+            payload = LINE_HEADER.pack(
+                style.layer, style.kind, style.min_zoom, 0, 2, len(name)
+            ) + point_bytes + name
+            self.spool.line(level.z, tile_x, tile_y, payload, style.layer)
+
     def _write_line_parts(
         self,
         z: int,
@@ -676,28 +775,51 @@ def project_batch(raw_lines: Sequence[RawLine], builder: VectorBuilder) -> None:
         builder.add_projected_line(raw.style, points)
 
 
+def project_marker_batch(raw_markers: Sequence[RawMarker], builder: VectorBuilder) -> None:
+    if not raw_markers:
+        return
+    projected_xs, projected_ys = transform(
+        SOURCE_CRS,
+        TARGET_CRS,
+        [marker.coordinate[0] for marker in raw_markers],
+        [marker.coordinate[1] for marker in raw_markers],
+    )
+    for marker, x_value, y_value in zip(raw_markers, projected_xs, projected_ys):
+        builder.add_projected_marker(marker.style, x_value, y_value)
+
+
 def process_line_features(features: Iterable[dict], builder: VectorBuilder, label: str) -> int:
     raw_lines: list[RawLine] = []
+    raw_markers: list[RawMarker] = []
     point_count = 0
     feature_count = 0
     started = time.time()
     for feature in features:
         properties = feature.get("properties") or {}
+        marker_style = energy_marker_style(properties)
+        if marker_style is not None:
+            coordinate = geometry_center(feature.get("geometry") or {})
+            if coordinate is not None:
+                raw_markers.append(RawMarker(marker_style, coordinate))
+                builder.source_features[marker_style.layer] += 1
+                feature_count += 1
         style = classify_line(properties)
-        if style is None:
-            continue
-        builder.source_features[style.layer] += 1
-        feature_count += 1
-        for coordinates in geometry_lines(feature.get("geometry")):
-            raw_lines.append(RawLine(style, coordinates))
-            point_count += len(coordinates)
-        if point_count >= PROJECT_BATCH_POINTS:
+        if style is not None:
+            builder.source_features[style.layer] += 1
+            feature_count += 1
+            for coordinates in geometry_lines(feature.get("geometry")):
+                raw_lines.append(RawLine(style, coordinates))
+                point_count += len(coordinates)
+        if point_count + len(raw_markers) >= PROJECT_BATCH_POINTS:
             project_batch(raw_lines, builder)
+            project_marker_batch(raw_markers, builder)
             raw_lines.clear()
+            raw_markers.clear()
             point_count = 0
             if feature_count % 25_000 < 500:
                 print(f"  {label}: {feature_count:,} Objekte", flush=True)
     project_batch(raw_lines, builder)
+    project_marker_batch(raw_markers, builder)
     print(f"  {label}: {feature_count:,} Objekte in {(time.time() - started) / 60:.1f} min")
     return feature_count
 
@@ -824,6 +946,12 @@ def write_osmium_config(path: Path) -> None:
         "include_tags": [
             "highway",
             "waterway",
+            "power",
+            "voltage",
+            "generator:source",
+            "generator:method",
+            "plant:source",
+            "plant:method",
             "boundary",
             "admin_level",
             "name",
@@ -987,6 +1115,20 @@ def layer_manifest() -> list[dict]:
         },
         {"id": LAYER_WATER, "name": "Fließgewässer", "kinds": ["Fluss", "Kanal", "Bach", "Graben", "Entwässerung"]},
         {"id": LAYER_BOUNDARY, "name": "Grenzen", "kinds": ["Staat", "Land", "Kreis", "Kommune"]},
+        {
+            "id": LAYER_ENERGY,
+            "name": "Energieinfrastruktur",
+            "kinds": [
+                "380-kV-Leitung",
+                "220-kV-Leitung",
+                "110-kV-Leitung",
+                "Umspannwerk",
+                "Transformator",
+                "Windenergieanlage",
+                "Photovoltaik",
+                "Konventioneller Erzeuger",
+            ],
+        },
     ]
 
 

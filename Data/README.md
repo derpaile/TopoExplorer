@@ -8,7 +8,7 @@
 - `BKG/`: amtliche geografische Namen GN250 samt Quelldokumentation
 - `Boundaries/`: präzise Ländergrenzen in EPSG:3035
 - `Population/`: Zensus-Bevölkerung als 100-m-Gitter für Flächenstatistiken
-- `Geoscience/`: BÜK250, GÜK250 und freigegebene geologische Landes-Overrides
+- `Geoscience/`: BÜK250, GÜK250, GMK1000R, GWS1000_250 und freigegebene Landes-Overrides
 
 `../MapData/Germany/` enthält die daraus erzeugte Kachelpyramide und wird ebenfalls nicht eingecheckt. Beide Verzeichnisse lassen sich lokal sichern oder neu erzeugen.
 

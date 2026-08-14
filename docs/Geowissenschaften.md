@@ -1,27 +1,36 @@
 # Geowissenschaftliche Produktfamilie
 
-Die Produktfamilie ergänzt die unveränderte Landbedeckung um zwei unabhängige
+Die Produktfamilie ergänzt die unveränderte Landbedeckung um vier unabhängige
 Ebenen:
 
 1. **Oberflächensubstrat** – bundesweit BÜK250, präzise Landesdaten als Override.
 2. **Oberflächennahe Geologie** – bundesweit GÜK250, etwa dGK25 in Bayern als Override.
+3. **Geomorphographische Einheiten** – bundesweit GMK1000R V2.0 mit 25 Reliefklassen.
+4. **Grundwasserflurabstand** – bundesweit GWS1000_250 V1.0 mit fünf Grundwasserstufen.
 
 ## Ausgelieferter amtlicher Bundesbestand
 
 ```sh
 ./scripts/fetch_bgr_substrate.sh
 ./scripts/fetch_bgr_geology.sh
+./scripts/fetch_bgr_geomorphography.sh
+./scripts/fetch_bgr_groundwater.sh
 ```
 
-Die Spezialimporte erzeugen fachlich ehrliche 80-m-Master-COGs und Kacheln bis
-z5; z6–z8 verwenden die passende Elternkachel. Enthalten sind BÜK250 V6.0 und
-GÜK250.
+Die Spezialimporte erzeugen fachlich ehrliche Master-COGs und Kacheln nur bis
+zur Auflösung der Quelle; feinere Zoomstufen verwenden die passende
+Elternkachel. Enthalten sind BÜK250 V6.0, GÜK250, GMK1000R V2.0 und
+GWS1000_250 V1.0. Der GMK1000R-Import lädt das amtliche 250-m-Raster selbst,
+übernimmt die 25 Klassen
+und Farben der BGR-Legende und projiziert es nach EPSG:3035.
+Der GWS1000_250-Import übernimmt entsprechend die fünf veröffentlichten
+Grundwasserstufen samt amtlicher Farbskala.
 
-Die beiden Flächenprodukte besitzen je ein Klassenraster und ein Qualitätsraster.
+Die Flächenprodukte besitzen je ein Klassenraster und ein Qualitätsraster.
 Qualitätswert `0` bedeutet „keine Quelle“, `1…n` verweist auf den entsprechenden
 Eintrag in `thematicRasters[].sources`. Damit zeigt die App am Mauszeiger nicht
-nur die Klasse, sondern auch Quelle und Erfassungsmaßstab. Ein 10-m-Ausgaberaster
-erhöht nicht die fachliche Genauigkeit einer Karte im Maßstab 1:250.000.
+nur die Klasse, sondern auch Quelle und Erfassungsmaßstab. Ein feineres
+App-Kachelraster erhöht nicht die fachliche Genauigkeit der Quellkarte.
 
 ## Raster-ETL
 

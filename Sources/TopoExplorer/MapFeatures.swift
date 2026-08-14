@@ -6,6 +6,8 @@ struct RenderLayers {
     let roadKinds: UInt32
     let railways: Bool
     let railwayKinds: UInt32
+    let energy: Bool
+    let energyKinds: UInt32
     let waterways: Bool
     let boundaries: Bool
     let places: Bool
@@ -19,6 +21,8 @@ final class LayerSettings: ObservableObject {
     @Published var roadKinds: UInt32 { didSet { save() } }
     @Published var railways: Bool { didSet { save() } }
     @Published var railwayKinds: UInt32 { didSet { save() } }
+    @Published var energy: Bool { didSet { save() } }
+    @Published var energyKinds: UInt32 { didSet { save() } }
     @Published var waterways: Bool { didSet { save() } }
     @Published var boundaries: Bool { didSet { save() } }
     @Published var places: Bool { didSet { save() } }
@@ -40,6 +44,8 @@ final class LayerSettings: ObservableObject {
         roadKinds = mask("roadKinds")
         railways = boolean("railways")
         railwayKinds = mask("railwayKinds")
+        energy = boolean("energy")
+        energyKinds = mask("energyKinds")
         waterways = boolean("waterways")
         boundaries = boolean("boundaries")
         places = boolean("places")
@@ -53,6 +59,8 @@ final class LayerSettings: ObservableObject {
             roadKinds: roadKinds,
             railways: railways,
             railwayKinds: railwayKinds,
+            energy: energy,
+            energyKinds: energyKinds,
             waterways: waterways,
             boundaries: boundaries,
             places: places,
@@ -65,6 +73,7 @@ final class LayerSettings: ObservableObject {
         UserDefaults.standard.set(
             ["roads": roads, "roadKinds": roadKinds,
              "railways": railways, "railwayKinds": railwayKinds,
+             "energy": energy, "energyKinds": energyKinds,
              "waterways": waterways, "boundaries": boundaries,
              "places": places, "geonames": geonames, "geonameKinds": geonameKinds],
             forKey: Self.key

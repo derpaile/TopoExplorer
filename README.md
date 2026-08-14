@@ -5,8 +5,9 @@ sichtbare Kacheln, berechnet das Relief in Metal und lässt 40 Oberflächenfarbe
 live verändern.
 
 Optional ergänzt eine eigenständige geowissenschaftliche Produktfamilie
-Oberflächensubstrat und oberflächennahe Geologie, ohne die 40
-Landbedeckungsklassen zu verändern.
+Oberflächensubstrat, oberflächennahe Geologie, geomorphographische
+Reliefeinheiten und Grundwasserstufen, ohne die 40 Landbedeckungsklassen zu
+verändern.
 
 ## Projektstruktur
 
@@ -71,6 +72,7 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Reliefregler: Stärke, Überhöhung und Kontrast ändern
 - Referenzansichten: Harz, Alpen, Küste, Ruhrgebiet und Flachland direkt anspringen
 - Ebenen: Straßen, Bahn, Flüsse, Grenzen, Orte und Natur-/Geländenamen einzeln schalten
+- Energieinfrastruktur: 380-, 220- und 110-kV-Netze sowie Umspannwerke, Transformatoren, Wind-, Solar- und konventionelle Erzeugungsanlagen aus OpenStreetMap
 - Beschriftung: Gewässer blau, Naturgebiete grün und Landschaften typografisch vom Ortsnamen getrennt
 - Suche: Ortsname oder EPSG:3035-Koordinaten eingeben
 - Mauszeiger: Koordinaten, Höhe und Landklasse ablesen

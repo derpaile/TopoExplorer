@@ -67,6 +67,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     )
     private var layers = RenderLayers(
         roads: true, roadKinds: .max, railways: true, railwayKinds: .max,
+        energy: true, energyKinds: .max,
         waterways: true, boundaries: true, places: true,
         geonames: true, geonameKinds: .max
     )
@@ -813,7 +814,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     ) -> (lineCount: Int, labels: [MapLabel]) {
         guard
             renderLayers.roads || renderLayers.railways || renderLayers.waterways
-                || renderLayers.boundaries || renderLayers.places || renderLayers.geonames
+                || renderLayers.boundaries || renderLayers.energy
+                || renderLayers.places || renderLayers.geonames
         else {
             return (0, [])
         }
@@ -822,9 +824,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         let tileMeters = Double(manifest.tileSize) * level.resolution
         let visibleZoom = semanticZoom ?? level.z
         let lineLayersEnabled = renderLayers.roads || renderLayers.railways
-            || renderLayers.waterways || renderLayers.boundaries
+            || renderLayers.waterways || renderLayers.boundaries || renderLayers.energy
         let layerOrder: [VectorLayer] = [
-            .boundary, .waterway, .railway, .road,
+            .boundary, .waterway, .energy, .railway, .road,
         ]
         if lineLayersEnabled { encoder.setRenderPipelineState(vectorPipeline) }
 
@@ -924,6 +926,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         case .railway: layers.railways
         case .waterway: layers.waterways
         case .boundary: layers.boundaries
+        case .energy: layers.energy
         }
     }
 
@@ -931,6 +934,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         switch layer {
         case .road: layers.roadKinds
         case .railway: layers.railwayKinds
+        case .energy: layers.energyKinds
         case .waterway, .boundary: .max
         }
     }

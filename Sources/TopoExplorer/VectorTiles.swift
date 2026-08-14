@@ -6,6 +6,7 @@ enum VectorLayer: UInt8, CaseIterable {
     case railway = 2
     case waterway = 3
     case boundary = 4
+    case energy = 8
 }
 
 /// Twelve-byte, GPU-native line segment. Styling stays encoded in one word:
@@ -180,6 +181,7 @@ enum VectorTileDecoder {
                 let groupIndex = layer.map { Int($0.rawValue) * zoomSlots + Int(minZoom) }
                 let usesCasing = layer.map { hasCasing(layer: $0, kind: kind) } ?? false
                 var previous = SIMD2(try reader.int16(), try reader.int16())
+                var emittedSegment = false
                 for _ in 1..<pointCount {
                     let current = SIMD2(try reader.int16(), try reader.int16())
                     if current != previous, let groupIndex {
@@ -189,8 +191,14 @@ enum VectorTileDecoder {
                         } else {
                             plainSegments[groupIndex].append(segment)
                         }
+                        emittedSegment = true
                     }
                     previous = current
+                }
+                if !emittedSegment, let groupIndex {
+                    plainSegments[groupIndex].append(
+                        VectorSegment(start: previous, end: previous, attributes: attributes)
+                    )
                 }
                 try reader.skip(nameLength)
                 if let groupIndex { lineCounts[groupIndex] += 1 }
@@ -292,6 +300,7 @@ enum VectorTileDecoder {
         case .road: kind <= 3
         case .railway, .boundary: true
         case .waterway: false
+        case .energy: kind <= 3
         }
     }
 }

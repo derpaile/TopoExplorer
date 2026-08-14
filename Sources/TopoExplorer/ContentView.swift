@@ -224,7 +224,7 @@ struct ContentView: View {
             HStack {
                 sidebarSectionTitle("Kartenebenen", systemImage: "square.3.layers.3d")
                 Spacer()
-                Text("6 Datensätze")
+                Text("7 Datensätze")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -277,6 +277,22 @@ struct ContentView: View {
                 AtlasLayerSubheading("Sonderverkehr")
                 layerKindRow("Sonderbahnen", kind: 6, mask: \.railwayKinds)
                 layerKindRow("Im Bau", kind: 7, mask: \.railwayKinds)
+            }
+            AtlasLayerGroup(
+                title: "Energieinfrastruktur", detail: "Netze und Erzeugungsanlagen",
+                symbol: "bolt.fill", tint: .yellow, isOn: $layers.energy
+            ) {
+                AtlasLayerSubheading("Hochspannungsnetze")
+                layerKindRow("380-kV-Netz", kind: 1, mask: \.energyKinds)
+                layerKindRow("220-kV-Netz", kind: 2, mask: \.energyKinds)
+                layerKindRow("110-kV-Netz", kind: 3, mask: \.energyKinds)
+                AtlasLayerSubheading("Netzknoten")
+                layerKindRow("Umspannwerke", kind: 4, mask: \.energyKinds)
+                layerKindRow("Transformatoren", kind: 5, mask: \.energyKinds)
+                AtlasLayerSubheading("Erzeugung")
+                layerKindRow("Windenergieanlagen", kind: 6, mask: \.energyKinds)
+                layerKindRow("Photovoltaik", kind: 7, mask: \.energyKinds)
+                layerKindRow("Konventionelle Erzeuger", kind: 8, mask: \.energyKinds)
             }
             AtlasLayerRow(
                 title: "Flüsse", detail: "Fließgewässer",
@@ -1147,7 +1163,7 @@ private struct GeoScienceSidebar: View {
                 Label("Geowissenschaften", systemImage: "fossil.shell.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Text("Untergrund und Gesteinsarten")
+                Text("Boden, Gestein, Relief und Wasser")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -1155,9 +1171,9 @@ private struct GeoScienceSidebar: View {
             if manifest.availableThematicRasters.isEmpty {
                 panel {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("Keine geologischen Flächenkarten", systemImage: "externaldrive.badge.exclamationmark")
+                        Label("Keine geowissenschaftlichen Flächenkarten", systemImage: "externaldrive.badge.exclamationmark")
                             .font(.subheadline.weight(.medium))
-                        Text("Erzeuge Substrat und Geologie mit der Geowissenschafts-Pipeline.")
+                        Text("Erzeuge Boden-, Geologie-, Relief- und Grundwasserkarten mit der Geowissenschafts-Pipeline.")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)

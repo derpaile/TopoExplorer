@@ -327,6 +327,7 @@ struct RuntimeVerifier {
             renderLayers: RenderLayers(
                 roads: true, roadKinds: .max,
                 railways: true, railwayKinds: .max,
+                energy: true, energyKinds: .max,
                 waterways: true, boundaries: true, places: true,
                 geonames: true, geonameKinds: .max
             ),
@@ -373,6 +374,7 @@ struct RuntimeVerifier {
         let renderLayers = RenderLayers(
             roads: true, roadKinds: .max,
             railways: true, railwayKinds: .max,
+            energy: true, energyKinds: .max,
             waterways: true, boundaries: true, places: true,
             geonames: true, geonameKinds: .max
         )
@@ -383,6 +385,7 @@ struct RuntimeVerifier {
             style: renderStyle,
             layers: renderLayers,
             comparison: renderComparison,
+            geoScience: .disabled,
             fitToken: 0,
             navigationToken: 0,
             target: nil

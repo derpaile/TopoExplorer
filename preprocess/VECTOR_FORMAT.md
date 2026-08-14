@@ -1,4 +1,4 @@
-# TopoExplorer-Vektorkacheln (`TVT1`)
+# TopoExplorer-Vektorkacheln (`TVT1` und `TVT2`)
 
 Die Pipeline `germany_vectors.py` erzeugt dieselben Zoomstufen und
 Kachelkoordinaten wie die Rasterkarte. Dateien fehlen absichtlich, wenn eine
@@ -35,7 +35,7 @@ Danach folgen zuerst alle Linien und anschließend alle Orte.
 
 | Feld | Typ |
 |---|---:|
-| Layer: Straße 1, Bahn 2, Wasserlauf 3, Grenze 4 | `u8` |
+| Layer: Straße 1, Bahn 2, Wasserlauf 3, Grenze 4, Energie 8 | `u8` |
 | Untertyp, ab 1; Namen stehen im Manifest | `u8` |
 | minimale Zoomstufe | `u8` |
 | Flags: Brücke 1, Tunnel 2 | `u8` |
@@ -59,3 +59,31 @@ Danach folgen zuerst alle Linien und anschließend alle Orte.
 `places-index.json.z` ist ein zlib-komprimiertes JSON-Dokument für Orts- und Geonamensuche und
 direktes Anspringen. Jedes Array folgt den Feldern
 `name, kind, population, x, y, minZoom`; `x/y` sind EPSG:3035-Koordinaten.
+
+Der Energielayer verwendet die Untertypen 1–3 für 380-, 220- und 110-kV-Leitungen.
+Die Untertypen 4–8 sind punktförmige Marker für Umspannwerke, Transformatoren,
+Windenergieanlagen, Photovoltaik und konventionelle Erzeuger. Punktmarker werden
+als Record mit zwei identischen Koordinaten gespeichert und vom Renderer als
+kartografische Symbole gezeichnet.
+
+## TVT2-Fachobjekte
+
+TVT2 bleibt zu TVT1 abwärtskompatibel und ersetzt nur Magic/Version durch
+`TVT2`/`2`. Hinter der Ortsanzahl steht zusätzlich eine Fachobjektanzahl als
+`u32`. Die bisherigen Linien- und Ortsrecords bleiben bytegleich; anschließend
+folgen dynamisch viele Fachobjekte.
+
+| Feld | Typ |
+|---|---:|
+| Layer: Bergbau 5, Kohlenwasserstoffe 6, Pipeline 7 | `u8` |
+| Untertyp | `u8` |
+| Geometrie: Punkt 1, Linie 2, Polygon 3 | `u8` |
+| minimale Zoomstufe | `u8` |
+| Punktanzahl | `u16` |
+| UTF-8-Namenslänge | `u16` |
+| JSON-Attributlänge | `u16` |
+| Punkte `(x, y)` | je `i16, i16` |
+| Name und unveränderte Attribute | UTF-8 |
+
+Der Swift-Decoder reserviert keine feste Layerzahl mehr. Punkte werden als
+Symbole, Linien und Polygonränder als thematisch gefärbte Segmente gerendert.

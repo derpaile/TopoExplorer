@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "sources": [
+    {"id": "mining", "name": "Bergbauobjekte", "path": "Data/Raw/Geoscience/Vectors/mining.geojson", "crs": "EPSG:4326", "layer": 5, "kindProperty": "_kind", "nameProperty": "name", "minZoom": 4, "license": "Quelllizenz im Datensatz", "url": "https://geoportal.bgr.de/"},
+    {"id": "hydrocarbons", "name": "Freigegebene KW-FIS/BGR-Objekte", "path": "Data/Raw/Geoscience/Vectors/hydrocarbons.geojson", "crs": "EPSG:4326", "layer": 6, "kindProperty": "_kind", "nameProperty": "name", "minZoom": 3, "license": "Nur öffentlich freigegebene Nachweisdaten", "url": "https://www.lbeg.niedersachsen.de/energie_rohstoffe/erdoel_und_erdgas/fachinformationssystem/kohlenwasserstoff-fachinformationssystem-kw-fis-670.html"},
+    {"id": "osm-pipelines", "name": "OSM Pipelines", "path": "Data/Raw/Geoscience/Vectors/pipelines.geojson", "crs": "EPSG:4326", "layer": 7, "kind": 1, "nameProperty": "name", "minZoom": 5, "license": "© OpenStreetMap-Mitwirkende, ODbL 1.0", "url": "https://www.openstreetmap.org/copyright"}
+  ]
+}

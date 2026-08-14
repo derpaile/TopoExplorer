@@ -83,6 +83,25 @@ final class TopoExplorerTests: XCTestCase {
         XCTAssertTrue(tile?.layers.isEmpty == true)
     }
 
+    func testEnergyMarkerDecoding() throws {
+        var raw = Data("TVT1".utf8)
+        raw.appendLittleEndian(UInt16(1))
+        raw.appendLittleEndian(UInt16(8192))
+        raw.appendLittleEndian(UInt16(128))
+        raw.appendLittleEndian(UInt32(1))
+        raw.appendLittleEndian(UInt32(0))
+        raw.append(contentsOf: [8, 4, 5, 0])
+        raw.appendLittleEndian(UInt16(2))
+        raw.appendLittleEndian(UInt16(0))
+        raw.appendLittleEndian(Int16(100))
+        raw.appendLittleEndian(Int16(200))
+        raw.appendLittleEndian(Int16(100))
+        raw.appendLittleEndian(Int16(200))
+
+        let tile = VectorTileDecoder.decode(try compressed(raw))
+        XCTAssertEqual(tile?.layers[.energy]?.segmentCount, 1)
+    }
+
     private func compressed(_ data: Data) throws -> Data {
         var result = Data(count: Int(compressBound(uLong(data.count))))
         var size = uLongf(result.count)

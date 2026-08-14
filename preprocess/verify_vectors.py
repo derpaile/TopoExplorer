@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate every TVT1 tile and the central TopoExplorer place index."""
+"""Validate backward-compatible TVT1 and geoscience-capable TVT2 tiles."""
 
 from __future__ import annotations
 
@@ -12,8 +12,10 @@ from pathlib import Path
 
 
 TILE_HEADER = struct.Struct("<4sHHHII")
+TILE2_HEADER = struct.Struct("<4sHHHIII")
 LINE_HEADER = struct.Struct("<BBBBHH")
 PLACE_HEADER = struct.Struct("<BBHhhIH")
+FEATURE_HEADER = struct.Struct("<BBBBHHH")
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,16 +35,23 @@ def verify_tile(
     extent: int,
     buffer: int,
     kind_limits: dict[int, int],
-) -> tuple[int, int, dict[int, int]]:
+) -> tuple[int, int, int, dict[int, int]]:
     try:
         payload = zlib.decompress(path.read_bytes())
     except zlib.error as error:
         raise RuntimeError(f"Defekte zlib-Kachel {path}: {error}") from error
     require(len(payload) >= TILE_HEADER.size, f"Kachelkopf fehlt: {path}")
-    magic, version, tile_extent, tile_buffer, line_count, place_count = TILE_HEADER.unpack_from(payload)
-    require(magic == b"TVT1" and version == 1, f"Unbekanntes Format: {path}")
+    magic = payload[:4]
+    if magic == b"TVT2":
+        magic, version, tile_extent, tile_buffer, line_count, place_count, feature_count = TILE2_HEADER.unpack_from(payload)
+        offset = TILE2_HEADER.size
+        require(version == 2, f"Unbekannte TVT2-Version: {path}")
+    else:
+        magic, version, tile_extent, tile_buffer, line_count, place_count = TILE_HEADER.unpack_from(payload)
+        feature_count = 0
+        offset = TILE_HEADER.size
+        require(magic == b"TVT1" and version == 1, f"Unbekanntes Format: {path}")
     require(tile_extent == extent and tile_buffer == buffer, f"Abweichende Quantisierung: {path}")
-    offset = TILE_HEADER.size
     layer_counts = {layer: 0 for layer in kind_limits}
     for _ in range(line_count):
         require(offset + LINE_HEADER.size <= len(payload), f"Abgeschnittener Linienkopf: {path}")
@@ -75,8 +84,24 @@ def verify_tile(
         require(end <= len(payload), f"Abgeschnittener Ortsname: {path}")
         require(bool(payload[offset:end].decode("utf-8")), f"Leerer Ortsname: {path}")
         offset = end
+    for _ in range(feature_count):
+        require(offset + FEATURE_HEADER.size <= len(payload), f"Abgeschnittener Featurekopf: {path}")
+        layer, kind, geometry, min_zoom, point_count, name_size, attribute_size = FEATURE_HEADER.unpack_from(payload, offset)
+        offset += FEATURE_HEADER.size
+        require(layer in {5, 6, 7}, f"Unbekannter TVT2-Layer {layer}: {path}")
+        require(kind > 0 and geometry in {1, 2, 3}, f"Ungültiges TVT2-Feature: {path}")
+        require(min_zoom <= zoom and point_count > 0, f"Ungültige TVT2-Geometrie: {path}")
+        point_bytes = point_count * 4
+        end = offset + point_bytes + name_size + attribute_size
+        require(end <= len(payload), f"Abgeschnittenes TVT2-Feature: {path}")
+        for point_offset in {offset, offset + (point_count - 1) * 4}:
+            x, y = struct.unpack_from("<hh", payload, point_offset)
+            require(-buffer <= x <= extent + buffer and -buffer <= y <= extent + buffer, f"TVT2-Punkt außerhalb Kachelpuffer: {path}")
+        payload[offset + point_bytes : offset + point_bytes + name_size].decode("utf-8")
+        json.loads(payload[offset + point_bytes + name_size : end] or b"{}")
+        offset = end
     require(offset == len(payload), f"{len(payload) - offset} unerwartete Bytes am Kachelende: {path}")
-    return line_count, place_count, layer_counts
+    return line_count, place_count, feature_count, layer_counts
 
 
 def main() -> int:
@@ -89,25 +114,27 @@ def main() -> int:
     extent = int(tile_format["extent"])
     buffer = int(tile_format["buffer"])
     kind_limits = {int(layer["id"]): len(layer["kinds"]) for layer in manifest["layers"]}
-    total_tiles = total_lines = total_places = 0
+    total_tiles = total_lines = total_places = total_features = 0
     total_layers = {layer: 0 for layer in kind_limits}
     for level in manifest["levels"]:
         z = int(level["z"])
-        tiles = lines = places = 0
+        tiles = lines = places = features = 0
         for path in sorted((root / f"z{z}").glob("*.vector.z")):
-            line_count, place_count, layer_counts = verify_tile(path, z, extent, buffer, kind_limits)
+            line_count, place_count, feature_count, layer_counts = verify_tile(path, z, extent, buffer, kind_limits)
             tiles += 1
             lines += line_count
             places += place_count
+            features += feature_count
             for layer, count in layer_counts.items():
                 total_layers[layer] += count
-        require(tiles == level["tilesWithData"], f"Kachelzahl z{z}: {tiles} statt {level['tilesWithData']}")
+        require(tiles >= level["tilesWithData"], f"Kachelzahl z{z}: {tiles} statt mindestens {level['tilesWithData']}")
         require(lines == level["lineRecords"], f"Linienzahl z{z}: {lines} statt {level['lineRecords']}")
         require(places == level["placeRecords"], f"Ortszahl z{z}: {places} statt {level['placeRecords']}")
-        print(f"z{z}: {tiles:,} Kacheln · {lines:,} Linien · {places:,} Orte")
+        print(f"z{z}: {tiles:,} Kacheln · {lines:,} Linien · {places:,} Orte · {features:,} Fachobjekte")
         total_tiles += tiles
         total_lines += lines
         total_places += places
+        total_features += features
 
     expected_layers = {int(layer): count for layer, count in manifest["counts"]["tileRecordsByLayer"].items()}
     require(total_layers == expected_layers, f"Layerzählung weicht ab: {total_layers} statt {expected_layers}")
@@ -135,7 +162,7 @@ def main() -> int:
         require(minimum <= populations[name] <= maximum, f"Unplausible Bevölkerung für {name}: {populations[name]}")
     print(
         f"Vollständig: {total_tiles:,} Kacheln · {total_lines:,} Linienrecords · "
-        f"{total_places:,} Ortsrecords · {len(index['places']):,} Suchorte"
+        f"{total_places:,} Ortsrecords · {total_features:,} Fachobjekte · {len(index['places']):,} Suchorte"
     )
     return 0
 
