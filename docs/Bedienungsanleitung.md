@@ -32,22 +32,33 @@ Ein abgebrochener Kachellauf kann mit demselben Befehl fortgesetzt werden.
   Flachland.
 - „Kartendaten wählen“ wechselt zu einem anderen Kachelordner.
 
-## Darstellung
+## Ebenenstapel und Darstellung
 
-Im linken Bereich „Flächen“ sind die 40 Landklassen in Grundlage, Siedlung,
-Natur, Landwirtschaft und Wald gegliedert. Ein Klick auf das Farbfeld öffnet
-direkt darunter eine schnelle Palette. Haken schalten einzelne Klassen oder
-ganze Gruppen zwischen farbiger und ausgegrauter Darstellung um; die Suche
-findet beispielsweise Nutzpflanzen und Baumarten sofort. Das
+Der ruhige Ebenenstapel links ordnet die Karte fachlich: Die hochauflösende
+Landoberfläche ist die feste Basis, darunter folgt höchstens eine aktive
+Raster-Fachkarte. Namen, Verkehr, Gewässer, Grenzen und Energie bilden
+kompakte Orientierungsebenen. Ein Klick auf eine Ebene öffnet rechts ihre
+Kontext-Schublade; der Schalter in der Zeile blendet sie direkt ein oder aus.
+
+In der Kontext-Schublade der Landoberfläche sind die 40 Landklassen in
+Grundlage, Siedlung, Natur, Landwirtschaft und Wald gegliedert. Ein Klick auf
+das Farbfeld öffnet direkt darunter eine schnelle Palette. Haken schalten
+einzelne Klassen oder ganze Gruppen zwischen farbiger und ausgegrauter
+Darstellung um; die Suche findet beispielsweise Nutzpflanzen und Baumarten
+sofort. Historische Zeitstände bleiben eingeklappt verfügbar, die
+hochauflösende Gesamtkarte ist der Normalzustand. Das
 unveränderliche Profil **Standard · Erststart** stellt exakt die Darstellung
 des ersten Starts dieser Version wieder her. Dazu kommen Kulturarten,
 Waldarten, Kontrastreich, Satellitisch, Kupferstich, Nordlicht, Pastellfelder
 und Bauhaus. Stil-Dateien lassen sich speichern, weitergeben und importieren.
 
-Straßen, Eisenbahnen, Flüsse, Grenzen und Ortsnamen erscheinen abhängig von
-der Zoomstufe. Nicht benötigte Ebenen können ausgeschaltet werden. Natur- und
-Geländenamen besitzen eigene Farben und Schriften; größere Landschaftsnamen
-folgen einer leicht gedrehten kartografischen Ausrichtung.
+Der Fachkarten-Katalog gruppiert Substrat, Geologie, Reliefform und
+Grundwasser. Genau eine Raster-Fachkarte kann aktiv sein; ihre Schublade
+enthält Deckkraft, erweiterte Basiskarten-Darstellung, Legende und Quellen.
+Straßen, Eisenbahnen, Flüsse, Grenzen und Ortsnamen erscheinen abhängig von der
+Zoomstufe. Natur- und Geländenamen besitzen eigene Farben und Schriften;
+größere Landschaftsnamen folgen einer leicht gedrehten kartografischen
+Ausrichtung.
 
 ## Suche und Informationen
 

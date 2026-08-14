@@ -13,12 +13,12 @@ struct ContentView: View {
     @EnvironmentObject private var geoScience: GeoScienceSettings
     @FocusState private var searchFocused: Bool
     @State private var showSearchResults = false
-    @State private var showInspector = false
     @State private var showHelp = false
     @State private var sidebarVisible = true
-    @State private var sidebarMode = SidebarMode.explore
+    @State private var activeDrawer: AtlasDrawer?
     @State private var surfaceQuery = ""
     @State private var selectedSurfaceID: Int?
+    @State private var showHistoricalControls = false
     @State private var analysisMode = false
 
     var body: some View {
@@ -61,7 +61,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
             if sidebarVisible {
                 sidebar(manifest: manifest)
-                    .frame(width: 286)
+                    .frame(width: 304)
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
 
@@ -102,32 +102,17 @@ struct ContentView: View {
                 }
 
                 searchField
-
-                Picker("Seitenleiste", selection: $sidebarMode) {
-                    ForEach(SidebarMode.allCases) { mode in
-                        Label(mode.title, systemImage: mode.symbol).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
             }
             .padding(.horizontal, 15)
             .padding(.top, 36)
             .padding(.bottom, 13)
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
-                    if sidebarMode == .explore {
-                        layerSection
-                        if manifest.hasLandcover2020 { landcoverSection }
-                        bookmarkSection
-                    } else if sidebarMode == .surfaces {
-                        surfaceEditorSection(manifest: manifest)
-                    } else if sidebarMode == .geoscience {
-                        geoScienceSection(manifest: manifest)
-                    } else {
-                        sidebarReliefSection
-                    }
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    surfaceStackSection(manifest: manifest)
+                    thematicStackSection(manifest: manifest)
+                    orientationStackSection
+                    bookmarkSection
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -150,158 +135,143 @@ struct ContentView: View {
         }
     }
 
-    private var discoverSection: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            sidebarSectionTitle("Entdecken", systemImage: "sparkles")
+    private func surfaceStackSection(manifest: MapManifest) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            stackSectionTitle("Landoberfläche", detail: "Kartengrundlage")
 
-            Button {
-                viewport.fitGermany()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "map.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color(red: 0.18, green: 0.48, blue: 0.34))
-                        .frame(width: 28, height: 28)
-                        .background(Color.green.opacity(0.11), in: RoundedRectangle(cornerRadius: 8))
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Deutschland")
-                            .font(.subheadline.weight(.medium))
-                        Text("Die ganze Karte im Überblick")
+            Button { toggleDrawer(.surface) } label: {
+                HStack(spacing: 11) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.green.opacity(0.50), .brown.opacity(0.42)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        Image(systemName: "leaf.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 38, height: 38)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Hochauflösende Gesamtkarte")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Kultur · Wald · Natur · Siedlung")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.caption)
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.tertiary)
                 }
-                .padding(8)
+                .padding(10)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(AtlasRowButtonStyle(isSelected: viewport.activeReference == nil))
+            .buttonStyle(AtlasStackButtonStyle(isSelected: activeDrawer == .surface))
 
-            Text("ATLASORTE")
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(0.8)
-                .foregroundStyle(.tertiary)
-                .padding(.top, 5)
-                .padding(.leading, 7)
+            AtlasCompactStackRow(
+                title: "Geländerelief",
+                detail: style.reliefEnabled ? "Plastische Schummerung aktiv" : "Ohne Schummerung",
+                symbol: "mountain.2.fill",
+                tint: .green,
+                isOn: $style.reliefEnabled,
+                isSelected: activeDrawer == .relief,
+                action: { toggleDrawer(.relief) }
+            )
 
-            ForEach(MapReference.all) { reference in
-                Button {
-                    viewport.show(reference)
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: referenceSymbol(reference))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(referenceColor(reference))
-                            .frame(width: 26)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(reference.name)
-                                .font(.subheadline.weight(.medium))
-                            Text(referenceDescription(reference))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if viewport.activeReference == reference {
-                            Circle()
-                                .fill(Color.accentColor)
-                                .frame(width: 6, height: 6)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
+            if comparison.mode != .year2015 {
+                Button { toggleDrawer(.surface) } label: {
+                    Label("Historische Ansicht aktiv", systemImage: "clock.arrow.circlepath")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                 }
-                .buttonStyle(AtlasRowButtonStyle(isSelected: viewport.activeReference == reference))
+                .buttonStyle(.plain)
             }
         }
     }
 
-    private var layerSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                sidebarSectionTitle("Kartenebenen", systemImage: "square.3.layers.3d")
-                Spacer()
-                Text("7 Datensätze")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.bottom, 2)
+    private func thematicStackSection(manifest: MapManifest) -> some View {
+        let product = geoScience.product(in: manifest)
+        return VStack(alignment: .leading, spacing: 8) {
+            stackSectionTitle("Fachkarte", detail: "Maximal eine Rasterkarte")
 
-            AtlasLayerRow(
-                title: "Orte & Namen", detail: "Städte und Siedlungen",
-                symbol: "building.2.fill", tint: .orange, isOn: $layers.places
+            AtlasCompactStackRow(
+                title: product?.name ?? "Fachkarte hinzufügen",
+                detail: product.map { _ in
+                    geoScience.presentation == .overlay
+                        ? "Überlagert · \(geoScience.opacity.formatted(.percent.precision(.fractionLength(0))))"
+                        : "Ersetzt die Kartengrundlage"
+                } ?? "Boden · Gestein · Relief · Wasser",
+                symbol: product.map(thematicSymbol) ?? "plus",
+                tint: product.map(thematicTint) ?? .secondary,
+                isOn: Binding(
+                    get: { product != nil },
+                    set: { enabled in
+                        if enabled {
+                            geoScience.selectedRasterID = manifest.availableThematicRasters.first?.id
+                        } else {
+                            geoScience.selectedRasterID = nil
+                        }
+                    }
+                ),
+                isSelected: activeDrawer == .thematic,
+                action: { toggleDrawer(.thematic) }
             )
-            AtlasLayerGroup(
-                title: "Natur & Gelände", detail: "Nach Themen filtern",
-                symbol: "mountain.2.fill", tint: .green, isOn: $layers.geonames
-            ) {
-                AtlasLayerSubheading("Relief")
-                layerKindRow("Gipfel & Höhenpunkte", kind: 7, mask: \.geonameKinds)
-                layerKindRow("Landschaften", kind: 8, mask: \.geonameKinds)
-                layerKindRow("Höhlen", kind: 12, mask: \.geonameKinds)
-                AtlasLayerSubheading("Wasser & Natur")
-                layerKindRow("Gewässer & Seen", kind: 9, mask: \.geonameKinds)
-                layerKindRow("Moore & Schutzgebiete", kind: 10, mask: \.geonameKinds)
-                layerKindRow("Inseln", kind: 11, mask: \.geonameKinds)
-            }
-            AtlasLayerGroup(
-                title: "Straßen", detail: "Nach Straßenklasse filtern",
-                symbol: "road.lanes", tint: .red, isOn: $layers.roads
-            ) {
-                AtlasLayerSubheading("Überregional")
-                layerKindRow("Autobahnen", kind: 1, mask: \.roadKinds)
-                layerKindRow("Fernstraßen", kind: 2, mask: \.roadKinds)
-                layerKindRow("Bundesstraßen", kind: 3, mask: \.roadKinds)
-                AtlasLayerSubheading("Regional")
-                layerKindRow("Landesstraßen", kind: 4, mask: \.roadKinds)
-                layerKindRow("Kreisstraßen", kind: 5, mask: \.roadKinds)
-                AtlasLayerSubheading("Lokal")
-                layerKindRow("Ortsstraßen", kind: 6, mask: \.roadKinds)
-                layerKindRow("Erschließungswege", kind: 7, mask: \.roadKinds)
-                layerKindRow("Feldwege", kind: 8, mask: \.roadKinds)
-            }
-            AtlasLayerGroup(
-                title: "Schienen", detail: "Nach Verkehrssystem filtern",
-                symbol: "tram.fill", tint: .purple, isOn: $layers.railways
-            ) {
-                AtlasLayerSubheading("Fern & regional")
-                layerKindRow("Eisenbahn", kind: 1, mask: \.railwayKinds)
-                layerKindRow("Schmalspurbahn", kind: 2, mask: \.railwayKinds)
-                AtlasLayerSubheading("Stadtverkehr")
-                layerKindRow("Stadtbahn", kind: 3, mask: \.railwayKinds)
-                layerKindRow("U-Bahn", kind: 4, mask: \.railwayKinds)
-                layerKindRow("Straßenbahn", kind: 5, mask: \.railwayKinds)
-                AtlasLayerSubheading("Sonderverkehr")
-                layerKindRow("Sonderbahnen", kind: 6, mask: \.railwayKinds)
-                layerKindRow("Im Bau", kind: 7, mask: \.railwayKinds)
-            }
-            AtlasLayerGroup(
-                title: "Energieinfrastruktur", detail: "Netze und Erzeugungsanlagen",
-                symbol: "bolt.fill", tint: .yellow, isOn: $layers.energy
-            ) {
-                AtlasLayerSubheading("Hochspannungsnetze")
-                layerKindRow("380-kV-Netz", kind: 1, mask: \.energyKinds)
-                layerKindRow("220-kV-Netz", kind: 2, mask: \.energyKinds)
-                layerKindRow("110-kV-Netz", kind: 3, mask: \.energyKinds)
-                AtlasLayerSubheading("Netzknoten")
-                layerKindRow("Umspannwerke", kind: 4, mask: \.energyKinds)
-                layerKindRow("Transformatoren", kind: 5, mask: \.energyKinds)
-                AtlasLayerSubheading("Erzeugung")
-                layerKindRow("Windenergieanlagen", kind: 6, mask: \.energyKinds)
-                layerKindRow("Photovoltaik", kind: 7, mask: \.energyKinds)
-                layerKindRow("Konventionelle Erzeuger", kind: 8, mask: \.energyKinds)
-            }
-            AtlasLayerRow(
-                title: "Flüsse", detail: "Fließgewässer",
-                symbol: "water.waves", tint: .blue, isOn: $layers.waterways
+        }
+    }
+
+    private var orientationStackSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            stackSectionTitle("Orientierung", detail: "Kontext über der Oberfläche")
+
+            AtlasCompactStackRow(
+                title: "Namen & Naturorte",
+                detail: layerStateText([layers.places, layers.geonames]),
+                symbol: "textformat.abc", tint: .orange,
+                isOn: Binding(
+                    get: { layers.places || layers.geonames },
+                    set: { layers.places = $0; layers.geonames = $0 }
+                ),
+                isSelected: activeDrawer == .labels,
+                action: { toggleDrawer(.labels) }
             )
-            AtlasLayerRow(
-                title: "Grenzen", detail: "Bundes- und Landesgrenzen",
-                symbol: "point.topleft.down.to.point.bottomright.curvepath", tint: .secondary,
-                isOn: $layers.boundaries
+            AtlasCompactStackRow(
+                title: "Verkehr",
+                detail: layerStateText([layers.roads, layers.railways]),
+                symbol: "point.bottomleft.forward.to.point.topright.scurvepath", tint: .red,
+                isOn: Binding(
+                    get: { layers.roads || layers.railways },
+                    set: { layers.roads = $0; layers.railways = $0 }
+                ),
+                isSelected: activeDrawer == .transport,
+                action: { toggleDrawer(.transport) }
+            )
+            AtlasCompactStackRow(
+                title: "Gewässer & Grenzen",
+                detail: layerStateText([layers.waterways, layers.boundaries]),
+                symbol: "water.waves", tint: .blue,
+                isOn: Binding(
+                    get: { layers.waterways || layers.boundaries },
+                    set: { layers.waterways = $0; layers.boundaries = $0 }
+                ),
+                isSelected: activeDrawer == .hydrography,
+                action: { toggleDrawer(.hydrography) }
+            )
+            AtlasCompactStackRow(
+                title: "Energie",
+                detail: layers.energy ? "Netze und Erzeugungsanlagen" : "Ausgeblendet",
+                symbol: "bolt.fill", tint: .yellow,
+                isOn: $layers.energy,
+                isSelected: activeDrawer == .energy,
+                action: { toggleDrawer(.energy) }
             )
         }
     }
@@ -326,39 +296,50 @@ struct ContentView: View {
     }
 
     private var landcoverSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sidebarSectionTitle("Land im Wandel", systemImage: "square.split.2x1")
-            Text("Landbedeckung zweier Zeitstände direkt vergleichen.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        AtlasInspectorPanel(title: "Historische Daten", symbol: "clock.arrow.circlepath") {
+            DisclosureGroup(isExpanded: $showHistoricalControls) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Die hochauflösende Gesamtkarte ist der Standard. Ältere Zeitstände bleiben für gezielte Vergleiche verfügbar.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-            Picker("Zeitstand", selection: $comparison.mode) {
-                ForEach(LandcoverMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            if comparison.mode == .comparison {
-                VStack(spacing: 4) {
-                    Slider(value: $comparison.splitPosition, in: 0.1...0.9)
-                    HStack {
-                        Text("2015")
-                        Spacer()
-                        Text("Trennlinie verschieben")
-                        Spacer()
-                        Text("2020")
+                    Picker("Zeitstand", selection: $comparison.mode) {
+                        ForEach(LandcoverMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
                     }
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    if comparison.mode == .comparison {
+                        VStack(spacing: 4) {
+                            Slider(value: $comparison.splitPosition, in: 0.1...0.9)
+                            HStack {
+                                Text("2015")
+                                Spacer()
+                                Text("Trennlinie")
+                                Spacer()
+                                Text("2020")
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .padding(.top, 9)
+            } label: {
+                HStack {
+                    Text(comparison.mode == .year2015 ? "Ausgeblendet" : comparison.mode.title)
+                    Spacer()
+                    if comparison.mode != .year2015 {
+                        Circle().fill(.orange).frame(width: 6, height: 6)
+                    }
+                }
+                .font(.caption.weight(.medium))
             }
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func surfaceEditorSection(manifest: MapManifest) -> some View {
@@ -416,10 +397,6 @@ struct ContentView: View {
                 )
             }
         }
-    }
-
-    private func geoScienceSection(manifest: MapManifest) -> some View {
-        GeoScienceSidebar(manifest: manifest, settings: geoScience, style: style)
     }
 
     private var sidebarReliefSection: some View {
@@ -531,15 +508,6 @@ struct ContentView: View {
             Divider().opacity(0.55)
 
             Button {
-                exportVisibleMap()
-            } label: {
-                Label("Kartenausschnitt exportieren", systemImage: "square.and.arrow.up")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .disabled(viewport.snapshot == nil)
-
-            Button {
                 session.isChoosingDirectory = true
             } label: {
                 HStack {
@@ -630,18 +598,9 @@ struct ContentView: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
-            if showInspector {
-                InspectorView(
-                    manifest: manifest,
-                    style: style,
-                    session: session,
-                    layers: layers,
-                    comparison: comparison,
-                    export: export,
-                    viewport: viewport,
-                    onClose: { showInspector = false }
-                )
-                .frame(width: 326)
+            if let activeDrawer {
+                drawer(activeDrawer, manifest: manifest)
+                .frame(width: 354)
                 .padding(.top, 62)
                 .padding(.trailing, 12)
                 .padding(.bottom, 58)
@@ -650,7 +609,194 @@ struct ContentView: View {
             }
         }
         .clipped()
-        .animation(.snappy(duration: 0.25), value: showInspector)
+        .animation(.snappy(duration: 0.25), value: activeDrawer)
+    }
+
+    @ViewBuilder
+    private func drawer(_ selection: AtlasDrawer, manifest: MapManifest) -> some View {
+        if selection == .appearance {
+            InspectorView(
+                manifest: manifest,
+                style: style,
+                session: session,
+                layers: layers,
+                comparison: comparison,
+                export: export,
+                viewport: viewport,
+                onClose: { activeDrawer = nil }
+            )
+        } else {
+            AtlasContextDrawer(
+                title: selection.title,
+                subtitle: selection.subtitle,
+                symbol: selection.symbol,
+                tint: selection.tint,
+                onClose: { activeDrawer = nil }
+            ) {
+                switch selection {
+                case .surface:
+                    surfaceDrawerContent(manifest: manifest)
+                case .relief:
+                    sidebarReliefSection
+                case .thematic:
+                    GeoScienceSidebar(
+                        manifest: manifest,
+                        settings: geoScience,
+                        style: style,
+                        showsHeader: false
+                    )
+                case .labels:
+                    labelsDrawerContent
+                case .transport:
+                    transportDrawerContent
+                case .hydrography:
+                    hydrographyDrawerContent
+                case .energy:
+                    energyDrawerContent
+                case .appearance:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    private func surfaceDrawerContent(manifest: MapManifest) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            AtlasInspectorPanel(title: "Kartengrundlage", symbol: "leaf.fill") {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("Die hochauflösende Gesamtkarte bleibt die feste Basis für Kulturarten, Wälder, Naturflächen und Siedlungen.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        activeDrawer = .appearance
+                    } label: {
+                        HStack {
+                            Label(style.activeStyleName, systemImage: "paintpalette.fill")
+                            Spacer()
+                            Text("Stil ändern")
+                                .foregroundStyle(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .font(.caption.weight(.medium))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            surfaceEditorSection(manifest: manifest)
+
+            if manifest.hasLandcover2020 {
+                landcoverSection
+            }
+        }
+    }
+
+    private var labelsDrawerContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            AtlasInspectorPanel(title: "Orte", symbol: "building.2.fill") {
+                Toggle("Städte und Siedlungen", isOn: $layers.places)
+                    .font(.subheadline.weight(.medium))
+            }
+
+            AtlasInspectorPanel(title: "Natur- und Geländenamen", symbol: "mountain.2.fill") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Naturorte anzeigen", isOn: $layers.geonames)
+                        .font(.subheadline.weight(.medium))
+                    Divider().padding(.vertical, 3)
+                    AtlasLayerSubheading("Relief")
+                    layerKindRow("Gipfel & Höhenpunkte", kind: 7, mask: \.geonameKinds)
+                    layerKindRow("Landschaften", kind: 8, mask: \.geonameKinds)
+                    layerKindRow("Höhlen", kind: 12, mask: \.geonameKinds)
+                    AtlasLayerSubheading("Wasser & Natur")
+                    layerKindRow("Gewässer & Seen", kind: 9, mask: \.geonameKinds)
+                    layerKindRow("Moore & Schutzgebiete", kind: 10, mask: \.geonameKinds)
+                    layerKindRow("Inseln", kind: 11, mask: \.geonameKinds)
+                }
+            }
+        }
+    }
+
+    private var transportDrawerContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            AtlasInspectorPanel(title: "Straßen", symbol: "road.lanes") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Straßennetz anzeigen", isOn: $layers.roads)
+                        .font(.subheadline.weight(.medium))
+                    Divider().padding(.vertical, 3)
+                    AtlasLayerSubheading("Überregional")
+                    layerKindRow("Autobahnen", kind: 1, mask: \.roadKinds)
+                    layerKindRow("Fernstraßen", kind: 2, mask: \.roadKinds)
+                    layerKindRow("Bundesstraßen", kind: 3, mask: \.roadKinds)
+                    AtlasLayerSubheading("Regional")
+                    layerKindRow("Landesstraßen", kind: 4, mask: \.roadKinds)
+                    layerKindRow("Kreisstraßen", kind: 5, mask: \.roadKinds)
+                    AtlasLayerSubheading("Lokal")
+                    layerKindRow("Ortsstraßen", kind: 6, mask: \.roadKinds)
+                    layerKindRow("Erschließungswege", kind: 7, mask: \.roadKinds)
+                    layerKindRow("Feldwege", kind: 8, mask: \.roadKinds)
+                }
+            }
+
+            AtlasInspectorPanel(title: "Schienen", symbol: "tram.fill") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Schienennetz anzeigen", isOn: $layers.railways)
+                        .font(.subheadline.weight(.medium))
+                    Divider().padding(.vertical, 3)
+                    AtlasLayerSubheading("Fern & regional")
+                    layerKindRow("Eisenbahn", kind: 1, mask: \.railwayKinds)
+                    layerKindRow("Schmalspurbahn", kind: 2, mask: \.railwayKinds)
+                    AtlasLayerSubheading("Stadtverkehr")
+                    layerKindRow("Stadtbahn", kind: 3, mask: \.railwayKinds)
+                    layerKindRow("U-Bahn", kind: 4, mask: \.railwayKinds)
+                    layerKindRow("Straßenbahn", kind: 5, mask: \.railwayKinds)
+                    AtlasLayerSubheading("Sonderverkehr")
+                    layerKindRow("Sonderbahnen", kind: 6, mask: \.railwayKinds)
+                    layerKindRow("Im Bau", kind: 7, mask: \.railwayKinds)
+                }
+            }
+        }
+    }
+
+    private var hydrographyDrawerContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            AtlasInspectorPanel(title: "Fließgewässer", symbol: "water.waves") {
+                Toggle("Flüsse und Bäche anzeigen", isOn: $layers.waterways)
+                    .font(.subheadline.weight(.medium))
+            }
+            AtlasInspectorPanel(
+                title: "Verwaltungsgrenzen",
+                symbol: "point.topleft.down.to.point.bottomright.curvepath"
+            ) {
+                Toggle("Bundes- und Landesgrenzen", isOn: $layers.boundaries)
+                    .font(.subheadline.weight(.medium))
+            }
+        }
+    }
+
+    private var energyDrawerContent: some View {
+        AtlasInspectorPanel(title: "Energieinfrastruktur", symbol: "bolt.fill") {
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Energieebene anzeigen", isOn: $layers.energy)
+                    .font(.subheadline.weight(.medium))
+                Divider().padding(.vertical, 3)
+                AtlasLayerSubheading("Hochspannungsnetze")
+                layerKindRow("380-kV-Netz", kind: 1, mask: \.energyKinds)
+                layerKindRow("220-kV-Netz", kind: 2, mask: \.energyKinds)
+                layerKindRow("110-kV-Netz", kind: 3, mask: \.energyKinds)
+                AtlasLayerSubheading("Netzknoten")
+                layerKindRow("Umspannwerke", kind: 4, mask: \.energyKinds)
+                layerKindRow("Transformatoren", kind: 5, mask: \.energyKinds)
+                AtlasLayerSubheading("Erzeugung")
+                layerKindRow("Windenergieanlagen", kind: 6, mask: \.energyKinds)
+                layerKindRow("Photovoltaik", kind: 7, mask: \.energyKinds)
+                layerKindRow("Konventionelle Erzeuger", kind: 8, mask: \.energyKinds)
+            }
+        }
     }
 
     private func mapTopBar(manifest: MapManifest) -> some View {
@@ -679,10 +825,35 @@ struct ContentView: View {
 
             Spacer()
 
+            if let product = geoScience.product(in: manifest) {
+                Button { toggleDrawer(.thematic) } label: {
+                    HStack(spacing: 7) {
+                        Circle()
+                            .fill(thematicTint(product))
+                            .frame(width: 7, height: 7)
+                        Text(product.name)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
+                .atlasGlass(cornerRadius: 11)
+                .help("Aktive Fachkarte einstellen")
+            }
+
             HStack(spacing: 1) {
                 MapChromeButton(symbol: "minus", help: "Herauszoomen") { zoom(by: 1 / 1.55) }
                 MapChromeButton(symbol: "plus", help: "Hineinzoomen") { zoom(by: 1.55) }
                 MapChromeButton(symbol: "scope", help: "Deutschland einpassen") { viewport.fitGermany() }
+            }
+
+            MapChromeButton(symbol: "square.and.arrow.up", help: "Kartenausschnitt exportieren") {
+                exportVisibleMap()
             }
 
             MapChromeButton(symbol: "questionmark", help: "Bedienung") {
@@ -710,14 +881,14 @@ struct ContentView: View {
             ) {
                 analysisMode.toggle()
                 if analysisMode {
-                    showInspector = false
+                    activeDrawer = nil
                     viewport.clearAnalysis()
                 }
             }
 
             MapChromeButton(symbol: "paintpalette", help: "Stile & Export") {
-                if !showInspector { analysisMode = false }
-                showInspector.toggle()
+                analysisMode = false
+                toggleDrawer(.appearance)
             }
         }
         .padding(12)
@@ -997,6 +1168,53 @@ struct ContentView: View {
             .foregroundStyle(.secondary)
     }
 
+    private func stackSectionTitle(_ title: String, detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(detail)
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 5)
+    }
+
+    private func layerStateText(_ states: [Bool]) -> String {
+        let active = states.filter { $0 }.count
+        if active == 0 { return "Ausgeblendet" }
+        if active == states.count { return "Alle Inhalte aktiv" }
+        return "\(active) von \(states.count) aktiv"
+    }
+
+    private func toggleDrawer(_ selection: AtlasDrawer) {
+        analysisMode = false
+        if viewport.analysisSelection != nil { viewport.clearAnalysis() }
+        activeDrawer = activeDrawer == selection ? nil : selection
+    }
+
+    private func thematicSymbol(_ product: MapManifest.ThematicRaster) -> String {
+        switch product.id {
+        case "substrate": "square.stack.3d.up.fill"
+        case "geology": "fossil.shell.fill"
+        case "geomorphography": "mountain.2.fill"
+        case "groundwater-level": "drop.fill"
+        default: "map.fill"
+        }
+    }
+
+    private func thematicTint(_ product: MapManifest.ThematicRaster) -> Color {
+        switch product.id {
+        case "substrate": .brown
+        case "geology": .purple
+        case "geomorphography": .orange
+        case "groundwater-level": .blue
+        default: .secondary
+        }
+    }
+
     private func surfaceGroups(
         for manifest: MapManifest
     ) -> [(name: String, classes: [MapManifest.LandClass])] {
@@ -1117,16 +1335,6 @@ struct ContentView: View {
         }
     }
 
-    private func referenceColor(_ reference: MapReference) -> Color {
-        switch reference.id {
-        case "harz": .green
-        case "alpen": .indigo
-        case "kueste": .blue
-        case "ruhrgebiet": .orange
-        default: Color(red: 0.48, green: 0.58, blue: 0.24)
-        }
-    }
-
     private func referenceDescription(_ reference: MapReference) -> String {
         switch reference.id {
         case "harz": "Wald & Mittelgebirge"
@@ -1142,8 +1350,10 @@ private struct GeoScienceSidebar: View {
     let manifest: MapManifest
     @ObservedObject var settings: GeoScienceSettings
     @ObservedObject var style: StyleSettings
+    let showsHeader: Bool
     @State private var showAllClasses = false
     @State private var showSources = false
+    @State private var showAdvancedDisplay = false
 
     private var product: MapManifest.ThematicRaster? {
         settings.product(in: manifest)
@@ -1157,15 +1367,35 @@ private struct GeoScienceSidebar: View {
         showAllClasses ? legendClasses : Array(legendClasses.prefix(6))
     }
 
+    private var productGroups: [(name: String, products: [MapManifest.ThematicRaster])] {
+        let products = manifest.availableThematicRasters
+        let definitions: [(String, [String])] = [
+            ("Boden", ["substrate"]),
+            ("Gestein", ["geology"]),
+            ("Reliefform", ["geomorphography"]),
+            ("Wasser", ["groundwater-level"]),
+        ]
+        let known = Set(definitions.flatMap(\.1))
+        var result = definitions.compactMap { name, ids in
+            let matches = ids.compactMap { id in products.first { $0.id == id } }
+            return matches.isEmpty ? nil : (name, matches)
+        }
+        let remaining = products.filter { !known.contains($0.id) }
+        if !remaining.isEmpty { result.append(("Weitere", remaining)) }
+        return result
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Label("Geowissenschaften", systemImage: "fossil.shell.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text("Boden, Gestein, Relief und Wasser")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+            if showsHeader {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Fachkarten", systemImage: "square.3.layers.3d.top.filled")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Text("Boden, Gestein, Relief und Wasser")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
             if manifest.availableThematicRasters.isEmpty {
@@ -1198,20 +1428,61 @@ private struct GeoScienceSidebar: View {
     private var layerSelection: some View {
         panel {
             VStack(alignment: .leading, spacing: 7) {
-                sectionLabel("Flächenkarte", symbol: "square.3.layers.3d")
-                Picker("Flächenkarte", selection: $settings.selectedRasterID) {
-                    Text("Landbedeckung").tag(String?.none)
-                    Divider()
-                    ForEach(manifest.availableThematicRasters) { product in
-                        Text(product.name).tag(Optional(product.id))
-                    }
+                HStack {
+                    sectionLabel("Kartenkatalog", symbol: "books.vertical.fill")
+                    Spacer()
+                    Text("eine aktiv")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel("Flächenkarte")
 
-                Text(product == nil ? "Die normale Atlas-Karte bleibt sichtbar." : "Die gewählte Karte wird direkt im Atlas dargestellt.")
+                Menu {
+                    Button {
+                        settings.selectedRasterID = nil
+                    } label: {
+                        if product == nil {
+                            Label("Keine Fachkarte", systemImage: "checkmark")
+                        } else {
+                            Text("Keine Fachkarte")
+                        }
+                    }
+                    Divider()
+                    ForEach(productGroups, id: \.name) { group in
+                        Section(group.name) {
+                            ForEach(group.products) { item in
+                                Button {
+                                    settings.selectedRasterID = item.id
+                                } label: {
+                                    if settings.selectedRasterID == item.id {
+                                        Label(item.name, systemImage: "checkmark")
+                                    } else {
+                                        Text(item.name)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 9) {
+                        Image(systemName: product == nil ? "square.dashed" : "map.fill")
+                            .foregroundStyle(product == nil ? .secondary : Color.accentColor)
+                            .frame(width: 22)
+                        Text(product?.name ?? "Fachkarte auswählen")
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.horizontal, 9)
+                    .frame(height: 36)
+                    .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
+                }
+                .menuStyle(.borderlessButton)
+                .accessibilityLabel("Fachkarte")
+
+                Text(product == nil ? "Die Landoberfläche bleibt unverändert sichtbar." : "Die Auswahl ersetzt automatisch die zuvor aktive Raster-Fachkarte.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1223,36 +1494,6 @@ private struct GeoScienceSidebar: View {
         panel {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel("Darstellung", symbol: "circle.lefthalf.filled")
-
-                Picker("Darstellung", selection: $settings.presentation) {
-                    Text("Überlagern").tag(ThematicPresentation.overlay)
-                    Text("Basiskarte").tag(ThematicPresentation.baseMap)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-
-                Divider()
-
-                Toggle(isOn: $style.reliefEnabled) {
-                    Label("Geländerelief", systemImage: "mountain.2.fill")
-                        .font(.caption.weight(.medium))
-                }
-                .toggleStyle(.switch)
-                .controlSize(.small)
-
-                if style.reliefEnabled {
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack {
-                            Text("Reliefstärke")
-                            Spacer()
-                            Text(style.reliefOpacity.formatted(.percent.precision(.fractionLength(0))))
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.caption)
-                        Slider(value: $style.reliefOpacity, in: 0...1)
-                    }
-                }
 
                 if settings.presentation == .overlay {
                     VStack(alignment: .leading, spacing: 5) {
@@ -1267,10 +1508,32 @@ private struct GeoScienceSidebar: View {
                         Slider(value: $settings.opacity, in: 0...1)
                     }
                 } else {
-                    Text("Landbedeckung wird vollständig durch die Flächenkarte ersetzt.")
+                    Text("Die Fachkarte ersetzt die Landoberfläche vollständig; das Geländerelief bleibt erhalten.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Divider()
+
+                DisclosureGroup(isExpanded: $showAdvancedDisplay) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Darstellung", selection: $settings.presentation) {
+                            Text("Überlagern").tag(ThematicPresentation.overlay)
+                            Text("Als Basiskarte").tag(ThematicPresentation.baseMap)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+
+                        Text("„Als Basiskarte“ blendet die Landoberfläche unter gültigen Fachkartendaten aus.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.top, 8)
+                } label: {
+                    Text("Erweiterte Darstellung")
+                        .font(.caption.weight(.medium))
                 }
             }
         }
@@ -1367,27 +1630,64 @@ private struct GeoScienceSidebar: View {
     }
 }
 
-private enum SidebarMode: String, CaseIterable, Identifiable {
-    case explore
-    case surfaces
-    case geoscience
+private enum AtlasDrawer: String, Equatable {
+    case surface
     case relief
+    case thematic
+    case labels
+    case transport
+    case hydrography
+    case energy
+    case appearance
 
-    var id: String { rawValue }
     var title: String {
         switch self {
-        case .explore: "Karte"
-        case .surfaces: "Flächen"
-        case .geoscience: "Geologie"
-        case .relief: "Relief"
+        case .surface: "Landoberfläche"
+        case .relief: "Geländerelief"
+        case .thematic: "Fachkarten"
+        case .labels: "Namen & Naturorte"
+        case .transport: "Verkehr"
+        case .hydrography: "Gewässer & Grenzen"
+        case .energy: "Energie"
+        case .appearance: "Stile & Export"
         }
     }
+
+    var subtitle: String {
+        switch self {
+        case .surface: "Hochauflösende Kartengrundlage"
+        case .relief: "Licht, Kontrast und Geländeform"
+        case .thematic: "Eine Rasterkarte über der Oberfläche"
+        case .labels: "Beschriftungen gezielt filtern"
+        case .transport: "Straßen- und Schienennetze"
+        case .hydrography: "Hydrographie und Verwaltung"
+        case .energy: "Netze, Knoten und Erzeugung"
+        case .appearance: "Kartenstil, Ausgabe und Daten"
+        }
+    }
+
     var symbol: String {
         switch self {
-        case .explore: "square.3.layers.3d"
-        case .surfaces: "paintpalette.fill"
-        case .geoscience: "fossil.shell.fill"
+        case .surface: "leaf.fill"
         case .relief: "mountain.2.fill"
+        case .thematic: "square.3.layers.3d.top.filled"
+        case .labels: "textformat.abc"
+        case .transport: "point.bottomleft.forward.to.point.topright.scurvepath"
+        case .hydrography: "water.waves"
+        case .energy: "bolt.fill"
+        case .appearance: "paintpalette.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .surface, .relief: .green
+        case .thematic: .indigo
+        case .labels: .orange
+        case .transport: .red
+        case .hydrography: .blue
+        case .energy: .yellow
+        case .appearance: .purple
         }
     }
 }
@@ -1869,31 +2169,147 @@ private struct CursorInfoGlassOverlay: View {
     }
 }
 
-private struct AtlasLayerRow: View {
+private struct AtlasContextDrawer<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let symbol: String
+    let tint: Color
+    let onClose: () -> Void
+    let content: Content
+
+    init(
+        title: String,
+        subtitle: String,
+        symbol: String,
+        tint: Color,
+        onClose: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.symbol = symbol
+        self.tint = tint
+        self.onClose = onClose
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(tint.opacity(0.13))
+                    Image(systemName: symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(tint)
+                }
+                .frame(width: 32, height: 32)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.headline)
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(width: 24, height: 24)
+                        .background(.primary.opacity(0.07), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Schließen")
+            }
+            .padding(14)
+
+            Divider().opacity(0.55)
+
+            ScrollView {
+                content
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.55), .white.opacity(0.10), .black.opacity(0.10)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
+        }
+        .shadow(color: .black.opacity(0.22), radius: 22, y: 10)
+    }
+}
+
+private struct AtlasInspectorPanel<Content: View>: View {
+    let title: String
+    let symbol: String
+    let content: Content
+
+    init(
+        title: String,
+        symbol: String,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.symbol = symbol
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Label(title, systemImage: symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            content
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.primary.opacity(0.038), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct AtlasCompactStackRow: View {
     let title: String
     let detail: String
     let symbol: String
     let tint: Color
     @Binding var isOn: Bool
+    let isSelected: Bool
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isOn ? tint : .secondary)
-                .frame(width: 28, height: 28)
-                .background(tint.opacity(isOn ? 0.12 : 0.05), in: RoundedRectangle(cornerRadius: 8))
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        HStack(spacing: 5) {
+            Button(action: action) {
+                HStack(spacing: 9) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isOn ? tint : .secondary)
+                        .frame(width: 28, height: 28)
+                        .background(tint.opacity(isOn ? 0.11 : 0.04), in: RoundedRectangle(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                        Text(detail)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 2)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
             }
-
-            Spacer(minLength: 4)
+            .buttonStyle(.plain)
 
             Toggle(title, isOn: $isOn)
                 .labelsHidden()
@@ -1901,58 +2317,34 @@ private struct AtlasLayerRow: View {
                 .controlSize(.mini)
         }
         .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
+        .padding(.vertical, 5)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.09) : Color.primary.opacity(0.025),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSelected ? Color.accentColor.opacity(0.18) : .primary.opacity(0.045), lineWidth: 0.7)
+        }
     }
 }
 
-private struct AtlasLayerGroup<Content: View>: View {
-    let title: String
-    let detail: String
-    let symbol: String
-    let tint: Color
-    @Binding var isOn: Bool
-    let content: Content
+private struct AtlasStackButtonStyle: ButtonStyle {
+    let isSelected: Bool
 
-    init(
-        title: String, detail: String, symbol: String, tint: Color,
-        isOn: Binding<Bool>, @ViewBuilder content: () -> Content
-    ) {
-        self.title = title
-        self.detail = detail
-        self.symbol = symbol
-        self.tint = tint
-        _isOn = isOn
-        self.content = content()
-    }
-
-    var body: some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 2) {
-                content
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.primary)
+            .background(
+                isSelected
+                    ? Color.accentColor.opacity(configuration.isPressed ? 0.15 : 0.09)
+                    : Color.primary.opacity(configuration.isPressed ? 0.065 : 0.035),
+                in: RoundedRectangle(cornerRadius: 13)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 13)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.20) : .primary.opacity(0.055), lineWidth: 0.7)
             }
-            .padding(.leading, 19)
-            .padding(.bottom, 5)
-        } label: {
-            HStack(spacing: 9) {
-                Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isOn ? tint : .secondary)
-                    .frame(width: 28, height: 28)
-                    .background(tint.opacity(isOn ? 0.12 : 0.05), in: RoundedRectangle(cornerRadius: 8))
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title).font(.subheadline.weight(.medium))
-                    Text(detail).font(.caption2).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 4)
-                Toggle(title, isOn: $isOn)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-            }
-            .padding(.vertical, 4)
-        }
-        .padding(.horizontal, 7)
     }
 }
 
@@ -2006,21 +2398,6 @@ private struct MapChromeButton: View {
         .buttonStyle(.plain)
         .atlasGlass(cornerRadius: 11)
         .help(help)
-    }
-}
-
-private struct AtlasRowButtonStyle: ButtonStyle {
-    let isSelected: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(.primary)
-            .background(
-                isSelected
-                    ? Color.accentColor.opacity(configuration.isPressed ? 0.15 : 0.09)
-                    : Color.primary.opacity(configuration.isPressed ? 0.065 : 0),
-                in: RoundedRectangle(cornerRadius: 9)
-            )
     }
 }
 

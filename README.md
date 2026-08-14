@@ -67,7 +67,9 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Doppelklick: hineinzoomen
 - `0`: ganz Deutschland einpassen
 - `+` / `-`: zoomen
-- Seitenleiste „Flächen“: 40 Klassen durchsuchen, direkt färben, einzeln oder gruppenweise ausgrauen
+- Ebenenstapel: hochauflösende Landoberfläche als feste Basis, genau eine aktive Raster-Fachkarte und kompakte Orientierungsebenen
+- Kontext-Schublade: ausgewählte Oberfläche oder Ebene rechts detailliert filtern und gestalten
+- Landoberfläche: 40 Klassen durchsuchen, direkt färben, einzeln oder gruppenweise ausgrauen
 - Themen: Naturatlas, Kulturarten, Waldarten und Kontrastreich
 - Reliefregler: Stärke, Überhöhung und Kontrast ändern
 - Referenzansichten: Harz, Alpen, Küste, Ruhrgebiet und Flachland direkt anspringen
@@ -76,7 +78,7 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Beschriftung: Gewässer blau, Naturgebiete grün und Landschaften typografisch vom Ortsnamen getrennt
 - Suche: Ortsname oder EPSG:3035-Koordinaten eingeben
 - Mauszeiger: Koordinaten, Höhe und Landklasse ablesen
-- Geologie: Themenraster als Overlay/Basiskarte, eigene Legenden sowie Quelle und Erfassungsmaßstab je Rasterzelle
+- Fachkarten: Substrat, Geologie, Reliefform oder Grundwasser exklusiv als Overlay/Basiskarte, mit eigener Legende, Quelle und Erfassungsmaßstab
 - Flächenanalyse: Analyseknopf aktivieren, Rechteck ziehen und Einwohner, Dichte sowie alle vorkommenden Kultur-, Wald- und sonstigen Flächen auswerten
 - Gesamtkarte: Kulturarten, Baumgattungen, Naturflächen und Siedlungsdichte
 - Export: echter Metal-Neuaufbau bis 4× mit feineren Kacheln, Maßstab und Stil-Datei

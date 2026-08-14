@@ -90,8 +90,8 @@ enum LandcoverMode: Int, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .year2015: "Gesamtkarte"
-        case .year2020: "2020"
-        case .comparison: "Vergleich"
+        case .year2020: "Archiv 2020"
+        case .comparison: "Vergleichen"
         }
     }
 }
