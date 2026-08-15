@@ -174,6 +174,16 @@ class SurfaceTexturePipelineTests(unittest.TestCase):
         source.profile = "rgbnir"
         self.assertIn("B08", source._evalscript())
 
+        with tempfile.TemporaryDirectory() as temporary:
+            dotenv = Path(temporary) / ".env"
+            dotenv.write_text(
+                'export CDSE_CLIENT_ID="client"\nCDSE_CLIENT_SECRET=secret\nIGNORED=value\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                surface_texture.dotenv_credentials(dotenv), ("client", "secret")
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

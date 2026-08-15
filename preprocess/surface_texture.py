@@ -341,18 +341,50 @@ def keychain_value(account: str) -> str | None:
     return result.stdout.strip() or None
 
 
+def dotenv_credentials(path: Path) -> tuple[str, str] | None:
+    if not path.is_file():
+        return None
+    values: dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip()
+        if key not in ("CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET"):
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        values[key] = value
+    client_id = values.get("CDSE_CLIENT_ID")
+    client_secret = values.get("CDSE_CLIENT_SECRET")
+    return (client_id, client_secret) if client_id and client_secret else None
+
+
 def cdse_credentials() -> tuple[str, str, str]:
     client_id = os.environ.get("CDSE_CLIENT_ID")
     client_secret = os.environ.get("CDSE_CLIENT_SECRET")
     if client_id and client_secret:
         return client_id, client_secret, "Umgebungsvariablen"
+    dotenv = dotenv_credentials(Path(__file__).resolve().parent.parent / ".env")
+    if dotenv is not None:
+        return dotenv[0], dotenv[1], "lokale .env"
     client_id = keychain_value("client-id")
     client_secret = keychain_value("client-secret")
     if client_id and client_secret:
         return client_id, client_secret, "macOS-Schlüsselbund"
     raise SystemExit(
         "CDSE-Zugangsdaten fehlen. Einmal ./scripts/configure_cdse_credentials.sh "
-        "ausführen oder CDSE_CLIENT_ID/CDSE_CLIENT_SECRET nur für diesen Prozess setzen."
+        "ausführen, lokal in .env ablegen oder CDSE_CLIENT_ID/CDSE_CLIENT_SECRET "
+        "nur für diesen Prozess setzen."
     )
 
 

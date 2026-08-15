@@ -17,7 +17,9 @@ geschrieben, sondern einmal verdeckt im macOS-Schlüsselbund abgelegt:
 
 Die Pipeline liest beide Werte selbst aus dem Schlüsselbund und erneuert den
 kurzlebigen Zugriffstoken während langer Läufe automatisch. Für temporäre
-CI-/Serverläufe bleiben `CDSE_CLIENT_ID` und `CDSE_CLIENT_SECRET` möglich. Siehe
+CI-/Serverläufe bleiben `CDSE_CLIENT_ID` und `CDSE_CLIENT_SECRET` möglich. Eine
+lokale, durch `.gitignore` ausgeschlossene `.env` mit genau diesen beiden Namen
+wird ebenfalls gelesen. Siehe
 [offizielle CDSE-Authentifizierung](https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Overview/Authentication.html).
 
 ## Hannover-Prüflauf
