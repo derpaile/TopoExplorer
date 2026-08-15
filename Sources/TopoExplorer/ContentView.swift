@@ -774,14 +774,18 @@ struct ContentView: View {
     private var labelsDrawerContent: some View {
         VStack(alignment: .leading, spacing: 14) {
             AtlasInspectorPanel(title: "Orte", symbol: "building.2.fill") {
-                Toggle("Städte und Siedlungen", isOn: $layers.places)
-                    .font(.subheadline.weight(.medium))
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Städte und Siedlungen", isOn: $layers.places)
+                        .font(.subheadline.weight(.medium))
+                    vectorPresetPicker($layers.placeLabelPreset)
+                }
             }
 
             AtlasInspectorPanel(title: "Natur- und Geländenamen", symbol: "mountain.2.fill") {
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle("Naturorte anzeigen", isOn: $layers.geonames)
                         .font(.subheadline.weight(.medium))
+                    vectorPresetPicker($layers.landscapeLabelPreset)
                     Divider().padding(.vertical, 3)
                     AtlasLayerSubheading("Relief")
                     layerKindRow("Gipfel & Höhenpunkte", kind: 7, mask: \.geonameKinds)
@@ -1080,6 +1084,22 @@ struct ContentView: View {
                         with: .color(motorway ? .white.opacity(0.96) : .black.opacity(0.88)),
                         lineWidth: 0.8
                     )
+                } else {
+                    let palette = labelPalette(for: label)
+                    let halo = mapLabelText(label, color: palette.halo)
+                    let radius = palette.haloRadius
+                    for offset in [
+                        CGPoint(x: -radius, y: 0), CGPoint(x: radius, y: 0),
+                        CGPoint(x: 0, y: -radius), CGPoint(x: 0, y: radius),
+                        CGPoint(x: -radius, y: -radius), CGPoint(x: radius, y: -radius),
+                        CGPoint(x: -radius, y: radius), CGPoint(x: radius, y: radius),
+                    ] {
+                        context.draw(
+                            halo,
+                            at: CGPoint(x: label.point.x + offset.x, y: label.point.y + offset.y),
+                            anchor: .center
+                        )
+                    }
                 }
                 context.draw(mapLabelText(label), at: label.point, anchor: .center)
             }
@@ -1087,8 +1107,20 @@ struct ContentView: View {
         .allowsHitTesting(false)
     }
 
-    private func mapLabelText(_ label: MapLabel) -> Text {
+    private func labelPalette(for label: MapLabel) -> (foreground: Color, halo: Color, haloRadius: CGFloat) {
+        let preset = label.kind <= 6 ? layers.placeLabelPreset : layers.landscapeLabelPreset
+        switch preset {
+        case .leise: return (Color.white.opacity(0.70), Color.black.opacity(0.40), 0.7)
+        case .hell: return (Color.white.opacity(0.98), Color.black.opacity(0.55), 0.8)
+        case .ausgewogen: return (Color(red: 0.97, green: 0.95, blue: 0.89), Color.black.opacity(0.76), 1.0)
+        case .klar: return (Color(red: 1.0, green: 0.91, blue: 0.62), Color.black.opacity(0.86), 1.1)
+        case .kontrast: return (Color.black.opacity(0.94), Color.white.opacity(0.92), 1.1)
+        }
+    }
+
+    private func mapLabelText(_ label: MapLabel, color override: Color? = nil) -> Text {
         let text = Text(label.kind == 7 ? "▲ \(label.name)" : label.name)
+        let color = override ?? labelPalette(for: label).foreground
         switch label.kind {
         case 13:
             return text.font(.system(size: 9, weight: .bold, design: .rounded))
@@ -1098,35 +1130,35 @@ struct ContentView: View {
                 .foregroundColor(.black.opacity(0.92))
         case 7:
             return text.font(.system(size: 12, weight: .light, design: .serif))
-                .italic().foregroundColor(.white.opacity(0.96))
+                .italic().foregroundColor(color)
         case 8:
             return text.font(.system(size: 15, weight: .light, design: .serif))
-                .tracking(1.6).foregroundColor(.white.opacity(0.96))
+                .tracking(1.6).foregroundColor(color)
         case 9:
             return text.font(.system(size: 12, weight: .light, design: .rounded))
-                .italic().foregroundColor(.white.opacity(0.96))
+                .italic().foregroundColor(color)
         case 10:
             return text.font(.system(size: 11, weight: .light, design: .rounded))
-                .foregroundColor(.white.opacity(0.96))
+                .foregroundColor(color)
         case 11:
             return text.font(.system(size: 12, weight: .light, design: .serif))
-                .italic().foregroundColor(.white.opacity(0.96))
+                .italic().foregroundColor(color)
         case 12:
             return text.font(.system(size: 10, weight: .light, design: .monospaced))
-                .foregroundColor(.white.opacity(0.96))
+                .foregroundColor(color)
         default:
             return text.font(placeFont(population: label.prominence))
-                .foregroundColor(.white.opacity(0.96))
+                .foregroundColor(color)
         }
     }
 
     private func placeFont(population: Double) -> Font {
-        if population >= 1_000_000 { return .system(size: 17, weight: .light, design: .rounded) }
-        if population >= 500_000 { return .system(size: 16, weight: .light, design: .rounded) }
-        if population >= 100_000 { return .system(size: 14, weight: .light, design: .rounded) }
-        if population >= 50_000 { return .system(size: 13, weight: .light, design: .rounded) }
-        if population >= 10_000 { return .system(size: 12, weight: .light, design: .rounded) }
-        return .system(size: 10, weight: .light, design: .rounded)
+        if population >= 1_000_000 { return .system(size: 17, weight: .bold, design: .rounded) }
+        if population >= 500_000 { return .system(size: 16, weight: .bold, design: .rounded) }
+        if population >= 100_000 { return .system(size: 14, weight: .semibold, design: .rounded) }
+        if population >= 50_000 { return .system(size: 13, weight: .semibold, design: .rounded) }
+        if population >= 10_000 { return .system(size: 12, weight: .semibold, design: .rounded) }
+        return .system(size: 10, weight: .medium, design: .rounded)
     }
 
     private var searchField: some View {

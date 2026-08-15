@@ -18,6 +18,8 @@ struct RenderLayers {
     let waterwayPreset: UInt32
     let boundaryPreset: UInt32
     let energyPreset: UInt32
+    let placeLabelPreset: UInt32
+    let landscapeLabelPreset: UInt32
 
     init(
         roads: Bool, roadKinds: UInt32, railways: Bool, railwayKinds: UInt32,
@@ -25,7 +27,8 @@ struct RenderLayers {
         places: Bool, geonames: Bool, geonameKinds: UInt32,
         roadPreset: UInt32 = 2, railwayPreset: UInt32 = 2,
         waterwayPreset: UInt32 = 2, boundaryPreset: UInt32 = 2,
-        energyPreset: UInt32 = 2
+        energyPreset: UInt32 = 2, placeLabelPreset: UInt32 = 2,
+        landscapeLabelPreset: UInt32 = 2
     ) {
         self.roads = roads
         self.roadKinds = roadKinds
@@ -43,6 +46,8 @@ struct RenderLayers {
         self.waterwayPreset = waterwayPreset
         self.boundaryPreset = boundaryPreset
         self.energyPreset = energyPreset
+        self.placeLabelPreset = placeLabelPreset
+        self.landscapeLabelPreset = landscapeLabelPreset
     }
 }
 
@@ -79,6 +84,8 @@ final class LayerSettings: ObservableObject {
     @Published var waterwayPreset: VectorAppearancePreset { didSet { save() } }
     @Published var boundaryPreset: VectorAppearancePreset { didSet { save() } }
     @Published var energyPreset: VectorAppearancePreset { didSet { save() } }
+    @Published var placeLabelPreset: VectorAppearancePreset { didSet { save() } }
+    @Published var landscapeLabelPreset: VectorAppearancePreset { didSet { save() } }
 
     private static let key = "TopoExplorer.layers.v1"
 
@@ -110,6 +117,8 @@ final class LayerSettings: ObservableObject {
         waterwayPreset = preset("waterwayPreset")
         boundaryPreset = preset("boundaryPreset")
         energyPreset = preset("energyPreset")
+        placeLabelPreset = preset("placeLabelPreset")
+        landscapeLabelPreset = preset("landscapeLabelPreset")
     }
 
     var renderLayers: RenderLayers {
@@ -129,7 +138,9 @@ final class LayerSettings: ObservableObject {
             railwayPreset: UInt32(railwayPreset.rawValue),
             waterwayPreset: UInt32(waterwayPreset.rawValue),
             boundaryPreset: UInt32(boundaryPreset.rawValue),
-            energyPreset: UInt32(energyPreset.rawValue)
+            energyPreset: UInt32(energyPreset.rawValue),
+            placeLabelPreset: UInt32(placeLabelPreset.rawValue),
+            landscapeLabelPreset: UInt32(landscapeLabelPreset.rawValue)
         )
     }
 
@@ -142,7 +153,9 @@ final class LayerSettings: ObservableObject {
              "places": places, "geonames": geonames, "geonameKinds": geonameKinds,
              "roadPreset": roadPreset.rawValue, "railwayPreset": railwayPreset.rawValue,
              "waterwayPreset": waterwayPreset.rawValue, "boundaryPreset": boundaryPreset.rawValue,
-             "energyPreset": energyPreset.rawValue],
+             "energyPreset": energyPreset.rawValue,
+             "placeLabelPreset": placeLabelPreset.rawValue,
+             "landscapeLabelPreset": landscapeLabelPreset.rawValue],
             forKey: Self.key
         )
     }

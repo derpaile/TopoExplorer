@@ -1202,7 +1202,14 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 width: rotatedWidth, height: rotatedHeight
             ).insetBy(dx: -4, dy: -3)
             guard visibleBounds.contains(rectangle) else { continue }
-            guard !occupied.contains(where: { $0.intersects(rectangle) }) else { continue }
+            let conflicts = occupied.indices.filter { occupied[$0].intersects(rectangle) }
+            guard conflicts.allSatisfy({ labels[$0].kind == 13 || labels[$0].kind == 14 }) else {
+                continue
+            }
+            for index in conflicts.reversed() {
+                occupied.remove(at: index)
+                labels.remove(at: index)
+            }
             occupied.append(rectangle)
             labels.append(
                 MapLabel(

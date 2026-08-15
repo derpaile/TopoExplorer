@@ -238,7 +238,7 @@ enum MapExportWriter {
             let text = label.kind == 7 ? "▲ \(label.name)" : label.name
             var attributes: [CFString: Any] = [
                 kCTFontAttributeName: font,
-                kCTForegroundColorAttributeName: labelColor(label),
+                kCTForegroundColorAttributeName: labelColor(label, layers: request.renderLayers),
             ]
             if label.kind == 8 { attributes[kCTKernAttributeName] = 3.2 * pixelRatio }
             let attributed = CFAttributedStringCreate(
@@ -253,6 +253,12 @@ enum MapExportWriter {
             context.saveGState()
             context.translateBy(x: x, y: y)
             context.rotate(by: CGFloat(-label.angleDegrees * .pi / 180))
+            if label.kind <= 12 {
+                context.setShadow(
+                    offset: .zero, blur: 1.4 * pixelRatio,
+                    color: labelHaloColor(label, layers: request.renderLayers)
+                )
+            }
             if label.kind == 13 || label.kind == 14 {
                 let boxWidth = max(20 * pixelRatio, CGFloat(label.name.count) * 5.2 * pixelRatio + 7 * pixelRatio)
                 let boxHeight = 16 * pixelRatio
@@ -309,12 +315,30 @@ enum MapExportWriter {
         case 10: "AvenirNext-UltraLight"
         case 11: "Baskerville-Italic"
         case 12: "Menlo-Regular"
-        default: "HelveticaNeue-Thin"
+        default: "HelveticaNeue-Medium"
         }
     }
 
-    private static func labelColor(_ label: MapLabel) -> CGColor {
-        label.kind == 14 ? CGColor(gray: 0, alpha: 0.92) : CGColor(gray: 1, alpha: 0.96)
+    private static func labelPreset(_ label: MapLabel, layers: RenderLayers) -> UInt32 {
+        label.kind <= 6 ? layers.placeLabelPreset : layers.landscapeLabelPreset
+    }
+
+    private static func labelColor(_ label: MapLabel, layers: RenderLayers) -> CGColor {
+        if label.kind == 14 { return CGColor(gray: 0, alpha: 0.92) }
+        if label.kind == 13 { return CGColor(gray: 1, alpha: 1) }
+        switch labelPreset(label, layers: layers) {
+        case 0: return CGColor(gray: 1, alpha: 0.70)
+        case 1: return CGColor(gray: 1, alpha: 0.98)
+        case 3: return CGColor(red: 1, green: 0.91, blue: 0.62, alpha: 1)
+        case 4: return CGColor(gray: 0, alpha: 0.94)
+        default: return CGColor(red: 0.97, green: 0.95, blue: 0.89, alpha: 1)
+        }
+    }
+
+    private static func labelHaloColor(_ label: MapLabel, layers: RenderLayers) -> CGColor {
+        labelPreset(label, layers: layers) == 4
+            ? CGColor(gray: 1, alpha: 0.92)
+            : CGColor(gray: 0, alpha: 0.82)
     }
 
     private static func drawScaleBar(
