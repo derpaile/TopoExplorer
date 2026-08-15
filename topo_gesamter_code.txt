@@ -1,6 +1,6 @@
 GESAMTER PROJEKTCODE
 Projekt: topo neue schose
-Anzahl Dateien: 37
+Anzahl Dateien: 39
 
 ======================================================================
 DATEI: Experiments/HarzLandcover/build.py
@@ -1067,6 +1067,258 @@ SPRACHE: JSON
 }
 
 ======================================================================
+DATEI: MapData/Germany/Analysis/population.json
+SPRACHE: JSON
+======================================================================
+{
+  "version": 1,
+  "source": "Zensus Bev\u00f6lkerung (100-m-Gitter)",
+  "sourceFile": "Zensus_Bevoelkerung_100m-Gitter.tif",
+  "sourceSHA256": "3c53a6fc64182c521a2092ee5072d97e9837e72894431b2e1a763cd9f4747869",
+  "crs": "EPSG:3035",
+  "bounds": [
+    4031300.0,
+    2684000.0,
+    4672600.0,
+    3551500.0
+  ],
+  "resolution": 100.0,
+  "width": 6413,
+  "height": 8675,
+  "tileSize": 512,
+  "tilesX": 13,
+  "tilesY": 17,
+  "suffix": "population.u16.z",
+  "encoding": "little-endian uint16, zlib; 0 = keine ausgewiesene Bev\u00f6lkerung",
+  "totalPopulation": 80324282,
+  "populatedCells": 3177723,
+  "tileSums": {
+    "0_0": 0,
+    "1_0": 0,
+    "2_0": 0,
+    "3_0": 30522,
+    "4_0": 177861,
+    "5_0": 82391,
+    "6_0": 0,
+    "7_0": 0,
+    "8_0": 0,
+    "9_0": 4709,
+    "10_0": 1238,
+    "11_0": 0,
+    "12_0": 0,
+    "0_1": 0,
+    "1_1": 0,
+    "2_1": 1407,
+    "3_1": 5525,
+    "4_1": 163061,
+    "5_1": 572847,
+    "6_1": 129450,
+    "7_1": 23850,
+    "8_1": 111076,
+    "9_1": 136389,
+    "10_1": 47994,
+    "11_1": 0,
+    "12_1": 0,
+    "0_2": 0,
+    "1_2": 5908,
+    "2_2": 11209,
+    "3_2": 58374,
+    "4_2": 181250,
+    "5_2": 561519,
+    "6_2": 502190,
+    "7_2": 150107,
+    "8_2": 303959,
+    "9_2": 127408,
+    "10_2": 152096,
+    "11_2": 6691,
+    "12_2": 0,
+    "0_3": 0,
+    "1_3": 30699,
+    "2_3": 401470,
+    "3_3": 429002,
+    "4_3": 238578,
+    "5_3": 2318363,
+    "6_3": 351118,
+    "7_3": 212447,
+    "8_3": 84520,
+    "9_3": 169423,
+    "10_3": 86114,
+    "11_3": 20563,
+    "12_3": 0,
+    "0_4": 0,
+    "1_4": 13967,
+    "2_4": 275898,
+    "3_4": 681806,
+    "4_4": 778953,
+    "5_4": 177426,
+    "6_4": 147357,
+    "7_4": 124091,
+    "8_4": 97683,
+    "9_4": 133753,
+    "10_4": 157119,
+    "11_4": 52775,
+    "12_4": 0,
+    "0_5": 0,
+    "1_5": 151098,
+    "2_5": 388878,
+    "3_5": 365503,
+    "4_5": 351351,
+    "5_5": 1085961,
+    "6_5": 377915,
+    "7_5": 88623,
+    "8_5": 173911,
+    "9_5": 896689,
+    "10_5": 3370298,
+    "11_5": 163182,
+    "12_5": 0,
+    "0_6": 81129,
+    "1_6": 425285,
+    "2_6": 815760,
+    "3_6": 1260721,
+    "4_6": 676196,
+    "5_6": 515718,
+    "6_6": 664819,
+    "7_6": 528945,
+    "8_6": 190738,
+    "9_6": 160991,
+    "10_6": 115813,
+    "11_6": 148432,
+    "12_6": 332,
+    "0_7": 449724,
+    "1_7": 3298430,
+    "2_7": 1966365,
+    "3_7": 615974,
+    "4_7": 326145,
+    "5_7": 400445,
+    "6_7": 267290,
+    "7_7": 289276,
+    "8_7": 692253,
+    "9_7": 187159,
+    "10_7": 177702,
+    "11_7": 310929,
+    "12_7": 31210,
+    "0_8": 1102370,
+    "1_8": 3652405,
+    "2_8": 846196,
+    "3_8": 251897,
+    "4_8": 495279,
+    "5_8": 329497,
+    "6_8": 322395,
+    "7_8": 514933,
+    "8_8": 804706,
+    "9_8": 414788,
+    "10_8": 960914,
+    "11_8": 343722,
+    "12_8": 180237,
+    "0_9": 688710,
+    "1_9": 1405068,
+    "2_9": 635174,
+    "3_9": 681059,
+    "4_9": 284296,
+    "5_9": 328979,
+    "6_9": 351941,
+    "7_9": 288283,
+    "8_9": 492178,
+    "9_9": 873192,
+    "10_9": 113589,
+    "11_9": 3692,
+    "12_9": 244,
+    "0_10": 90170,
+    "1_10": 252300,
+    "2_10": 611410,
+    "3_10": 2153608,
+    "4_10": 735321,
+    "5_10": 299829,
+    "6_10": 238168,
+    "7_10": 356505,
+    "8_10": 282495,
+    "9_10": 15943,
+    "10_10": 0,
+    "11_10": 0,
+    "12_10": 0,
+    "0_11": 205580,
+    "1_11": 313167,
+    "2_11": 433255,
+    "3_11": 1307375,
+    "4_11": 570517,
+    "5_11": 496967,
+    "6_11": 367815,
+    "7_11": 481087,
+    "8_11": 233440,
+    "9_11": 18632,
+    "10_11": 0,
+    "11_11": 0,
+    "12_11": 0,
+    "0_12": 84806,
+    "1_12": 905883,
+    "2_12": 456201,
+    "3_12": 1672150,
+    "4_12": 637551,
+    "5_12": 284399,
+    "6_12": 319548,
+    "7_12": 1045364,
+    "8_12": 290701,
+    "9_12": 167224,
+    "10_12": 9300,
+    "11_12": 0,
+    "12_12": 0,
+    "0_13": 0,
+    "1_13": 0,
+    "2_13": 109329,
+    "3_13": 1109001,
+    "4_13": 2260625,
+    "5_13": 655276,
+    "6_13": 249402,
+    "7_13": 400752,
+    "8_13": 425865,
+    "9_13": 311544,
+    "10_13": 269788,
+    "11_13": 14029,
+    "12_13": 0,
+    "0_14": 0,
+    "1_14": 0,
+    "2_14": 394868,
+    "3_14": 405896,
+    "4_14": 748124,
+    "5_14": 586921,
+    "6_14": 675133,
+    "7_14": 990213,
+    "8_14": 581487,
+    "9_14": 311015,
+    "10_14": 129349,
+    "11_14": 785,
+    "12_14": 0,
+    "0_15": 0,
+    "1_15": 0,
+    "2_15": 587016,
+    "3_15": 465953,
+    "4_15": 358625,
+    "5_15": 413720,
+    "6_15": 408917,
+    "7_15": 1204712,
+    "8_15": 783313,
+    "9_15": 289997,
+    "10_15": 14232,
+    "11_15": 0,
+    "12_15": 0,
+    "0_16": 0,
+    "1_16": 0,
+    "2_16": 244858,
+    "3_16": 62895,
+    "4_16": 160420,
+    "5_16": 183009,
+    "6_16": 134752,
+    "7_16": 94381,
+    "8_16": 20078,
+    "9_16": 4125,
+    "10_16": 18076,
+    "11_16": 0,
+    "12_16": 0
+  },
+  "generatedAt": "2026-08-11T23:59:32.534304+00:00"
+}
+
+======================================================================
 DATEI: MapData/Germany/Vectors/vector-manifest.json
 SPRACHE: JSON
 ======================================================================
@@ -1437,7 +1689,7 @@ SPRACHE: JSON
     },
     {
       "id": 3,
-      "name": "Versiegelte Einzelfläche",
+      "name": "Versiegelte Einzelfl\u00e4che",
       "defaultColor": "#D97972",
       "group": "Siedlung"
     },
@@ -1449,7 +1701,7 @@ SPRACHE: JSON
     },
     {
       "id": 5,
-      "name": "Offener oder spärlicher Boden",
+      "name": "Offener oder sp\u00e4rlicher Boden",
       "defaultColor": "#B59B70",
       "group": "Natur"
     },
@@ -1557,7 +1809,7 @@ SPRACHE: JSON
     },
     {
       "id": 23,
-      "name": "Zuckerrüben",
+      "name": "Zuckerr\u00fcben",
       "defaultColor": "#805132",
       "group": "Landwirtschaft"
     },
@@ -1581,7 +1833,7 @@ SPRACHE: JSON
     },
     {
       "id": 27,
-      "name": "Raps und Rübsen",
+      "name": "Raps und R\u00fcbsen",
       "defaultColor": "#D6B448",
       "group": "Landwirtschaft"
     },
@@ -1593,7 +1845,7 @@ SPRACHE: JSON
     },
     {
       "id": 29,
-      "name": "Hülsenfrüchte",
+      "name": "H\u00fclsenfr\u00fcchte",
       "defaultColor": "#99A66B",
       "group": "Landwirtschaft"
     },
@@ -1605,7 +1857,7 @@ SPRACHE: JSON
     },
     {
       "id": 31,
-      "name": "Lärche",
+      "name": "L\u00e4rche",
       "defaultColor": "#3E6848",
       "group": "Wald"
     },
@@ -1653,7 +1905,7 @@ SPRACHE: JSON
     },
     {
       "id": 39,
-      "name": "Nadelwald-Offenfläche",
+      "name": "Nadelwald-Offenfl\u00e4che",
       "defaultColor": "#947B55",
       "group": "Wald"
     }
@@ -1687,7 +1939,7 @@ SPRACHE: JSON
     {
       "name": "Land Cover DE",
       "year": 2015,
-      "role": "nur Nadelwald-Offenfläche",
+      "role": "nur Nadelwald-Offenfl\u00e4che",
       "license": "CC BY-NC 4.0",
       "url": "https://geoservice.dlr.de/data-assets/1ccmlap3mn39.html"
     },
@@ -2187,6 +2439,7 @@ struct ContentView: View {
     @State private var sidebarMode = SidebarMode.explore
     @State private var surfaceQuery = ""
     @State private var selectedSurfaceID: Int?
+    @State private var analysisMode = false
 
     var body: some View {
         Group {
@@ -2282,7 +2535,6 @@ struct ContentView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     if sidebarMode == .explore {
-                        discoverSection
                         layerSection
                         if manifest.hasLandcover2020 { landcoverSection }
                         bookmarkSection
@@ -2397,18 +2649,50 @@ struct ContentView: View {
                 title: "Orte & Namen", detail: "Städte und Siedlungen",
                 symbol: "building.2.fill", tint: .orange, isOn: $layers.places
             )
-            AtlasLayerRow(
-                title: "Natur & Gelände", detail: "Berge, Landschaften und Gewässer",
+            AtlasLayerGroup(
+                title: "Natur & Gelände", detail: "Nach Themen filtern",
                 symbol: "mountain.2.fill", tint: .green, isOn: $layers.geonames
-            )
-            AtlasLayerRow(
-                title: "Straßen", detail: "Autobahn bis Landstraße",
+            ) {
+                AtlasLayerSubheading("Relief")
+                layerKindRow("Gipfel & Höhenpunkte", kind: 7, mask: \.geonameKinds)
+                layerKindRow("Landschaften", kind: 8, mask: \.geonameKinds)
+                layerKindRow("Höhlen", kind: 12, mask: \.geonameKinds)
+                AtlasLayerSubheading("Wasser & Natur")
+                layerKindRow("Gewässer & Seen", kind: 9, mask: \.geonameKinds)
+                layerKindRow("Moore & Schutzgebiete", kind: 10, mask: \.geonameKinds)
+                layerKindRow("Inseln", kind: 11, mask: \.geonameKinds)
+            }
+            AtlasLayerGroup(
+                title: "Straßen", detail: "Nach Straßenklasse filtern",
                 symbol: "road.lanes", tint: .red, isOn: $layers.roads
-            )
-            AtlasLayerRow(
-                title: "Eisenbahn", detail: "Schienennetz",
+            ) {
+                AtlasLayerSubheading("Überregional")
+                layerKindRow("Autobahnen", kind: 1, mask: \.roadKinds)
+                layerKindRow("Fernstraßen", kind: 2, mask: \.roadKinds)
+                layerKindRow("Bundesstraßen", kind: 3, mask: \.roadKinds)
+                AtlasLayerSubheading("Regional")
+                layerKindRow("Landesstraßen", kind: 4, mask: \.roadKinds)
+                layerKindRow("Kreisstraßen", kind: 5, mask: \.roadKinds)
+                AtlasLayerSubheading("Lokal")
+                layerKindRow("Ortsstraßen", kind: 6, mask: \.roadKinds)
+                layerKindRow("Erschließungswege", kind: 7, mask: \.roadKinds)
+                layerKindRow("Feldwege", kind: 8, mask: \.roadKinds)
+            }
+            AtlasLayerGroup(
+                title: "Schienen", detail: "Nach Verkehrssystem filtern",
                 symbol: "tram.fill", tint: .purple, isOn: $layers.railways
-            )
+            ) {
+                AtlasLayerSubheading("Fern & regional")
+                layerKindRow("Eisenbahn", kind: 1, mask: \.railwayKinds)
+                layerKindRow("Schmalspurbahn", kind: 2, mask: \.railwayKinds)
+                AtlasLayerSubheading("Stadtverkehr")
+                layerKindRow("Stadtbahn", kind: 3, mask: \.railwayKinds)
+                layerKindRow("U-Bahn", kind: 4, mask: \.railwayKinds)
+                layerKindRow("Straßenbahn", kind: 5, mask: \.railwayKinds)
+                AtlasLayerSubheading("Sonderverkehr")
+                layerKindRow("Sonderbahnen", kind: 6, mask: \.railwayKinds)
+                layerKindRow("Im Bau", kind: 7, mask: \.railwayKinds)
+            }
             AtlasLayerRow(
                 title: "Flüsse", detail: "Fließgewässer",
                 symbol: "water.waves", tint: .blue, isOn: $layers.waterways
@@ -2419,6 +2703,25 @@ struct ContentView: View {
                 isOn: $layers.boundaries
             )
         }
+    }
+
+    private func layerKindRow(
+        _ title: String,
+        kind: UInt8,
+        mask keyPath: ReferenceWritableKeyPath<LayerSettings, UInt32>
+    ) -> some View {
+        let bit = UInt32(1) << UInt32(kind)
+        return AtlasLayerKindRow(
+            title: title,
+            isOn: Binding(
+                get: { (layers[keyPath: keyPath] & bit) != 0 },
+                set: { enabled in
+                    if enabled { layers[keyPath: keyPath] |= bit }
+                    else { layers[keyPath: keyPath] &= ~bit }
+                }
+            ),
+            isolate: { layers[keyPath: keyPath] = bit }
+        )
     }
 
     private var landcoverSection: some View {
@@ -2663,10 +2966,23 @@ struct ContentView: View {
                 layers: layers,
                 comparison: comparison,
                 export: export,
-                viewport: viewport
+                viewport: viewport,
+                analysisMode: analysisMode
             )
 
             labelsOverlay
+
+            if let rect = viewport.analysisScreenRect, rect.width > 0, rect.height > 0 {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.cyan.opacity(0.14))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 3)
+                            .stroke(Color.cyan, style: StrokeStyle(lineWidth: 2, dash: [7, 4]))
+                    }
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+                    .allowsHitTesting(false)
+            }
 
             if manifest.hasLandcover2020 && comparison.mode == .comparison {
                 comparisonOverlay
@@ -2675,8 +2991,37 @@ struct ContentView: View {
             mapTopBar(manifest: manifest)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-            mapBottomBar(manifest: manifest)
+            mapBottomBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+
+            if let probe = viewport.probe, viewport.analysisSelection == nil {
+                CursorInfoGlassOverlay(
+                    probe: probe,
+                    crs: manifest.crs,
+                    surfaceColor: probe.classID.flatMap { id in
+                        style.colors.indices.contains(id) ? style.colors[id].color : nil
+                    }
+                )
+                .padding(.top, 76)
+                .padding(.leading, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .allowsHitTesting(false)
+            }
+
+            if viewport.analysisSelection != nil {
+                AreaStatisticsPanel(
+                    statistics: viewport.areaStatistics,
+                    isLoading: viewport.isAnalyzing,
+                    message: viewport.analysisMessage,
+                    onClose: { analysisMode = false }
+                )
+                .frame(width: 380)
+                .padding(.top, 76)
+                .padding(.trailing, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
 
             if showInspector {
                 InspectorView(
@@ -2744,42 +3089,42 @@ struct ContentView: View {
                     Label("Mausrad oder Trackpad zum Zoomen", systemImage: "plus.magnifyingglass")
                     Label("Doppelklick zum Hineinzoomen", systemImage: "cursorarrow.click.2")
                     Label("Mauszeiger zeigt Höhe und Landklasse", systemImage: "info.circle")
+                    Label("Analyseknopf: Rechteck ziehen und Fläche auswerten", systemImage: "rectangle.dashed")
                 }
                 .font(.subheadline)
                 .padding(15)
                 .frame(width: 285, alignment: .leading)
             }
 
+
+            MapChromeButton(
+                symbol: analysisMode ? "xmark" : "rectangle.dashed",
+                help: analysisMode ? "Flächenanalyse beenden" : "Fläche analysieren"
+            ) {
+                analysisMode.toggle()
+                if analysisMode {
+                    showInspector = false
+                    viewport.clearAnalysis()
+                }
+            }
+
             MapChromeButton(symbol: "paintpalette", help: "Stile & Export") {
+                if !showInspector { analysisMode = false }
                 showInspector.toggle()
             }
         }
         .padding(12)
     }
 
-    private func mapBottomBar(manifest: MapManifest) -> some View {
+    private var mapBottomBar: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            VStack(alignment: .leading, spacing: 6) {
-                if let probe = viewport.probe {
-                    CursorInfoGlassOverlay(
-                        probe: probe,
-                        crs: manifest.crs,
-                        surfaceColor: probe.classID.flatMap { id in
-                            style.colors.indices.contains(id) ? style.colors[id].color : nil
-                        }
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .allowsHitTesting(false)
-                }
-
-                if !viewport.status.isEmpty {
-                    Text(viewport.status)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .atlasGlass(cornerRadius: 10)
-                }
+            if !viewport.status.isEmpty {
+                Text(viewport.status)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .atlasGlass(cornerRadius: 10)
             }
 
             Spacer()
@@ -2835,12 +3180,48 @@ struct ContentView: View {
     }
 
     private var labelsOverlay: some View {
-        ZStack {
-            ForEach(viewport.labels) { label in
-                AtlasMapLabel(label: label)
+        Canvas(rendersAsynchronously: true) { context, _ in
+            for label in viewport.labels {
+                context.draw(mapLabelText(label), at: label.point, anchor: .center)
             }
         }
         .allowsHitTesting(false)
+    }
+
+    private func mapLabelText(_ label: MapLabel) -> Text {
+        let text = Text(label.kind == 7 ? "▲ \(label.name)" : label.name)
+        switch label.kind {
+        case 7:
+            return text.font(.system(size: 12, weight: .light, design: .serif))
+                .italic().foregroundColor(.white.opacity(0.96))
+        case 8:
+            return text.font(.system(size: 15, weight: .light, design: .serif))
+                .tracking(1.6).foregroundColor(.white.opacity(0.96))
+        case 9:
+            return text.font(.system(size: 12, weight: .light, design: .rounded))
+                .italic().foregroundColor(.white.opacity(0.96))
+        case 10:
+            return text.font(.system(size: 11, weight: .light, design: .rounded))
+                .foregroundColor(.white.opacity(0.96))
+        case 11:
+            return text.font(.system(size: 12, weight: .light, design: .serif))
+                .italic().foregroundColor(.white.opacity(0.96))
+        case 12:
+            return text.font(.system(size: 10, weight: .light, design: .monospaced))
+                .foregroundColor(.white.opacity(0.96))
+        default:
+            return text.font(placeFont(population: label.prominence))
+                .foregroundColor(.white.opacity(0.96))
+        }
+    }
+
+    private func placeFont(population: Double) -> Font {
+        if population >= 1_000_000 { return .system(size: 17, weight: .light, design: .rounded) }
+        if population >= 500_000 { return .system(size: 16, weight: .light, design: .rounded) }
+        if population >= 100_000 { return .system(size: 14, weight: .light, design: .rounded) }
+        if population >= 50_000 { return .system(size: 13, weight: .light, design: .rounded) }
+        if population >= 10_000 { return .system(size: 12, weight: .light, design: .rounded) }
+        return .system(size: 10, weight: .light, design: .rounded)
     }
 
     private var searchField: some View {
@@ -3362,58 +3743,166 @@ private struct SurfaceClassEditor: View {
     }
 }
 
-private struct AtlasMapLabel: View {
-    let label: MapLabel
+private struct AreaStatisticsPanel: View {
+    let statistics: AreaStatistics?
+    let isLoading: Bool
+    let message: String?
+    let onClose: () -> Void
 
     var body: some View {
-        styledText
-            .shadow(color: haloColor, radius: label.kind <= 6 ? 1.6 : 1.2)
-            .rotationEffect(.degrees(label.angleDegrees))
-            .position(label.point)
-            .fixedSize()
+        VStack(alignment: .leading, spacing: 13) {
+            HStack {
+                Label("Flächenanalyse", systemImage: "chart.bar.xaxis")
+                    .font(.headline)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+            }
+
+            if isLoading {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Einwohner und Flächen werden berechnet …")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
+                .padding(.vertical, 8)
+            } else if let statistics {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 9) {
+                    metric(
+                        "Einwohner",
+                        statistics.population?.formatted(.number) ?? "—",
+                        symbol: "person.3.fill"
+                    )
+                    metric(
+                        "Einwohner / km²",
+                        statistics.populationDensity.map { Int($0.rounded()).formatted(.number) } ?? "—",
+                        symbol: "building.2.fill"
+                    )
+                    metric(
+                        "Auswahl",
+                        area(statistics.selection.squareKilometers),
+                        symbol: "square.dashed"
+                    )
+                    metric(
+                        "Rasteranalyse",
+                        "≈ \(Int(statistics.sampledResolution)) m",
+                        symbol: "square.grid.3x3"
+                    )
+                }
+
+                VStack(spacing: 6) {
+                    groupRow("Landwirtschaft", value: statistics.squareKilometers(in: "Landwirtschaft"), color: .yellow)
+                    groupRow("Wald", value: statistics.squareKilometers(in: "Wald"), color: .green)
+                    groupRow("Siedlung", value: statistics.squareKilometers(in: "Siedlung"), color: .red)
+                    groupRow("Natur", value: statistics.squareKilometers(in: "Natur"), color: .blue)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Vorkommende Flächen und Arten")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Kultur- und Waldarten werden als Fläche ausgewiesen; Ertragsdaten können später ergänzt werden.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    ScrollView {
+                        LazyVStack(spacing: 5) {
+                            ForEach(statistics.classes) { item in
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(groupColor(item.group))
+                                        .frame(width: 7, height: 7)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(item.name).lineLimit(1)
+                                        Text(item.group)
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    Spacer()
+                                    Text("\(area(item.squareKilometers)) · \(item.share.formatted(.percent.precision(.fractionLength(1))))")
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
+                                .font(.caption)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 205)
+                }
+
+                HStack(spacing: 5) {
+                    Image(systemName: statistics.population == nil ? "exclamationmark.triangle" : "checkmark.circle")
+                    Text(populationNote(statistics))
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            } else {
+                Label(message ?? "Auf der Karte ein Rechteck ziehen.", systemImage: "cursorarrow.motionlines")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+            }
+        }
+        .padding(15)
+        .atlasGlass(cornerRadius: 17)
+        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
     }
 
-    @ViewBuilder private var styledText: some View {
-        switch label.kind {
-        case 7:
-            Text("▲ \(label.name)")
-                .font(.system(size: 12, weight: .semibold, design: .serif))
-                .foregroundStyle(Color(red: 0.35, green: 0.25, blue: 0.18))
-        case 8:
-            Text(label.name)
-                .font(.system(size: 20, weight: .medium, design: .serif))
-                .italic()
-                .tracking(3.4)
-                .foregroundStyle(Color(red: 0.31, green: 0.34, blue: 0.20))
-        case 9, 11:
-            Text(label.name)
-                .font(.system(size: 13, weight: .medium, design: .serif))
-                .italic()
-                .tracking(0.7)
-                .foregroundStyle(Color(red: 0.08, green: 0.34, blue: 0.56))
-        case 10:
-            Text(label.name)
-                .font(.system(size: 12, weight: .medium, design: .serif))
-                .italic()
-                .foregroundStyle(Color(red: 0.18, green: 0.38, blue: 0.24))
-        case 12:
-            Text(label.name)
-                .font(.system(size: 11, weight: .medium, design: .serif))
-                .foregroundStyle(Color(red: 0.36, green: 0.27, blue: 0.21))
-        default:
-            Text(label.name)
-                .font(.system(
-                    size: label.prominence >= 100_000 ? 13 : 11,
-                    weight: label.prominence >= 100_000 ? .semibold : .medium
-                ))
-                .foregroundStyle(Color(red: 0.10, green: 0.11, blue: 0.09))
+    private func metric(_ title: String, _ value: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(title, systemImage: symbol)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(9)
+        .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func groupRow(_ title: String, value: Double, color: Color) -> some View {
+        HStack {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(title)
+            Spacer()
+            Text(area(value)).monospacedDigit().foregroundStyle(.secondary)
+        }
+        .font(.caption)
+    }
+
+    private func groupColor(_ group: String) -> Color {
+        switch group {
+        case "Landwirtschaft": .yellow
+        case "Wald": .green
+        case "Siedlung": .red
+        case "Natur": .blue
+        default: .secondary
         }
     }
 
-    private var haloColor: Color {
-        label.kind == 9 || label.kind == 11
-            ? Color(red: 0.86, green: 0.92, blue: 0.84).opacity(0.92)
-            : Color(red: 0.96, green: 0.94, blue: 0.80).opacity(0.92)
+    private func area(_ squareKilometers: Double) -> String {
+        if squareKilometers < 1 {
+            return "\(Int((squareKilometers * 100).rounded()).formatted(.number)) ha"
+        }
+        return "\(squareKilometers.formatted(.number.precision(.fractionLength(1)))) km²"
+    }
+
+    private func populationNote(_ statistics: AreaStatistics) -> String {
+        guard let source = statistics.populationSource else {
+            return "Bevölkerungsraster fehlt im Kartendatenordner."
+        }
+        if statistics.populationCoverage < 0.999 {
+            return "\(source) deckt \(statistics.populationCoverage.formatted(.percent.precision(.fractionLength(0)))) der Auswahl ab."
+        }
+        return source
     }
 }
 
@@ -3425,44 +3914,44 @@ private struct CursorInfoGlassOverlay: View {
     private var accent: Color { surfaceColor ?? .secondary }
 
     var body: some View {
-        HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
                 Label("HÖHE", systemImage: "mountain.2.fill")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
                     .tracking(0.8)
                     .foregroundStyle(.secondary)
 
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text(probe.elevation.map(String.init) ?? "—")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .font(.system(size: 38, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .contentTransition(.numericText())
                     Text("m")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(width: 82, alignment: .leading)
+            .frame(width: 110, alignment: .leading)
 
             Rectangle()
                 .fill(.primary.opacity(0.10))
-                .frame(width: 1, height: 52)
+                .frame(width: 1, height: 70)
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 6) {
                     Circle()
                         .fill(accent)
-                        .frame(width: 8, height: 8)
+                        .frame(width: 11, height: 11)
                         .overlay(Circle().stroke(.white.opacity(0.65), lineWidth: 0.7))
                         .shadow(color: accent.opacity(0.45), radius: 3)
                     Text("OBERFLÄCHE")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .tracking(0.8)
                         .foregroundStyle(.secondary)
                 }
 
                 Text(probe.className ?? "Keine Kartendaten")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
                     .lineLimit(1)
                     .contentTransition(.interpolate)
 
@@ -3472,13 +3961,13 @@ private struct CursorInfoGlassOverlay: View {
                     Text(crs.replacingOccurrences(of: "EPSG:", with: "EPSG "))
                         .foregroundStyle(.tertiary)
                 }
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(.secondary)
             }
-            .frame(width: 236, alignment: .leading)
+            .frame(width: 292, alignment: .leading)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 15)
         .background {
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -3554,6 +4043,90 @@ private struct AtlasLayerRow: View {
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+    }
+}
+
+private struct AtlasLayerGroup<Content: View>: View {
+    let title: String
+    let detail: String
+    let symbol: String
+    let tint: Color
+    @Binding var isOn: Bool
+    let content: Content
+
+    init(
+        title: String, detail: String, symbol: String, tint: Color,
+        isOn: Binding<Bool>, @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.detail = detail
+        self.symbol = symbol
+        self.tint = tint
+        _isOn = isOn
+        self.content = content()
+    }
+
+    var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 2) {
+                content
+            }
+            .padding(.leading, 19)
+            .padding(.bottom, 5)
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isOn ? tint : .secondary)
+                    .frame(width: 28, height: 28)
+                    .background(tint.opacity(isOn ? 0.12 : 0.05), in: RoundedRectangle(cornerRadius: 8))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).font(.subheadline.weight(.medium))
+                    Text(detail).font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 4)
+                Toggle(title, isOn: $isOn)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+            }
+            .padding(.vertical, 4)
+        }
+        .padding(.horizontal, 7)
+    }
+}
+
+private struct AtlasLayerSubheading: View {
+    let title: String
+
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 8, weight: .bold))
+            .tracking(0.7)
+            .foregroundStyle(.tertiary)
+            .padding(.top, 5)
+    }
+}
+
+private struct AtlasLayerKindRow: View {
+    let title: String
+    @Binding var isOn: Bool
+    let isolate: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Toggle(title, isOn: $isOn)
+                .toggleStyle(.checkbox)
+                .font(.caption)
+            Spacer()
+            Button("Nur", action: isolate)
+                .buttonStyle(.borderless)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(minHeight: 22)
     }
 }
 
@@ -4143,8 +4716,6 @@ enum MapExportWriter {
             var attributes: [CFString: Any] = [
                 kCTFontAttributeName: font,
                 kCTForegroundColorAttributeName: labelColor(label),
-                kCTStrokeColorAttributeName: labelHaloColor(label),
-                kCTStrokeWidthAttributeName: -2.6,
             ]
             if label.kind == 8 { attributes[kCTKernAttributeName] = 3.2 * pixelRatio }
             let attributed = CFAttributedStringCreate(
@@ -4167,38 +4738,35 @@ enum MapExportWriter {
 
     private static func labelSize(_ label: MapLabel) -> CGFloat {
         switch label.kind {
-        case 8: 20
-        case 9, 11: 13
-        case 7, 10: 12
-        case 12: 11
-        default: label.prominence >= 100_000 ? 13 : 11
+        case 7: 11
+        case 8: 15
+        case 9, 11: 12
+        case 10: 11
+        case 12: 10
+        default:
+            if label.prominence >= 1_000_000 { 17 }
+            else if label.prominence >= 500_000 { 16 }
+            else if label.prominence >= 100_000 { 14 }
+            else if label.prominence >= 50_000 { 13 }
+            else if label.prominence >= 10_000 { 12 }
+            else { 10 }
         }
     }
 
     private static func labelFontName(_ label: MapLabel) -> String {
         switch label.kind {
-        case 8, 9, 10, 11: "TimesNewRomanPS-ItalicMT"
-        case 7, 12: "TimesNewRomanPS-BoldMT"
-        default: label.prominence >= 100_000 ? "Helvetica-Semibold" : "Helvetica-Medium"
+        case 7: "TimesNewRomanPS-ItalicMT"
+        case 8: "Baskerville"
+        case 9: "HelveticaNeue-LightItalic"
+        case 10: "AvenirNext-UltraLight"
+        case 11: "Baskerville-Italic"
+        case 12: "Menlo-Regular"
+        default: "HelveticaNeue-Thin"
         }
     }
 
-    private static func labelColor(_ label: MapLabel) -> CGColor {
-        switch label.kind {
-        case 7: CGColor(red: 0.35, green: 0.25, blue: 0.18, alpha: 1)
-        case 8: CGColor(red: 0.31, green: 0.34, blue: 0.20, alpha: 1)
-        case 9, 11: CGColor(red: 0.08, green: 0.34, blue: 0.56, alpha: 1)
-        case 10: CGColor(red: 0.18, green: 0.38, blue: 0.24, alpha: 1)
-        case 12: CGColor(red: 0.36, green: 0.27, blue: 0.21, alpha: 1)
-        default: CGColor(red: 0.10, green: 0.11, blue: 0.09, alpha: 1)
-        }
-    }
-
-    private static func labelHaloColor(_ label: MapLabel) -> CGColor {
-        if label.kind == 9 || label.kind == 11 {
-            return CGColor(red: 0.86, green: 0.92, blue: 0.84, alpha: 0.92)
-        }
-        return CGColor(red: 0.96, green: 0.94, blue: 0.80, alpha: 0.92)
+    private static func labelColor(_: MapLabel) -> CGColor {
+        CGColor(gray: 1, alpha: 0.96)
     }
 
     private static func drawScaleBar(
@@ -4281,49 +4849,70 @@ import SwiftUI
 
 struct RenderLayers {
     let roads: Bool
+    let roadKinds: UInt32
     let railways: Bool
+    let railwayKinds: UInt32
     let waterways: Bool
     let boundaries: Bool
     let places: Bool
     let geonames: Bool
+    let geonameKinds: UInt32
 }
 
 @MainActor
 final class LayerSettings: ObservableObject {
     @Published var roads: Bool { didSet { save() } }
+    @Published var roadKinds: UInt32 { didSet { save() } }
     @Published var railways: Bool { didSet { save() } }
+    @Published var railwayKinds: UInt32 { didSet { save() } }
     @Published var waterways: Bool { didSet { save() } }
     @Published var boundaries: Bool { didSet { save() } }
     @Published var places: Bool { didSet { save() } }
     @Published var geonames: Bool { didSet { save() } }
+    @Published var geonameKinds: UInt32 { didSet { save() } }
 
     private static let key = "TopoExplorer.layers.v1"
 
     init() {
-        let saved = UserDefaults.standard.dictionary(forKey: Self.key) as? [String: Bool] ?? [:]
-        roads = saved["roads"] ?? true
-        railways = saved["railways"] ?? true
-        waterways = saved["waterways"] ?? true
-        boundaries = saved["boundaries"] ?? true
-        places = saved["places"] ?? true
-        geonames = saved["geonames"] ?? true
+        let saved = UserDefaults.standard.dictionary(forKey: Self.key) ?? [:]
+        func boolean(_ key: String) -> Bool {
+            (saved[key] as? NSNumber)?.boolValue ?? true
+        }
+        func mask(_ key: String) -> UInt32 {
+            guard let number = saved[key] as? NSNumber else { return .max }
+            return number.uint32Value
+        }
+        roads = boolean("roads")
+        roadKinds = mask("roadKinds")
+        railways = boolean("railways")
+        railwayKinds = mask("railwayKinds")
+        waterways = boolean("waterways")
+        boundaries = boolean("boundaries")
+        places = boolean("places")
+        geonames = boolean("geonames")
+        geonameKinds = mask("geonameKinds")
     }
 
     var renderLayers: RenderLayers {
         RenderLayers(
             roads: roads,
+            roadKinds: roadKinds,
             railways: railways,
+            railwayKinds: railwayKinds,
             waterways: waterways,
             boundaries: boundaries,
             places: places,
-            geonames: geonames
+            geonames: geonames,
+            geonameKinds: geonameKinds
         )
     }
 
     private func save() {
         UserDefaults.standard.set(
-            ["roads": roads, "railways": railways, "waterways": waterways,
-             "boundaries": boundaries, "places": places, "geonames": geonames],
+            ["roads": roads, "roadKinds": roadKinds,
+             "railways": railways, "railwayKinds": railwayKinds,
+             "waterways": waterways, "boundaries": boundaries,
+             "places": places, "geonames": geonames, "geonameKinds": geonameKinds],
             forKey: Self.key
         )
     }
@@ -4390,6 +4979,52 @@ struct MapProbe: Equatable {
         if let elevation { parts.append("\(elevation) m") }
         if let className { parts.append(className) }
         return parts.joined(separator: " · ")
+    }
+}
+
+struct MapSelection: Equatable {
+    let minX: Double
+    let minY: Double
+    let maxX: Double
+    let maxY: Double
+
+    init(x1: Double, y1: Double, x2: Double, y2: Double) {
+        minX = min(x1, x2)
+        minY = min(y1, y2)
+        maxX = max(x1, x2)
+        maxY = max(y1, y2)
+    }
+
+    var width: Double { maxX - minX }
+    var height: Double { maxY - minY }
+    var squareKilometers: Double { width * height / 1_000_000 }
+}
+
+struct AreaClassStatistic: Identifiable, Equatable {
+    let classID: Int
+    let name: String
+    let group: String
+    let squareKilometers: Double
+    let share: Double
+
+    var id: Int { classID }
+}
+
+struct AreaStatistics: Equatable {
+    let selection: MapSelection
+    let population: Int?
+    let populationSource: String?
+    let populationCoverage: Double
+    let sampledResolution: Double
+    let classes: [AreaClassStatistic]
+
+    var populationDensity: Double? {
+        guard let population, selection.squareKilometers > 0 else { return nil }
+        return Double(population) / selection.squareKilometers
+    }
+
+    func squareKilometers(in group: String) -> Double {
+        classes.filter { $0.group == group }.reduce(0) { $0 + $1.squareKilometers }
     }
 }
 
@@ -4622,7 +5257,7 @@ private struct VectorUniforms {
     var layer: UInt32
     var pass: UInt32
     var zoom: UInt32
-    var padding: UInt32 = 0
+    var kindMask: UInt32
 }
 
 private struct RenderViewport {
@@ -4651,8 +5286,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         ambientLight: 0.08, sunAzimuthRadians: 5.4977871438
     )
     private var layers = RenderLayers(
-        roads: true, railways: true, waterways: true, boundaries: true,
-        places: true, geonames: true
+        roads: true, roadKinds: .max, railways: true, railwayKinds: .max,
+        waterways: true, boundaries: true, places: true,
+        geonames: true, geonameKinds: .max
     )
     private var comparison = RenderComparison(mode: 0, splitPosition: 0.5)
     private var centerX = 0.0
@@ -4663,6 +5299,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     private var lastNavigationToken = -1
     private var pendingTarget: ViewportController.Target?
     private var probeGeneration = 0
+    private var analysisGeneration = 0
+    private var analysisStartPoint: CGPoint?
+    private var analysisSelection: MapSelection?
 
     init?(view: MapCanvasView, manifest: MapManifest, viewport: ViewportController) {
         guard
@@ -4884,10 +5523,14 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             visibleWidthMeters: Double(view.bounds.width) / pixelsPerMeter,
             visibleHeightMeters: Double(view.bounds.height) / pixelsPerMeter
         )
+        let selectionRect = analysisSelection.map { selection in
+            screenRect(for: selection, in: view.bounds.size)
+        }
         Task { @MainActor [weak viewport] in
             viewport?.updateStatus(status)
             viewport?.updateLabels(vectorResult.labels)
             viewport?.updateSnapshot(snapshot)
+            viewport?.updateAnalysisScreenRect(selectionRect)
         }
     }
 
@@ -4941,6 +5584,78 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     func clearInspection() {
         probeGeneration &+= 1
         Task { @MainActor [weak viewport] in viewport?.updateProbe(nil) }
+    }
+
+    func beginAreaSelection(at point: CGPoint) {
+        guard manifest != nil else { return }
+        analysisGeneration &+= 1
+        analysisStartPoint = point
+        updateAreaSelection(to: point)
+    }
+
+    func updateAreaSelection(to point: CGPoint) {
+        guard let view, let start = analysisStartPoint else { return }
+        let startWorld = worldPoint(for: start, in: view.bounds.size)
+        let endWorld = worldPoint(for: point, in: view.bounds.size)
+        let selection = MapSelection(
+            x1: startWorld.x, y1: startWorld.y,
+            x2: endWorld.x, y2: endWorld.y
+        )
+        analysisSelection = selection
+        let rect = CGRect(
+            x: min(start.x, point.x), y: min(start.y, point.y),
+            width: abs(point.x - start.x), height: abs(point.y - start.y)
+        )
+        Task { @MainActor [weak viewport] in
+            viewport?.updateAnalysisSelection(selection, screenRect: rect)
+        }
+    }
+
+    func finishAreaSelection(at point: CGPoint) {
+        updateAreaSelection(to: point)
+        guard
+            let start = analysisStartPoint,
+            abs(point.x - start.x) >= 8,
+            abs(point.y - start.y) >= 8,
+            let selection = analysisSelection,
+            let queryService
+        else {
+            cancelAreaSelection()
+            return
+        }
+        analysisStartPoint = nil
+        analysisGeneration &+= 1
+        let generation = analysisGeneration
+        let use2020 = comparison.mode == UInt32(LandcoverMode.year2020.rawValue)
+        Task { @MainActor [weak viewport] in viewport?.beginAnalysis() }
+        queryService.queryStatistics(selection: selection, year2020: use2020) { [weak self] result, message in
+            guard let self, self.analysisGeneration == generation else { return }
+            Task { @MainActor [weak viewport] in
+                viewport?.finishAnalysis(result, message: message)
+            }
+        }
+    }
+
+    func cancelAreaSelection() {
+        analysisGeneration &+= 1
+        analysisStartPoint = nil
+        analysisSelection = nil
+        Task { @MainActor [weak viewport] in viewport?.clearAnalysis() }
+    }
+
+    private func worldPoint(for point: CGPoint, in size: CGSize) -> CGPoint {
+        CGPoint(
+            x: centerX + (point.x - size.width / 2) / pixelsPerMeter,
+            y: centerY - (point.y - size.height / 2) / pixelsPerMeter
+        )
+    }
+
+    private func screenRect(for selection: MapSelection, in size: CGSize) -> CGRect {
+        let x1 = size.width / 2 + (selection.minX - centerX) * pixelsPerMeter
+        let x2 = size.width / 2 + (selection.maxX - centerX) * pixelsPerMeter
+        let y1 = size.height / 2 + (centerY - selection.maxY) * pixelsPerMeter
+        let y2 = size.height / 2 + (centerY - selection.minY) * pixelsPerMeter
+        return CGRect(x: x1, y: y1, width: x2 - x1, height: y2 - y1)
     }
 
     func export(_ request: MapExportRequest, completion: @escaping (Result<URL, Error>) -> Void) {
@@ -5330,13 +6045,15 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     ),
                     layer: 0,
                     pass: 0,
-                    zoom: UInt32(max(0, visibleZoom))
+                    zoom: UInt32(max(0, visibleZoom)),
+                    kindMask: .max
                 )
 
                 // Casings first, then cores: intersections retain the previous visual hierarchy.
                 for layer in layerOrder where layerEnabled(layer, in: renderLayers) {
                     guard let layerSegments = tile.layers[layer] else { continue }
                     uniforms.layer = UInt32(layer.rawValue)
+                    uniforms.kindMask = kindMask(for: layer, in: renderLayers)
                     uniforms.pass = 0
                     for group in layerSegments.zoomLevels where group.minimumZoom <= visibleZoom {
                         drawVectorBuffer(
@@ -5347,6 +6064,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 for layer in layerOrder where layerEnabled(layer, in: renderLayers) {
                     guard let layerSegments = tile.layers[layer] else { continue }
                     uniforms.layer = UInt32(layer.rawValue)
+                    uniforms.kindMask = kindMask(for: layer, in: renderLayers)
                     uniforms.pass = 1
                     for group in layerSegments.zoomLevels where group.minimumZoom <= visibleZoom {
                         drawVectorBuffer(
@@ -5359,8 +6077,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             }
 
             if renderLayers.places || renderLayers.geonames {
-                for place in tile.places where Int(place.minZoom) <= visibleZoom
-                    && (place.kind <= 6 ? renderLayers.places : renderLayers.geonames)
+                for place in tile.places where effectiveMinimumZoom(for: place) <= visibleZoom
+                    && labelKindEnabled(place.kind, in: renderLayers)
                 {
                     let point = world(place.point)
                     places.append((place, point.x, point.y))
@@ -5377,6 +6095,37 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         case .waterway: layers.waterways
         case .boundary: layers.boundaries
         }
+    }
+
+    private func kindMask(for layer: VectorLayer, in layers: RenderLayers) -> UInt32 {
+        switch layer {
+        case .road: layers.roadKinds
+        case .railway: layers.railwayKinds
+        case .waterway, .boundary: .max
+        }
+    }
+
+    private func labelKindEnabled(_ kind: UInt8, in layers: RenderLayers) -> Bool {
+        if kind <= 6 { return layers.places }
+        return layers.geonames && (layers.geonameKinds & (UInt32(1) << UInt32(kind))) != 0
+    }
+
+    private func effectiveMinimumZoom(for place: VectorPlace) -> Int {
+        guard place.kind <= 6 else { return Int(place.minZoom) }
+        let population = Int(place.population)
+        let populationZoom: Int
+        switch place.kind {
+        case 1:
+            populationZoom = population >= 500_000 ? 1 : population >= 100_000 ? 2 : population >= 20_000 ? 3 : 4
+        case 2:
+            populationZoom = population >= 50_000 ? 3 : population >= 10_000 ? 4 : 5
+        case 3:
+            populationZoom = population >= 5_000 ? 6 : 7
+        case 4: populationZoom = 6
+        case 5: populationZoom = 8
+        default: populationZoom = 9
+        }
+        return max(Int(place.minZoom), populationZoom)
     }
 
     private func drawVectorBuffer(
@@ -5456,30 +6205,31 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         }
         var occupied: [CGRect] = []
         var labels: [MapLabel] = []
+        let visibleBounds = CGRect(origin: .zero, size: viewport.logicalSize)
+            .insetBy(dx: 6, dy: 6)
         for (place, worldX, worldY) in sorted {
             let x = (worldX - viewport.centerX) * viewport.pixelsPerMeter
                 + Double(viewport.logicalSize.width) / 2
             let y = (viewport.centerY - worldY) * viewport.pixelsPerMeter
                 + Double(viewport.logicalSize.height) / 2
-            guard
-                x > 20, y > 12,
-                x < Double(viewport.logicalSize.width) - 20,
-                y < Double(viewport.logicalSize.height) - 12
-            else { continue }
             let identity = "\(place.name)|\(Int(worldX / 100))|\(Int(worldY / 100))"
             guard seen.insert(identity).inserted else { continue }
             let isLandscape = place.kind == 8
-            let characterWidth = isLandscape ? 12.5 : (place.kind >= 7 ? 7.7 : 7.2)
-            let width = min(isLandscape ? 260 : 180, max(32, Double(place.name.count) * characterWidth + 12))
-            let height = isLandscape ? 30.0 : 22.0
-            let angle = labelAngle(for: place)
-            let radians = abs(angle) * .pi / 180
-            let rotatedWidth = abs(width * cos(radians)) + abs(height * sin(radians))
-            let rotatedHeight = abs(width * sin(radians)) + abs(height * cos(radians))
+            let populationWidth = place.population >= 500_000 ? 9.2 : place.population >= 100_000 ? 8.2 : 7.0
+            let characterWidth = isLandscape ? 9.5 : (place.kind >= 7 ? 7.5 : populationWidth)
+            let width = min(
+                isLandscape ? 220 : 190,
+                max(34, Double(place.name.count) * characterWidth + 14)
+            )
+            let height = isLandscape ? 25.0 : 22.0
+            let angle = 0.0
+            let rotatedWidth = width
+            let rotatedHeight = height
             let rectangle = CGRect(
                 x: x - rotatedWidth / 2, y: y - rotatedHeight / 2,
                 width: rotatedWidth, height: rotatedHeight
             ).insetBy(dx: -4, dy: -3)
+            guard visibleBounds.contains(rectangle) else { continue }
             guard !occupied.contains(where: { $0.intersects(rectangle) }) else { continue }
             occupied.append(rectangle)
             labels.append(
@@ -5489,20 +6239,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     kind: place.kind, angleDegrees: angle
                 )
             )
-            if labels.count >= 120 { break }
+            if labels.count >= 80 { break }
         }
         return labels
-    }
-
-    private func labelAngle(for place: VectorPlace) -> Double {
-        guard place.kind == 8 else { return 0 }
-        var hash: UInt32 = 2_166_136_261
-        for byte in place.name.utf8 {
-            hash = (hash ^ UInt32(byte)) &* 16_777_619
-        }
-        var angle = Double(Int(hash % 41) - 20)
-        if abs(angle) < 7 { angle = angle < 0 ? -9 : 9 }
-        return angle
     }
 
     private func prefetch(
@@ -5725,6 +6464,11 @@ final class ViewportController: ObservableObject {
     @Published private(set) var labels: [MapLabel] = []
     @Published private(set) var probe: MapProbe?
     @Published private(set) var snapshot: ViewportSnapshot?
+    @Published private(set) var analysisSelection: MapSelection?
+    @Published private(set) var analysisScreenRect: CGRect?
+    @Published private(set) var areaStatistics: AreaStatistics?
+    @Published private(set) var isAnalyzing = false
+    @Published private(set) var analysisMessage: String?
 
     func fitGermany() {
         activeReference = nil
@@ -5763,6 +6507,38 @@ final class ViewportController: ObservableObject {
 
     func updateSnapshot(_ value: ViewportSnapshot) {
         if snapshot != value { snapshot = value }
+    }
+
+    func updateAnalysisSelection(_ selection: MapSelection?, screenRect: CGRect?) {
+        analysisSelection = selection
+        analysisScreenRect = screenRect
+        areaStatistics = nil
+        analysisMessage = nil
+        isAnalyzing = false
+    }
+
+    func beginAnalysis() {
+        areaStatistics = nil
+        analysisMessage = nil
+        isAnalyzing = true
+    }
+
+    func updateAnalysisScreenRect(_ screenRect: CGRect?) {
+        if analysisScreenRect != screenRect { analysisScreenRect = screenRect }
+    }
+
+    func finishAnalysis(_ statistics: AreaStatistics?, message: String? = nil) {
+        areaStatistics = statistics
+        analysisMessage = message
+        isAnalyzing = false
+    }
+
+    func clearAnalysis() {
+        analysisSelection = nil
+        analysisScreenRect = nil
+        areaStatistics = nil
+        analysisMessage = nil
+        isAnalyzing = false
     }
 }
 
@@ -5955,6 +6731,9 @@ import SwiftUI
 
 final class MapCanvasView: MTKView {
     weak var mapRenderer: MapRenderer?
+    var analysisMode = false {
+        didSet { if analysisMode != oldValue { window?.invalidateCursorRects(for: self) } }
+    }
     private var lastDragPoint: CGPoint?
     private var pointerTrackingArea: NSTrackingArea?
 
@@ -5993,6 +6772,11 @@ final class MapCanvasView: MTKView {
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
+        if analysisMode {
+            lastDragPoint = nil
+            mapRenderer?.beginAreaSelection(at: point)
+            return
+        }
         if event.clickCount == 2 {
             mapRenderer?.zoom(factor: 2, around: point)
         }
@@ -6001,6 +6785,10 @@ final class MapCanvasView: MTKView {
 
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        if analysisMode {
+            mapRenderer?.updateAreaSelection(to: point)
+            return
+        }
         if let previous = lastDragPoint {
             mapRenderer?.pan(deltaX: point.x - previous.x, deltaY: point.y - previous.y)
         }
@@ -6008,7 +6796,14 @@ final class MapCanvasView: MTKView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if analysisMode {
+            mapRenderer?.finishAreaSelection(at: convert(event.locationInWindow, from: nil))
+        }
         lastDragPoint = nil
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: analysisMode ? .crosshair : .openHand)
     }
 
     override func scrollWheel(with event: NSEvent) {
@@ -6041,10 +6836,12 @@ struct MetalMapView: NSViewRepresentable {
     @ObservedObject var comparison: ComparisonSettings
     @ObservedObject var export: MapExportController
     @ObservedObject var viewport: ViewportController
+    let analysisMode: Bool
 
     final class Coordinator {
         var renderer: MapRenderer?
         var lastExportID = -1
+        var lastAnalysisMode = false
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -6056,6 +6853,11 @@ struct MetalMapView: NSViewRepresentable {
     }
 
     func updateNSView(_ view: MapCanvasView, context: Context) {
+        view.analysisMode = analysisMode
+        if context.coordinator.lastAnalysisMode && !analysisMode {
+            context.coordinator.renderer?.cancelAreaSelection()
+        }
+        context.coordinator.lastAnalysisMode = analysisMode
         context.coordinator.renderer?.update(
             manifest: manifest,
             dataDirectory: dataDirectory,
@@ -6126,7 +6928,7 @@ enum MetalShader {
         uint layer;
         uint pass;
         uint zoom;
-        uint padding;
+        uint kindMask;
     };
 
     struct VectorOut {
@@ -6207,12 +7009,25 @@ enum MetalShader {
             sin(altitude)
         ));
 
-        float shadeOne = clamp(dot(normal, lightOne) * 0.5 + 0.5, 0.0, 1.0);
-        float shadeTwo = clamp(dot(normal, lightTwo) * 0.5 + 0.5, 0.0, 1.0);
-        float shade = clamp(max(shadeOne * 1.2, shadeTwo * 0.7), 0.0, 1.0);
-        shade = pow(shade, max(relief.contrast, 0.01));
-        float reliefGray = clamp((1.0 - shade) + relief.ambient, 0.0, 1.0);
-        float3 composed = mix(baseColor, float3(reliefGray), relief.opacity);
+        // Gegenlicht entfernt die konstante Helligkeit ebener Flächen. Das
+        // Reliefsignal ist dadurch exakt um neutrales 50-%-Grau zentriert.
+        float directionalShade = (dot(normal, lightOne) - dot(normal, lightTwo))
+            / (2.0 * cos(altitude));
+        float shapedShade = tanh(directionalShade * max(relief.contrast, 0.01) * 1.35);
+        float reliefTone = 0.5 + 0.5 * shapedShade;
+        reliefTone = mix(reliefTone, 1.0, clamp(relief.ambient, 0.0, 1.0));
+
+        // Farberhaltendes "Weiches Licht": Das Relief moduliert die vorhandene
+        // Oberflächenfarbe, statt sie wie zuvor mit grauen Pixeln zu ersetzen.
+        float3 softLight;
+        if (reliefTone <= 0.5) {
+            softLight = (1.0 - 2.0 * reliefTone) * baseColor * baseColor
+                + 2.0 * reliefTone * baseColor;
+        } else {
+            softLight = 2.0 * (1.0 - reliefTone) * baseColor
+                + (2.0 * reliefTone - 1.0) * sqrt(max(baseColor, float3(0.0)));
+        }
+        float3 composed = mix(baseColor, softLight, clamp(relief.opacity, 0.0, 1.0));
         return float4(composed, 1.0);
     }
 
@@ -6289,7 +7104,8 @@ enum MetalShader {
             1.0 - point.y / uniforms.viewport.y * 2.0
         );
         VectorOut out;
-        out.position = minimumZoom <= uniforms.zoom
+        bool kindEnabled = (uniforms.kindMask & (1u << kind)) != 0u;
+        out.position = minimumZoom <= uniforms.zoom && kindEnabled
             ? float4(clip, 0.0, 1.0)
             : float4(2.0, 2.0, 0.0, 1.0);
         out.color = color;
@@ -6321,18 +7137,280 @@ private final class RasterQueryTile: NSObject {
     }
 }
 
+private struct PopulationGrid: Decodable {
+    let version: Int
+    let source: String
+    let crs: String
+    let bounds: [Double]
+    let resolution: Double
+    let width: Int
+    let height: Int
+    let tileSize: Int
+    let suffix: String
+    let totalPopulation: Int
+    let tileSums: [String: Int]
+
+    var left: Double { bounds[0] }
+    var bottom: Double { bounds[1] }
+    var right: Double { bounds[2] }
+    var top: Double { bounds[3] }
+}
+
 final class RasterQueryService {
     private let manifest: MapManifest
     private let directory: URL
     private let level: MapManifest.Level
     private let cache = NSCache<NSString, RasterQueryTile>()
+    private let populationCache = NSCache<NSString, NSData>()
     private let queue = DispatchQueue(label: "TopoExplorer.map-query", qos: .userInteractive)
+    private let populationGrid: PopulationGrid?
 
     init(manifest: MapManifest, directory: URL) {
         self.manifest = manifest
         self.directory = directory
         level = manifest.levels.last!
+        let metadataURL = directory.appendingPathComponent("Analysis/population.json")
+        populationGrid = try? JSONDecoder().decode(
+            PopulationGrid.self, from: Data(contentsOf: metadataURL)
+        )
         cache.totalCostLimit = 48 * 1024 * 1024
+        populationCache.totalCostLimit = 24 * 1024 * 1024
+    }
+
+    func queryStatistics(
+        selection: MapSelection,
+        year2020: Bool,
+        completion: @escaping (AreaStatistics?, String?) -> Void
+    ) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let clippedMinX = max(selection.minX, self.manifest.left)
+            let clippedMinY = max(selection.minY, self.manifest.bottom)
+            let clippedMaxX = min(selection.maxX, self.manifest.right)
+            let clippedMaxY = min(selection.maxY, self.manifest.top)
+            guard clippedMaxX > clippedMinX, clippedMaxY > clippedMinY else {
+                DispatchQueue.main.async {
+                    completion(nil, "Die Auswahl liegt außerhalb der Kartendaten.")
+                }
+                return
+            }
+            let clipped = MapSelection(
+                x1: clippedMinX, y1: clippedMinY,
+                x2: clippedMaxX, y2: clippedMaxY
+            )
+
+            let land = self.landStatistics(in: clipped, year2020: year2020)
+            let population = self.population(in: clipped)
+            let statistics = AreaStatistics(
+                selection: clipped,
+                population: population.value,
+                populationSource: self.populationGrid?.source,
+                populationCoverage: population.coverage,
+                sampledResolution: land.resolution,
+                classes: land.classes
+            )
+            DispatchQueue.main.async { completion(statistics, nil) }
+        }
+    }
+
+    private func landStatistics(
+        in selection: MapSelection, year2020: Bool
+    ) -> (resolution: Double, classes: [AreaClassStatistic]) {
+        let maximumSamples = 900_000.0
+        let selectedLevel = manifest.levels.reversed().first { candidate in
+            ceil(selection.width / candidate.resolution)
+                * ceil(selection.height / candidate.resolution) <= maximumSamples
+        } ?? manifest.levels[0]
+        let range = pixelRange(
+            selection: selection,
+            left: manifest.left,
+            top: manifest.top,
+            resolution: selectedLevel.resolution,
+            width: selectedLevel.width,
+            height: selectedLevel.height
+        )
+        var counts = Array(repeating: 0.0, count: manifest.classes.count)
+        var sampled = 0.0
+        guard !range.x.isEmpty, !range.y.isEmpty else {
+            return (selectedLevel.resolution, [])
+        }
+
+        let firstTileX = range.x.lowerBound / manifest.tileSize
+        let lastTileX = (range.x.upperBound - 1) / manifest.tileSize
+        let firstTileY = range.y.lowerBound / manifest.tileSize
+        let lastTileY = (range.y.upperBound - 1) / manifest.tileSize
+        for tileY in firstTileY...lastTileY {
+            for tileX in firstTileX...lastTileX {
+                let key = TileKey(z: selectedLevel.z, x: tileX, y: tileY)
+                guard let data = landData(key, year2020: year2020) else { continue }
+                let startX = max(range.x.lowerBound, tileX * manifest.tileSize)
+                let endX = min(range.x.upperBound, (tileX + 1) * manifest.tileSize)
+                let startY = max(range.y.lowerBound, tileY * manifest.tileSize)
+                let endY = min(range.y.upperBound, (tileY + 1) * manifest.tileSize)
+                for globalY in startY..<endY {
+                    let localY = globalY - tileY * manifest.tileSize
+                    let cellTop = manifest.top - Double(globalY) * selectedLevel.resolution
+                    let cellBottom = cellTop - selectedLevel.resolution
+                    let overlapHeight = max(
+                        0, min(cellTop, selection.maxY) - max(cellBottom, selection.minY)
+                    )
+                    for globalX in startX..<endX {
+                        let localX = globalX - tileX * manifest.tileSize
+                        let cellLeft = manifest.left + Double(globalX) * selectedLevel.resolution
+                        let cellRight = cellLeft + selectedLevel.resolution
+                        let overlapWidth = max(
+                            0, min(cellRight, selection.maxX) - max(cellLeft, selection.minX)
+                        )
+                        let weight = overlapWidth * overlapHeight
+                            / (selectedLevel.resolution * selectedLevel.resolution)
+                        let classID = Int(data[localY * manifest.tileSize + localX])
+                        if counts.indices.contains(classID) { counts[classID] += weight }
+                        sampled += weight
+                    }
+                }
+            }
+        }
+
+        guard sampled > 0 else { return (selectedLevel.resolution, []) }
+        let area = selection.squareKilometers
+        let classes = manifest.classes.compactMap { landClass -> AreaClassStatistic? in
+            guard landClass.id != 0, counts[landClass.id] > 0 else { return nil }
+            let share = counts[landClass.id] / sampled
+            return AreaClassStatistic(
+                classID: landClass.id,
+                name: landClass.name,
+                group: landClass.group ?? "Sonstige",
+                squareKilometers: area * share,
+                share: share
+            )
+        }.sorted { $0.squareKilometers > $1.squareKilometers }
+        return (selectedLevel.resolution, classes)
+    }
+
+    private func population(in selection: MapSelection) -> (value: Int?, coverage: Double) {
+        guard
+            let grid = populationGrid,
+            grid.version == 1,
+            grid.crs == manifest.crs,
+            grid.bounds.count == 4
+        else { return (nil, 0) }
+        let clippedMinX = max(selection.minX, grid.left)
+        let clippedMinY = max(selection.minY, grid.bottom)
+        let clippedMaxX = min(selection.maxX, grid.right)
+        let clippedMaxY = min(selection.maxY, grid.top)
+        guard clippedMaxX > clippedMinX, clippedMaxY > clippedMinY else { return (nil, 0) }
+        let clipped = MapSelection(
+            x1: clippedMinX, y1: clippedMinY,
+            x2: clippedMaxX, y2: clippedMaxY
+        )
+        let coverage = min(1, clipped.width * clipped.height / (selection.width * selection.height))
+        let range = pixelRange(
+            selection: clipped,
+            left: grid.left,
+            top: grid.top,
+            resolution: grid.resolution,
+            width: grid.width,
+            height: grid.height
+        )
+        guard !range.x.isEmpty, !range.y.isEmpty else { return (nil, coverage) }
+        let firstTileX = range.x.lowerBound / grid.tileSize
+        let lastTileX = (range.x.upperBound - 1) / grid.tileSize
+        let firstTileY = range.y.lowerBound / grid.tileSize
+        let lastTileY = (range.y.upperBound - 1) / grid.tileSize
+        var total = 0.0
+        for tileY in firstTileY...lastTileY {
+            for tileX in firstTileX...lastTileX {
+                let tileLeft = grid.left + Double(tileX * grid.tileSize) * grid.resolution
+                let tileRight = min(
+                    grid.right,
+                    grid.left + Double((tileX + 1) * grid.tileSize) * grid.resolution
+                )
+                let tileTop = grid.top - Double(tileY * grid.tileSize) * grid.resolution
+                let tileBottom = max(
+                    grid.bottom,
+                    grid.top - Double((tileY + 1) * grid.tileSize) * grid.resolution
+                )
+                if clipped.minX <= tileLeft, clipped.maxX >= tileRight,
+                   clipped.minY <= tileBottom, clipped.maxY >= tileTop
+                {
+                    total += Double(grid.tileSums["\(tileX)_\(tileY)"] ?? 0)
+                    continue
+                }
+                guard let data = populationTile(x: tileX, y: tileY, grid: grid) else { continue }
+                let startX = max(range.x.lowerBound, tileX * grid.tileSize)
+                let endX = min(range.x.upperBound, (tileX + 1) * grid.tileSize)
+                let startY = max(range.y.lowerBound, tileY * grid.tileSize)
+                let endY = min(range.y.upperBound, (tileY + 1) * grid.tileSize)
+                for globalY in startY..<endY {
+                    let localY = globalY - tileY * grid.tileSize
+                    let cellTop = grid.top - Double(globalY) * grid.resolution
+                    let cellBottom = cellTop - grid.resolution
+                    let overlapHeight = max(
+                        0, min(cellTop, clipped.maxY) - max(cellBottom, clipped.minY)
+                    )
+                    for globalX in startX..<endX {
+                        let localX = globalX - tileX * grid.tileSize
+                        let offset = (localY * grid.tileSize + localX) * 2
+                        let value = Int(data[offset]) | (Int(data[offset + 1]) << 8)
+                        let cellLeft = grid.left + Double(globalX) * grid.resolution
+                        let cellRight = cellLeft + grid.resolution
+                        let overlapWidth = max(
+                            0, min(cellRight, clipped.maxX) - max(cellLeft, clipped.minX)
+                        )
+                        let weight = overlapWidth * overlapHeight
+                            / (grid.resolution * grid.resolution)
+                        total += Double(value) * weight
+                    }
+                }
+            }
+        }
+        return (Int(total.rounded()), coverage)
+    }
+
+    private func pixelRange(
+        selection: MapSelection,
+        left: Double,
+        top: Double,
+        resolution: Double,
+        width: Int,
+        height: Int
+    ) -> (x: Range<Int>, y: Range<Int>) {
+        let startX = min(width, max(0, Int(floor((selection.minX - left) / resolution))))
+        let endX = min(width, max(startX, Int(ceil((selection.maxX - left) / resolution))))
+        let startY = min(height, max(0, Int(floor((top - selection.maxY) / resolution))))
+        let endY = min(height, max(startY, Int(ceil((top - selection.minY) / resolution))))
+        return (startX..<endX, startY..<endY)
+    }
+
+    private func landData(_ key: TileKey, year2020: Bool) -> Data? {
+        let levelDirectory = directory.appendingPathComponent("z\(key.z)", isDirectory: true)
+        let selectedURL: URL
+        if year2020, manifest.landcoverProduct == nil {
+            let yearURL = levelDirectory.appendingPathComponent("\(key.filename).land2020.z")
+            selectedURL = FileManager.default.fileExists(atPath: yearURL.path)
+                ? yearURL
+                : levelDirectory.appendingPathComponent("\(key.filename).\(manifest.landcoverSuffix)")
+        } else {
+            selectedURL = levelDirectory.appendingPathComponent("\(key.filename).\(manifest.landcoverSuffix)")
+        }
+        guard let packed = try? Data(contentsOf: selectedURL) else { return nil }
+        return ZlibDecoder.decode(packed, expectedSize: manifest.tileSize * manifest.tileSize)
+    }
+
+    private func populationTile(x: Int, y: Int, grid: PopulationGrid) -> Data? {
+        let key = "\(x)_\(y)" as NSString
+        if let cached = populationCache.object(forKey: key) { return cached as Data }
+        let url = directory.appendingPathComponent(
+            "Analysis/\(x)_\(y).\(grid.suffix)"
+        )
+        guard
+            let packed = try? Data(contentsOf: url),
+            let decoded = ZlibDecoder.decode(
+                packed, expectedSize: grid.tileSize * grid.tileSize * 2
+            )
+        else { return nil }
+        populationCache.setObject(decoded as NSData, forKey: key, cost: decoded.count)
+        return decoded
     }
 
     func query(worldX: Double, worldY: Double, year2020: Bool, completion: @escaping (MapProbe) -> Void) {
@@ -7991,10 +9069,47 @@ struct RuntimeVerifier {
             )
             print("Zeitvergleich: \(comparisonURL.path)")
         }
+        try verifyAreaAnalysis(root: root, manifest: manifest)
         try verifyVectors(root: root, device: device, queue: queue, library: library)
         try verifyExport()
         try verifyHighResolutionExport(root: root, manifest: manifest)
         print("Kacheldekompression, Metal-Shader und Referenzbilder OK.")
+    }
+
+    @MainActor
+    private static func verifyAreaAnalysis(root: URL, manifest: MapManifest) throws {
+        let metadata = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: root.appendingPathComponent("Analysis/population.json"))
+        ) as? [String: Any]
+        guard let expectedPopulation = metadata?["totalPopulation"] as? Int else {
+            throw VerificationError.analysis
+        }
+        let service = RasterQueryService(manifest: manifest, directory: root)
+        let selection = MapSelection(
+            x1: manifest.left, y1: manifest.bottom,
+            x2: manifest.right, y2: manifest.top
+        )
+        var result: AreaStatistics?
+        var failure: String?
+        service.queryStatistics(selection: selection, year2020: false) { statistics, message in
+            result = statistics
+            failure = message
+        }
+        let deadline = Date().addingTimeInterval(30)
+        while result == nil, failure == nil, Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+        guard
+            failure == nil,
+            let result,
+            result.population == expectedPopulation,
+            result.classes.contains(where: { $0.group == "Landwirtschaft" }),
+            result.classes.contains(where: { $0.group == "Wald" })
+        else { throw VerificationError.analysis }
+        print(
+            "Flächenanalyse OK: \(expectedPopulation) Einwohner, "
+                + "\(result.classes.count) Flächenklassen"
+        )
     }
 
     private static func verifyVectors(
@@ -8168,7 +9283,8 @@ struct RuntimeVerifier {
             labels: [
                 MapLabel(
                     id: "harz", name: "Harz",
-                    point: CGPoint(x: 48, y: 32), prominence: 100_000
+                    point: CGPoint(x: 48, y: 32), prominence: 100_000,
+                    kind: 0, angleDegrees: 0
                 )
             ],
             styleDocument: style,
@@ -8179,8 +9295,10 @@ struct RuntimeVerifier {
                 reliefContrast: 2.5, ambientLight: 0.08
             ),
             renderLayers: RenderLayers(
-                roads: true, railways: true, waterways: true,
-                boundaries: true, places: true, geonames: true
+                roads: true, roadKinds: .max,
+                railways: true, railwayKinds: .max,
+                waterways: true, boundaries: true, places: true,
+                geonames: true, geonameKinds: .max
             ),
             renderComparison: RenderComparison(mode: 0, splitPosition: 0.5),
             sources: []
@@ -8223,8 +9341,10 @@ struct RuntimeVerifier {
             reliefContrast: 2.5, ambientLight: 0.08
         )
         let renderLayers = RenderLayers(
-            roads: true, railways: true, waterways: true,
-            boundaries: true, places: true, geonames: true
+            roads: true, roadKinds: .max,
+            railways: true, railwayKinds: .max,
+            waterways: true, boundaries: true, places: true,
+            geonames: true, geonameKinds: .max
         )
         let renderComparison = RenderComparison(mode: 2, splitPosition: 0.42)
         renderer.update(
@@ -8265,7 +9385,8 @@ struct RuntimeVerifier {
             labels: [
                 MapLabel(
                     id: "harz-export", name: "Harz",
-                    point: CGPoint(x: 160, y: 120), prominence: 100_000
+                    point: CGPoint(x: 160, y: 120), prominence: 100_000,
+                    kind: 0, angleDegrees: 0
                 )
             ],
             styleDocument: document,
@@ -8531,6 +9652,7 @@ private enum VerificationError: Error {
     case outsideMap
     case style
     case vector
+    case analysis
 }
 
 ======================================================================
@@ -9933,14 +11055,14 @@ def place_min_zoom(place_type: str, population: int) -> int:
             return 1
         if population >= 100_000:
             return 2
-        return 3
+        return 3 if population >= 20_000 else 4
     if place_type == "town":
-        return 3 if population >= 50_000 else 4
+        return 3 if population >= 50_000 else 4 if population >= 10_000 else 5
     if place_type in {"suburb", "quarter", "borough"}:
-        return 5
+        return 6
     if place_type == "village":
-        return 5
-    return 6
+        return 6 if population >= 5_000 else 7
+    return 8 if place_type in {"hamlet", "isolated_dwelling"} else 9
 
 
 def geometry_lines(geometry: dict | None) -> Iterator[list[tuple[float, float]]]:
@@ -10825,6 +11947,153 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nAbgebrochen; fertige Arbeitsstufen werden beim nächsten Lauf fortgesetzt.", file=sys.stderr)
         raise SystemExit(130)
+
+======================================================================
+DATEI: preprocess/population_tiles.py
+SPRACHE: Python
+======================================================================
+#!/usr/bin/env python3
+"""Convert a census GeoTIFF into compact, non-visual analysis tiles."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import math
+import zlib
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+import rasterio
+from rasterio.windows import Window
+
+
+TARGET_CRS = "EPSG:3035"
+TILE_SIZE = 512
+FORMAT_VERSION = 1
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Zensus-Bevölkerung für Flächenanalysen kacheln")
+    parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--map-data", type=Path, default=Path("MapData/Germany"))
+    parser.add_argument("--compression", type=int, choices=range(1, 10), default=6)
+    return parser.parse_args()
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_tile(path: Path, values: np.ndarray, compression: int) -> None:
+    packed = zlib.compress(values.astype("<u2", copy=False).tobytes(order="C"), compression)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_bytes(packed)
+    temporary.replace(path)
+
+
+def main() -> None:
+    args = parse_args()
+    if not args.source.is_file():
+        raise SystemExit(f"Bevölkerungsraster fehlt: {args.source}")
+    manifest_path = args.map_data / "manifest.json"
+    if not manifest_path.is_file():
+        raise SystemExit(f"Kartenmanifest fehlt: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("crs") != TARGET_CRS:
+        raise SystemExit(f"Nicht unterstütztes Karten-KBS: {manifest.get('crs')}")
+
+    output = args.map_data / "Analysis"
+    output.mkdir(parents=True, exist_ok=True)
+    incomplete = output / ".population-incomplete"
+    incomplete.write_text("in Arbeit\n", encoding="utf-8")
+
+    with rasterio.open(args.source) as dataset:
+        if dataset.crs is None or dataset.crs.to_epsg() != 3035:
+            raise SystemExit(f"Bevölkerungsraster muss EPSG:3035 sein, ist aber {dataset.crs}")
+        transform = dataset.transform
+        if transform.b != 0 or transform.d != 0 or transform.a <= 0 or transform.e >= 0:
+            raise SystemExit("Gedrehte oder gespiegelte Bevölkerungsraster werden nicht unterstützt.")
+        if not math.isclose(transform.a, -transform.e, rel_tol=0, abs_tol=1e-6):
+            raise SystemExit("Bevölkerungszellen müssen quadratisch sein.")
+
+        tiles_x = math.ceil(dataset.width / TILE_SIZE)
+        tiles_y = math.ceil(dataset.height / TILE_SIZE)
+        total_population = 0
+        populated_cells = 0
+        tile_sums: dict[str, int] = {}
+        for tile_y in range(tiles_y):
+            for tile_x in range(tiles_x):
+                x = tile_x * TILE_SIZE
+                y = tile_y * TILE_SIZE
+                width = min(TILE_SIZE, dataset.width - x)
+                height = min(TILE_SIZE, dataset.height - y)
+                source = dataset.read(1, window=Window(x, y, width, height), masked=False)
+                valid = np.isfinite(source) & (source >= 0)
+                rounded = np.zeros(source.shape, dtype=np.uint16)
+                if np.any(valid):
+                    maximum = float(np.max(source[valid]))
+                    if maximum > np.iinfo(np.uint16).max:
+                        raise SystemExit(f"Einwohnerwert {maximum} überschreitet UInt16.")
+                    rounded[valid] = np.rint(source[valid]).astype(np.uint16)
+                    tile_population = int(rounded.sum(dtype=np.uint64))
+                    total_population += tile_population
+                    populated_cells += int(np.count_nonzero(rounded))
+                else:
+                    tile_population = 0
+                tile_sums[f"{tile_x}_{tile_y}"] = tile_population
+                tile = np.zeros((TILE_SIZE, TILE_SIZE), dtype=np.uint16)
+                tile[:height, :width] = rounded
+                write_tile(
+                    output / f"{tile_x}_{tile_y}.population.u16.z",
+                    tile,
+                    args.compression,
+                )
+
+        metadata = {
+            "version": FORMAT_VERSION,
+            "source": "Zensus Bevölkerung (100-m-Gitter)",
+            "sourceFile": args.source.name,
+            "sourceSHA256": sha256(args.source),
+            "crs": TARGET_CRS,
+            "bounds": [
+                dataset.bounds.left,
+                dataset.bounds.bottom,
+                dataset.bounds.right,
+                dataset.bounds.top,
+            ],
+            "resolution": transform.a,
+            "width": dataset.width,
+            "height": dataset.height,
+            "tileSize": TILE_SIZE,
+            "tilesX": tiles_x,
+            "tilesY": tiles_y,
+            "suffix": "population.u16.z",
+            "encoding": "little-endian uint16, zlib; 0 = keine ausgewiesene Bevölkerung",
+            "totalPopulation": total_population,
+            "populatedCells": populated_cells,
+            "tileSums": tile_sums,
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        temporary = output / "population.json.tmp"
+        temporary.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(output / "population.json")
+
+    incomplete.unlink(missing_ok=True)
+    print(
+        f"Bevölkerungsanalyse: {tiles_x * tiles_y} Kacheln, "
+        f"{total_population:,} Einwohner, {populated_cells:,} belegte Zellen"
+    )
+
+
+if __name__ == "__main__":
+    main()
 
 ======================================================================
 DATEI: preprocess/rich_landcover_10m.py
