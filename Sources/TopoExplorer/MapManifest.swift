@@ -153,7 +153,7 @@ struct MapManifest: Codable, Equatable {
                 !surfaceTexture.suffix.isEmpty,
                 (minZoom...maxZoom).contains(surfaceTexture.minZoom),
                 (surfaceTexture.minZoom...maxZoom).contains(surfaceTexture.maxZoom),
-                (0...0.50).contains(surfaceTexture.defaultStrength),
+                (0...0.60).contains(surfaceTexture.defaultStrength),
                 surfaceTexture.fullStrengthResolution > 0,
                 surfaceTexture.hiddenResolution > surfaceTexture.fullStrengthResolution,
                 surfaceTexture.classWeights.count == classes.count,

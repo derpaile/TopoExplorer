@@ -720,12 +720,25 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                     .font(.caption)
-                    Slider(value: $style.surfaceTextureStrength, in: 0...0.50)
+                    Slider(value: $style.surfaceTextureStrength, in: 0...0.60)
+                }
+                .disabled(!style.surfaceTextureEnabled)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Kantenverstärkung")
+                        Spacer()
+                        Text(style.surfaceTextureEdgeStrength.formatted(.number.precision(.fractionLength(1))))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.caption)
+                    Slider(value: $style.surfaceTextureEdgeStrength, in: 0...2)
                 }
                 .disabled(!style.surfaceTextureEnabled)
 
                 HStack(spacing: 4) {
-                    ForEach([0.0, 0.20, 0.30, 0.40, 0.50], id: \.self) { strength in
+                    ForEach([0.0, 0.20, 0.30, 0.40, 0.50, 0.60], id: \.self) { strength in
                         Button(strength.formatted(.percent.precision(.fractionLength(0)))) {
                             style.surfaceTextureStrength = strength
                         }

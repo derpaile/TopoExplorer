@@ -43,7 +43,7 @@ enum MetalShader {
         uint active;
         float strength;
         float zoomWeight;
-        float padding;
+        float edgeStrength;
     };
 
     struct VectorSegment {
@@ -118,9 +118,20 @@ enum MetalShader {
         if (surface.active != 0u && surface.strength > 0.0 && surface.zoomWeight > 0.0) {
             constexpr sampler surfaceSampler(coord::normalized, address::clamp_to_edge, filter::linear);
             float sampleValue = surfaceTexture.sample(surfaceSampler, in.uv).r;
+            float2 texel = 1.0 / float2(surfaceTexture.get_width(), surfaceTexture.get_height());
+            float localMean = (
+                surfaceTexture.sample(surfaceSampler, in.uv + float2(texel.x, 0.0)).r
+                + surfaceTexture.sample(surfaceSampler, in.uv - float2(texel.x, 0.0)).r
+                + surfaceTexture.sample(surfaceSampler, in.uv + float2(0.0, texel.y)).r
+                + surfaceTexture.sample(surfaceSampler, in.uv - float2(0.0, texel.y)).r
+            ) * 0.25;
+            sampleValue = clamp(
+                sampleValue + (sampleValue - localMean) * clamp(surface.edgeStrength, 0.0, 2.0),
+                0.0, 1.0
+            );
             // UInt8 128 ist exakt neutral; 0 und 255 bilden die Endpunkte.
             float detail = clamp((sampleValue * 255.0 - 128.0) / 127.0, -1.0, 1.0);
-            float amount = clamp(surface.strength, 0.0, 0.50)
+            float amount = clamp(surface.strength, 0.0, 0.60)
                 * clamp(surface.zoomWeight, 0.0, 1.0)
                 * clamp(surfaceWeights[classIndex], 0.0, 1.0);
             texturedBase *= 1.0 + detail * amount;
@@ -197,7 +208,7 @@ enum MetalShader {
     float vectorCoreWidth(uint layer, uint kind)
     {
         if (layer == 1u) {
-            return kind <= 1u ? 2.8 : (kind <= 3u ? 2.1 : (kind <= 5u ? 1.5 : 1.0));
+            return kind <= 1u ? 2.25 : (kind <= 3u ? 2.05 : (kind <= 5u ? 1.45 : 0.95));
         }
         if (layer == 2u) return kind <= 2u ? 1.5 : 1.0;
         if (layer == 3u) {
@@ -214,9 +225,9 @@ enum MetalShader {
     float4 vectorCoreColor(uint layer, uint kind)
     {
         if (layer == 1u) {
-            if (kind == 1u) return float4(0.96, 0.84, 0.68, 0.96);
-            if (kind <= 3u) return float4(0.95, 0.76, 0.47, 0.92);
-            return float4(0.16, 0.12, 0.10, 0.82);
+            if (kind <= 3u) return float4(0.93, 0.92, 0.89, 0.90);
+            if (kind <= 5u) return float4(0.88, 0.88, 0.85, 0.80);
+            return float4(0.82, 0.83, 0.80, 0.68);
         }
         if (layer == 2u) return float4(0.05, 0.04, 0.05, 0.86);
         if (layer == 3u) {
@@ -239,9 +250,7 @@ enum MetalShader {
     float4 vectorCasingColor(uint layer, uint kind)
     {
         if (layer == 1u) {
-            return kind == 1u
-                ? float4(0.70, 0.25, 0.23, 0.86)
-                : float4(0.76, 0.49, 0.19, 0.82);
+            return float4(0.30, 0.31, 0.30, 0.50);
         }
         if (layer == 2u) return float4(0.70, 0.25, 0.23, 0.86);
         if (layer == 8u) return float4(0.98, 0.96, 0.91, 0.88);

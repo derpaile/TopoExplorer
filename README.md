@@ -77,7 +77,7 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Landoberfläche: 40 Klassen durchsuchen, direkt färben, einzeln oder gruppenweise ausgrauen
 - Themen: Naturatlas, Kulturarten, Waldarten und Kontrastreich
 - Reliefregler: Stärke, Überhöhung und Kontrast ändern
-- Oberflächentextur: klassen- und zoomabhängige Sentinel-2-Feinstruktur mit Schnellvergleich 0/20/30/40/50 %
+- Oberflächentextur: klassen- und zoomabhängige Sentinel-2-Feinstruktur mit Kantenverstärkung und Schnellvergleich bis 60 %
 - Referenzansichten: Harz, Alpen, Küste, Ruhrgebiet und Flachland direkt anspringen
 - Ebenen: Straßen, Bahn, Flüsse, Grenzen, Orte und Natur-/Geländenamen einzeln schalten
 - Energieinfrastruktur: 380-, 220- und 110-kV-Netze sowie Umspannwerke, Transformatoren, Wind-, Solar- und konventionelle Erzeugungsanlagen aus OpenStreetMap

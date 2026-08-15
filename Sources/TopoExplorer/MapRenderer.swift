@@ -35,7 +35,7 @@ private struct SurfaceUniforms {
     var active: UInt32
     var strength: Float
     var zoomWeight: Float
-    var padding: Float = 0
+    var edgeStrength: Float
 }
 
 private struct VectorUniforms {
@@ -316,7 +316,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             var surfaceUniforms = SurfaceUniforms(
                 active: textures.surface == nil || !style.surfaceEnabled ? 0 : 1,
                 strength: style.surfaceStrength,
-                zoomWeight: manifest.surfaceZoomWeight(at: level)
+                zoomWeight: manifest.surfaceZoomWeight(at: level),
+                edgeStrength: style.surfaceEdgeStrength
             )
             encoder.setFragmentBytes(
                 &surfaceUniforms,
@@ -687,7 +688,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             var surfaceUniforms = SurfaceUniforms(
                 active: textures.surface == nil || !request.renderStyle.surfaceEnabled ? 0 : 1,
                 strength: request.renderStyle.surfaceStrength,
-                zoomWeight: manifest.surfaceZoomWeight(at: level)
+                zoomWeight: manifest.surfaceZoomWeight(at: level),
+                edgeStrength: request.renderStyle.surfaceEdgeStrength
             )
             encoder.setFragmentBytes(
                 &surfaceUniforms,

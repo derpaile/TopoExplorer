@@ -42,8 +42,10 @@ vier Kindkacheln gemittelt; der Shader blendet sie zusätzlich zwischen 20 und
 Landwirtschaft 100 %, Wald 85 %, Grasland 65 %, Siedlung 42 %, Wasser 0 %.
 
 Unter `MapData/Germany/SurfaceTexture/` entsteht außerdem eine reine
-TopoExplorer-Vergleichsgrafik mit 0, 20, 30, 40 und 50 % Modulation. Sie enthält
-nur Klassenfarben plus Graustufen-Detail, keine Satellitenfarben.
+TopoExplorer-Vergleichsgrafik mit 0, 20, 30, 40, 50 und 60 % Modulation. Eine
+regelbare Kantenverstärkung hebt kleinräumige Übergänge im Detailkanal hervor.
+Die Vergleichsgrafik enthält zusätzlich die echten Vektorstraßen, aber weiterhin
+keine Satellitenfarben.
 
 Nach einer Änderung der Vergleichsstärken lässt sie sich ohne erneuten Abruf
 aus den vorhandenen Tiles erzeugen:

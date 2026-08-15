@@ -49,6 +49,7 @@ struct RenderStyle {
     let sunAzimuthRadians: Float
     let surfaceEnabled: Bool
     let surfaceStrength: Float
+    let surfaceEdgeStrength: Float
 
     init(
         colors: [SIMD4<Float>],
@@ -58,7 +59,8 @@ struct RenderStyle {
         ambientLight: Float,
         sunAzimuthRadians: Float = 5.4977871438,
         surfaceEnabled: Bool = true,
-        surfaceStrength: Float = 0.30
+        surfaceStrength: Float = 0.30,
+        surfaceEdgeStrength: Float = 1.0
     ) {
         self.colors = colors
         self.reliefOpacity = reliefOpacity
@@ -68,6 +70,7 @@ struct RenderStyle {
         self.sunAzimuthRadians = sunAzimuthRadians
         self.surfaceEnabled = surfaceEnabled
         self.surfaceStrength = surfaceStrength
+        self.surfaceEdgeStrength = surfaceEdgeStrength
     }
 }
 
@@ -89,6 +92,7 @@ final class StyleSettings: ObservableObject {
     private static let visibilityStorageKey = "TopoExplorer.surfaceVisibility.v1"
     private static let textureEnabledStorageKey = "TopoExplorer.surfaceTextureEnabled.v1"
     private static let textureStrengthStorageKey = "TopoExplorer.surfaceTextureStrength.v1"
+    private static let textureEdgeStorageKey = "TopoExplorer.surfaceTextureEdgeStrength.v1"
     private static let styleContentType = UTType(
         filenameExtension: "topostyle",
         conformingTo: .json
@@ -306,6 +310,7 @@ final class StyleSettings: ObservableObject {
     @Published var sunAzimuthDegrees: Double { didSet { propertyChanged() } }
     @Published var surfaceTextureEnabled: Bool { didSet { surfaceTextureChanged() } }
     @Published var surfaceTextureStrength: Double { didSet { surfaceTextureChanged() } }
+    @Published var surfaceTextureEdgeStrength: Double { didSet { surfaceTextureChanged() } }
     @Published private(set) var customStyles: [MapStyleDocument]
     @Published private(set) var activeStyleName: String
     @Published var errorMessage: String?
@@ -333,7 +338,11 @@ final class StyleSettings: ObservableObject {
         let savedTextureStrength = UserDefaults.standard.object(
             forKey: Self.textureStrengthStorageKey
         ) as? Double
-        surfaceTextureStrength = min(max(savedTextureStrength ?? 0.30, 0), 0.50)
+        surfaceTextureStrength = min(max(savedTextureStrength ?? 0.30, 0), 0.60)
+        let savedEdgeStrength = UserDefaults.standard.object(
+            forKey: Self.textureEdgeStorageKey
+        ) as? Double
+        surfaceTextureEdgeStrength = min(max(savedEdgeStrength ?? 1.0, 0), 2.0)
         activeStyleName = original.name
         activeStyleID = original.id
         errorMessage = nil
@@ -513,7 +522,8 @@ final class StyleSettings: ObservableObject {
             ambientLight: Float(ambientLight),
             sunAzimuthRadians: Float(sunAzimuthDegrees * .pi / 180),
             surfaceEnabled: surfaceTextureEnabled,
-            surfaceStrength: Float(surfaceTextureStrength)
+            surfaceStrength: Float(surfaceTextureStrength),
+            surfaceEdgeStrength: Float(surfaceTextureEdgeStrength)
         )
     }
 
@@ -550,6 +560,7 @@ final class StyleSettings: ObservableObject {
         guard !isApplying else { return }
         UserDefaults.standard.set(surfaceTextureEnabled, forKey: Self.textureEnabledStorageKey)
         UserDefaults.standard.set(surfaceTextureStrength, forKey: Self.textureStrengthStorageKey)
+        UserDefaults.standard.set(surfaceTextureEdgeStrength, forKey: Self.textureEdgeStorageKey)
         revision &+= 1
     }
 

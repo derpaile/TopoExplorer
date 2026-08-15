@@ -12,6 +12,7 @@ import argparse
 import json
 import math
 import os
+import struct
 import time
 import urllib.error
 import urllib.parse
@@ -47,7 +48,8 @@ SOURCE_URL = (
     "SentinelMissions/Sentinel2.html#sentinel-2-level-3-quarterly-mosaics"
 )
 HANNOVER_LON_LAT = (9.732, 52.375)
-STRENGTHS = (0.0, 0.20, 0.30, 0.40, 0.50)
+STRENGTHS = (0.0, 0.20, 0.30, 0.40, 0.50, 0.60)
+EDGE_STRENGTH = 1.0
 
 
 @dataclass(frozen=True)
@@ -454,6 +456,100 @@ def hex_rgb(value: str) -> tuple[int, int, int]:
     return (number >> 16) & 255, (number >> 8) & 255, number & 255
 
 
+def preview_road_masks(
+    root: Path,
+    level: dict,
+    tiles: list[Tile],
+    tile_size: int,
+    crop_x: int,
+    crop_y: int,
+    crop_size: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    vector_directory = root / "Vectors" / f"z{level['z']}"
+    if not vector_directory.is_dir():
+        return None
+    min_x, min_y = min(tile.x for tile in tiles), min(tile.y for tile in tiles)
+    masks = tuple(np.zeros((crop_size, crop_size), dtype=bool) for _ in range(3))
+
+    def draw_segment(mask: np.ndarray, start: tuple[float, float], end: tuple[float, float]) -> None:
+        x1, y1 = start[0] - crop_x, start[1] - crop_y
+        x2, y2 = end[0] - crop_x, end[1] - crop_y
+        if max(x1, x2) < -1 or min(x1, x2) > crop_size or max(y1, y2) < -1 or min(y1, y2) > crop_size:
+            return
+        steps = max(2, int(math.ceil(max(abs(x2 - x1), abs(y2 - y1)))) + 1)
+        xx = np.rint(np.linspace(x1, x2, steps)).astype(np.int32)
+        yy = np.rint(np.linspace(y1, y2, steps)).astype(np.int32)
+        inside = (xx >= 0) & (xx < crop_size) & (yy >= 0) & (yy < crop_size)
+        mask[yy[inside], xx[inside]] = True
+
+    for tile in tiles:
+        path = vector_directory / f"{tile.x}_{tile.y}.vector.z"
+        if not path.is_file():
+            continue
+        data = zlib.decompress(path.read_bytes())
+        if len(data) < 18 or data[:4] not in (b"TVT1", b"TVT2"):
+            continue
+        magic = data[:4]
+        _, extent, _ = struct.unpack_from("<HHH", data, 4)
+        line_count, _ = struct.unpack_from("<II", data, 10)
+        offset = 22 if magic == b"TVT2" else 18
+        scale = tile_size / extent
+        base_x = (tile.x - min_x) * tile_size
+        base_y = (tile.y - min_y) * tile_size
+        for _ in range(line_count):
+            layer, kind, minimum_zoom, _, point_count, name_length = struct.unpack_from(
+                "<BBBBHH", data, offset
+            )
+            offset += 8
+            points = np.frombuffer(data, dtype="<i2", count=point_count * 2, offset=offset).reshape(
+                point_count, 2
+            )
+            offset += point_count * 4 + name_length
+            if layer != 1 or minimum_zoom > int(level["z"]):
+                continue
+            target = masks[0 if kind <= 3 else 1 if kind <= 5 else 2]
+            for first, second in zip(points, points[1:]):
+                draw_segment(
+                    target,
+                    (base_x + float(first[0]) * scale, base_y + float(first[1]) * scale),
+                    (base_x + float(second[0]) * scale, base_y + float(second[1]) * scale),
+                )
+    return masks if any(np.any(mask) for mask in masks) else None
+
+
+def dilate(mask: np.ndarray, radius: int) -> np.ndarray:
+    if radius <= 0:
+        return mask
+    padded = np.pad(mask, radius, mode="constant")
+    result = np.zeros_like(mask)
+    for offset_y in range(-radius, radius + 1):
+        for offset_x in range(-radius, radius + 1):
+            if offset_x * offset_x + offset_y * offset_y > radius * radius:
+                continue
+            y0, x0 = radius + offset_y, radius + offset_x
+            result |= padded[y0 : y0 + mask.shape[0], x0 : x0 + mask.shape[1]]
+    return result
+
+
+def overlay_preview_roads(
+    image: np.ndarray,
+    masks: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
+) -> np.ndarray:
+    if masks is None:
+        return image
+    result = image.astype(np.float32)
+
+    def blend(mask: np.ndarray, color: tuple[int, int, int], opacity: float) -> None:
+        result[mask] = result[mask] * (1 - opacity) + np.asarray(color) * opacity
+
+    primary, regional, local = masks
+    blend(dilate(primary, 2), (77, 79, 77), 0.50)
+    blend(local, (209, 212, 204), 0.68)
+    blend(dilate(regional, 1), (225, 224, 217), 0.80)
+    blend(dilate(primary, 1), (237, 235, 227), 0.90)
+    return np.clip(result, 0, 255).astype(np.uint8)
+
+
 def write_preview(
     root: Path,
     manifest: dict,
@@ -484,10 +580,17 @@ def write_preview(
     base = palette[np.minimum(land, len(palette) - 1)]
     class_weight = np.asarray(weights, dtype=np.float32)[np.minimum(land, len(weights) - 1)]
     detail = np.clip((surface.astype(np.float32) - 128) / 127, -1, 1)
+    padded = np.pad(detail, 1, mode="edge")
+    local_mean = (
+        padded[1:-1, :-2] + padded[1:-1, 2:] + padded[:-2, 1:-1] + padded[2:, 1:-1]
+    ) * 0.25
+    detail = np.clip(detail + (detail - local_mean) * EDGE_STRENGTH, -1, 1)
+    road_masks = preview_road_masks(root, level, tiles, tile_size, x0, y0, crop)
     panels = []
     for strength in STRENGTHS:
         factor = 1 + detail * class_weight * strength
-        panels.append(np.clip(base * factor[..., None], 0, 255).astype(np.uint8))
+        panel = np.clip(base * factor[..., None], 0, 255).astype(np.uint8)
+        panels.append(overlay_preview_roads(panel, road_masks))
     comparison = np.concatenate(panels, axis=1)
     output_directory = root / "SurfaceTexture"
     output_directory.mkdir(parents=True, exist_ok=True)
@@ -506,7 +609,9 @@ def write_preview(
             dataset.write(np.moveaxis(comparison, 2, 0))
     metadata = {
         "panelsLeftToRight": [f"{value:.0%}" for value in STRENGTHS],
-        "description": "TopoExplorer-Klassenfarben, nur durch neutralen Detailkanal moduliert",
+        "edgeStrength": EDGE_STRENGTH,
+        "roads": road_masks is not None,
+        "description": "Klassenfarben mit neutralem Detailkanal und hellen Vektorstraßen",
     }
     output.with_suffix(".json").write_text(
         json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
