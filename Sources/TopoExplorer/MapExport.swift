@@ -253,6 +253,29 @@ enum MapExportWriter {
             context.saveGState()
             context.translateBy(x: x, y: y)
             context.rotate(by: CGFloat(-label.angleDegrees * .pi / 180))
+            if label.kind == 13 || label.kind == 14 {
+                let boxWidth = max(34 * pixelRatio, CGFloat(label.name.count * 8 + 14) * pixelRatio)
+                let boxHeight = 22 * pixelRatio
+                let box = CGRect(
+                    x: -boxWidth / 2, y: -boxHeight / 2,
+                    width: boxWidth, height: boxHeight
+                )
+                context.addPath(
+                    CGPath(
+                        roundedRect: box, cornerWidth: 4 * pixelRatio,
+                        cornerHeight: 4 * pixelRatio, transform: nil
+                    )
+                )
+                if label.kind == 13 {
+                    context.setFillColor(CGColor(red: 0.02, green: 0.30, blue: 0.62, alpha: 1))
+                    context.setStrokeColor(CGColor(gray: 1, alpha: 0.96))
+                } else {
+                    context.setFillColor(CGColor(red: 0.98, green: 0.78, blue: 0.05, alpha: 1))
+                    context.setStrokeColor(CGColor(gray: 0, alpha: 0.88))
+                }
+                context.setLineWidth(pixelRatio)
+                context.drawPath(using: .fillStroke)
+            }
             context.textPosition = CGPoint(x: -bounds.midX, y: -bounds.midY)
             CTLineDraw(line, context)
             context.restoreGState()
@@ -261,6 +284,7 @@ enum MapExportWriter {
 
     private static func labelSize(_ label: MapLabel) -> CGFloat {
         switch label.kind {
+        case 13, 14: 11
         case 7: 11
         case 8: 15
         case 9, 11: 12
@@ -278,6 +302,7 @@ enum MapExportWriter {
 
     private static func labelFontName(_ label: MapLabel) -> String {
         switch label.kind {
+        case 13, 14: "HelveticaNeue-Bold"
         case 7: "TimesNewRomanPS-ItalicMT"
         case 8: "Baskerville"
         case 9: "HelveticaNeue-LightItalic"
@@ -288,8 +313,8 @@ enum MapExportWriter {
         }
     }
 
-    private static func labelColor(_: MapLabel) -> CGColor {
-        CGColor(gray: 1, alpha: 0.96)
+    private static func labelColor(_ label: MapLabel) -> CGColor {
+        label.kind == 14 ? CGColor(gray: 0, alpha: 0.92) : CGColor(gray: 1, alpha: 0.96)
     }
 
     private static func drawScaleBar(

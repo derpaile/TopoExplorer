@@ -49,6 +49,36 @@ struct VectorPlace {
     let name: String
 }
 
+struct RoadShield: Decodable {
+    let reference: String
+    let roadKind: UInt8
+    let x: Double
+    let y: Double
+    let minZoom: UInt8
+}
+
+private struct RoadShieldDocument: Decodable {
+    let version: Int
+    let crs: String
+    let shields: [RoadShield]
+}
+
+enum RoadShieldIndex {
+    static func load(from mapDirectory: URL) -> [RoadShield] {
+        let url = mapDirectory
+            .appendingPathComponent("Vectors", isDirectory: true)
+            .appendingPathComponent("road-shields.json.z")
+        guard
+            let packed = try? Data(contentsOf: url, options: .mappedIfSafe),
+            let decoded = ZlibDecoder.decodeUnknown(packed),
+            let document = try? JSONDecoder().decode(RoadShieldDocument.self, from: decoded),
+            document.version == 1,
+            document.crs == "EPSG:3035"
+        else { return [] }
+        return document.shields
+    }
+}
+
 final class VectorTile: NSObject {
     let extent: Int
     let buffer: Int

@@ -18,4 +18,22 @@ if ! command -v osmium >/dev/null 2>&1; then
 fi
 
 ./scripts/download_supplemental_data.sh
-exec .venv/bin/python preprocess/germany_vectors.py "$@"
+
+VECTOR_OUTPUT="MapData/Germany/Vectors"
+VECTOR_PBF="Data/Raw/OSM/germany-latest.osm.pbf"
+arguments=("$@")
+for ((index = 1; index <= ${#arguments}; index++)); do
+  case "${arguments[$index]}" in
+    --output)
+      VECTOR_OUTPUT="${arguments[$((index + 1))]}"
+      ;;
+    --pbf)
+      VECTOR_PBF="${arguments[$((index + 1))]}"
+      ;;
+  esac
+done
+
+.venv/bin/python preprocess/germany_vectors.py "$@"
+.venv/bin/python preprocess/road_shields.py \
+  --pbf "$VECTOR_PBF" \
+  --output "$VECTOR_OUTPUT/road-shields.json.z"

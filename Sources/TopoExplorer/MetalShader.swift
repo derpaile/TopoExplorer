@@ -224,9 +224,9 @@ enum MetalShader {
     float4 vectorCoreColor(uint layer, uint kind)
     {
         if (layer == 1u) {
-            if (kind <= 3u) return float4(0.93, 0.92, 0.89, 0.90);
-            if (kind <= 5u) return float4(0.88, 0.88, 0.85, 0.80);
-            return float4(0.82, 0.83, 0.80, 0.68);
+            if (kind <= 3u) return float4(0.93, 0.92, 0.89, 0.98);
+            if (kind <= 5u) return float4(0.88, 0.88, 0.85, 0.94);
+            return float4(0.82, 0.83, 0.80, 0.86);
         }
         if (layer == 2u) return float4(0.05, 0.04, 0.05, 0.86);
         if (layer == 3u) {
@@ -249,7 +249,7 @@ enum MetalShader {
     float4 vectorCasingColor(uint layer, uint kind)
     {
         if (layer == 1u) {
-            return float4(0.30, 0.31, 0.30, 0.50);
+            return float4(0.30, 0.31, 0.30, 0.74);
         }
         if (layer == 2u) return float4(0.70, 0.25, 0.23, 0.86);
         if (layer == 8u) return float4(0.98, 0.96, 0.91, 0.88);

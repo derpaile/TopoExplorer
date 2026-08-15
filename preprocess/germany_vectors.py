@@ -38,7 +38,7 @@ SOURCE_CRS = "EPSG:4326"
 GEONAMES_CRS = "EPSG:25832"
 MAGIC = b"TVT1"
 FORMAT_VERSION = 1
-PIPELINE_VERSION = 6
+PIPELINE_VERSION = 7
 EXTENT = 8192
 BUFFER = 128  # 8 screen pixels for a 512 pixel raster tile
 TILE_HEADER = struct.Struct("<4sHHHII")
@@ -337,7 +337,8 @@ def classify_line(properties: dict) -> LineStyle | None:
     highway = properties.get("highway")
     if highway in ROAD_TYPES:
         kind, min_zoom = ROAD_TYPES[str(highway)]
-        return LineStyle(LAYER_ROAD, kind, min_zoom, flags, name)
+        route_reference = str(properties.get("ref") or "").strip()
+        return LineStyle(LAYER_ROAD, kind, min_zoom, flags, route_reference or name)
     railway = properties.get("railway")
     if railway in RAIL_TYPES:
         kind, min_zoom = RAIL_TYPES[str(railway)]
@@ -956,6 +957,7 @@ def write_osmium_config(path: Path) -> None:
             "admin_level",
             "name",
             "name:de",
+            "ref",
             "bridge",
             "tunnel",
         ],

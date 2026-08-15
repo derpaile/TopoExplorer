@@ -63,6 +63,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     private let vectorPipeline: MTLRenderPipelineState
     private var tileCache: TileCache
     private var vectorCache: VectorTileCache
+    private var roadShields: [RoadShield] = []
     private var queryService: RasterQueryService?
 
     private var manifest: MapManifest?
@@ -187,6 +188,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             )
             if dataChanged {
                 vectorCache = VectorTileCache(device: commandQueue.device)
+                roadShields = RoadShieldIndex.load(from: newDirectory)
                 queryService = RasterQueryService(manifest: newManifest, directory: newDirectory)
                 needsFit = true
             }
@@ -960,7 +962,13 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 }
             }
         }
-        return (lineCount, layoutLabels(places, viewport: viewport))
+        return (
+            lineCount,
+            layoutLabels(
+                places, roadShields: roadShields, visibleZoom: visibleZoom,
+                layers: renderLayers, viewport: viewport
+            )
+        )
     }
 
     private func layerEnabled(_ layer: VectorLayer, in layers: RenderLayers) -> Bool {
@@ -1072,6 +1080,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
 
     private func layoutLabels(
         _ candidates: [(VectorPlace, Double, Double)],
+        roadShields: [RoadShield],
+        visibleZoom: Int,
+        layers: RenderLayers,
         viewport: RenderViewport
     ) -> [MapLabel] {
         var seen = Set<String>()
@@ -1084,6 +1095,35 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         var labels: [MapLabel] = []
         let visibleBounds = CGRect(origin: .zero, size: viewport.logicalSize)
             .insetBy(dx: 6, dy: 6)
+        if layers.roads {
+            for shield in roadShields where Int(shield.minZoom) <= visibleZoom {
+                let kindBit = UInt32(1) << UInt32(shield.roadKind)
+                guard layers.roadKinds & kindBit != 0 else { continue }
+                let x = (shield.x - viewport.centerX) * viewport.pixelsPerMeter
+                    + Double(viewport.logicalSize.width) / 2
+                let y = (viewport.centerY - shield.y) * viewport.pixelsPerMeter
+                    + Double(viewport.logicalSize.height) / 2
+                let width = max(34.0, Double(shield.reference.count) * 8.0 + 14.0)
+                let rectangle = CGRect(
+                    x: x - width / 2, y: y - 12,
+                    width: width, height: 24
+                ).insetBy(dx: -18, dy: -12)
+                guard visibleBounds.contains(rectangle) else { continue }
+                guard !occupied.contains(where: { $0.intersects(rectangle) }) else { continue }
+                let identity = "route|\(shield.reference)|\(Int(shield.x / 100))|\(Int(shield.y / 100))"
+                guard seen.insert(identity).inserted else { continue }
+                occupied.append(rectangle)
+                labels.append(
+                    MapLabel(
+                        id: identity, name: shield.reference,
+                        point: CGPoint(x: x, y: y), prominence: Double(shield.roadKind),
+                        kind: shield.reference.hasPrefix("A ") ? 13 : 14,
+                        angleDegrees: 0
+                    )
+                )
+                if labels.count >= 32 { break }
+            }
+        }
         for (place, worldX, worldY) in sorted {
             let x = (worldX - viewport.centerX) * viewport.pixelsPerMeter
                 + Double(viewport.logicalSize.width) / 2
