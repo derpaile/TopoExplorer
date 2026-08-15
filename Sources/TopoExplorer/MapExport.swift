@@ -254,16 +254,16 @@ enum MapExportWriter {
             context.translateBy(x: x, y: y)
             context.rotate(by: CGFloat(-label.angleDegrees * .pi / 180))
             if label.kind == 13 || label.kind == 14 {
-                let boxWidth = max(34 * pixelRatio, CGFloat(label.name.count * 8 + 14) * pixelRatio)
-                let boxHeight = 22 * pixelRatio
+                let boxWidth = max(20 * pixelRatio, CGFloat(label.name.count) * 5.2 * pixelRatio + 7 * pixelRatio)
+                let boxHeight = 16 * pixelRatio
                 let box = CGRect(
                     x: -boxWidth / 2, y: -boxHeight / 2,
                     width: boxWidth, height: boxHeight
                 )
                 context.addPath(
                     CGPath(
-                        roundedRect: box, cornerWidth: 4 * pixelRatio,
-                        cornerHeight: 4 * pixelRatio, transform: nil
+                        roundedRect: box, cornerWidth: 3 * pixelRatio,
+                        cornerHeight: 3 * pixelRatio, transform: nil
                     )
                 )
                 if label.kind == 13 {
@@ -284,7 +284,7 @@ enum MapExportWriter {
 
     private static func labelSize(_ label: MapLabel) -> CGFloat {
         switch label.kind {
-        case 13, 14: 11
+        case 13, 14: 9
         case 7: 11
         case 8: 15
         case 9, 11: 12

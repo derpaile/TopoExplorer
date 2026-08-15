@@ -1096,6 +1096,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         let visibleBounds = CGRect(origin: .zero, size: viewport.logicalSize)
             .insetBy(dx: 6, dy: 6)
         if layers.roads {
+            typealias ShieldCandidate = (shield: RoadShield, x: Double, y: Double)
+            var grouped: [String: [ShieldCandidate]] = [:]
             for shield in roadShields where Int(shield.minZoom) <= visibleZoom {
                 let kindBit = UInt32(1) << UInt32(shield.roadKind)
                 guard layers.roadKinds & kindBit != 0 else { continue }
@@ -1103,25 +1105,59 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     + Double(viewport.logicalSize.width) / 2
                 let y = (viewport.centerY - shield.y) * viewport.pixelsPerMeter
                     + Double(viewport.logicalSize.height) / 2
-                let width = max(34.0, Double(shield.reference.count) * 8.0 + 14.0)
-                let rectangle = CGRect(
-                    x: x - width / 2, y: y - 12,
-                    width: width, height: 24
-                ).insetBy(dx: -18, dy: -12)
-                guard visibleBounds.contains(rectangle) else { continue }
-                guard !occupied.contains(where: { $0.intersects(rectangle) }) else { continue }
-                let identity = "route|\(shield.reference)|\(Int(shield.x / 100))|\(Int(shield.y / 100))"
-                guard seen.insert(identity).inserted else { continue }
-                occupied.append(rectangle)
-                labels.append(
-                    MapLabel(
-                        id: identity, name: shield.reference,
-                        point: CGPoint(x: x, y: y), prominence: Double(shield.roadKind),
-                        kind: shield.reference.hasPrefix("A ") ? 13 : 14,
-                        angleDegrees: 0
+                guard visibleBounds.contains(CGPoint(x: x, y: y)) else { continue }
+                grouped[shield.reference, default: []].append((shield, x, y))
+            }
+            let centerX = Double(viewport.logicalSize.width) / 2
+            let centerY = Double(viewport.logicalSize.height) / 2
+            let repetitions = visibleZoom <= 3 ? 1 : visibleZoom == 4 ? 2 : visibleZoom == 5 ? 3 : 4
+            let spacing = visibleZoom <= 4 ? 250.0 : visibleZoom == 5 ? 220.0 : visibleZoom == 6 ? 200.0 : 180.0
+            let references = grouped.keys.sorted { left, right in
+                let leftA = left.hasPrefix("A "), rightA = right.hasPrefix("A ")
+                if leftA != rightA { return leftA }
+                let leftNumber = Int(left.dropFirst(2)) ?? .max
+                let rightNumber = Int(right.dropFirst(2)) ?? .max
+                return leftNumber == rightNumber ? left < right : leftNumber < rightNumber
+            }
+            var selected: [String: [ShieldCandidate]] = [:]
+            for reference in references {
+                let ordered = (grouped[reference] ?? []).sorted {
+                    hypot($0.x - centerX, $0.y - centerY)
+                        < hypot($1.x - centerX, $1.y - centerY)
+                }
+                for candidate in ordered {
+                    let existing = selected[reference, default: []]
+                    guard existing.count < repetitions else { break }
+                    guard existing.allSatisfy({ hypot($0.x - candidate.x, $0.y - candidate.y) >= spacing }) else { continue }
+                    selected[reference, default: []].append(candidate)
+                }
+            }
+            let maximum = visibleZoom <= 2 ? 14 : visibleZoom == 3 ? 22 : visibleZoom == 4 ? 30 : 40
+            routeRounds: for round in 0..<repetitions {
+                for reference in references {
+                    guard let route = selected[reference], round < route.count else { continue }
+                    let candidate = route[round]
+                    let width = max(20.0, Double(reference.count) * 5.2 + 7.0)
+                    let rectangle = CGRect(
+                        x: candidate.x - width / 2, y: candidate.y - 8,
+                        width: width, height: 16
+                    ).insetBy(dx: -8, dy: -6)
+                    guard visibleBounds.contains(rectangle) else { continue }
+                    guard !occupied.contains(where: { $0.intersects(rectangle) }) else { continue }
+                    let shield = candidate.shield
+                    let identity = "route|\(reference)|\(Int(shield.x / 100))|\(Int(shield.y / 100))"
+                    occupied.append(rectangle)
+                    labels.append(
+                        MapLabel(
+                            id: identity, name: reference,
+                            point: CGPoint(x: candidate.x, y: candidate.y),
+                            prominence: Double(shield.roadKind),
+                            kind: reference.hasPrefix("A ") ? 13 : 14,
+                            angleDegrees: 0
+                        )
                     )
-                )
-                if labels.count >= 32 { break }
+                    if labels.count >= maximum { break routeRounds }
+                }
             }
         }
         for (place, worldX, worldY) in sorted {

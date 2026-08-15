@@ -1045,12 +1045,12 @@ struct ContentView: View {
         Canvas(rendersAsynchronously: true) { context, _ in
             for label in viewport.labels {
                 if label.kind == 13 || label.kind == 14 {
-                    let width = max(34, CGFloat(label.name.count) * 8 + 14)
+                    let width = max(20, CGFloat(label.name.count) * 5.2 + 7)
                     let rectangle = CGRect(
-                        x: label.point.x - width / 2, y: label.point.y - 11,
-                        width: width, height: 22
+                        x: label.point.x - width / 2, y: label.point.y - 8,
+                        width: width, height: 16
                     )
-                    let shape = Path(roundedRect: rectangle, cornerRadius: 4)
+                    let shape = Path(roundedRect: rectangle, cornerRadius: 3)
                     let motorway = label.kind == 13
                     context.fill(
                         shape,
@@ -1059,7 +1059,7 @@ struct ContentView: View {
                     context.stroke(
                         shape,
                         with: .color(motorway ? .white.opacity(0.96) : .black.opacity(0.88)),
-                        lineWidth: motorway ? 1.2 : 1
+                        lineWidth: 0.8
                     )
                 }
                 context.draw(mapLabelText(label), at: label.point, anchor: .center)
@@ -1072,10 +1072,10 @@ struct ContentView: View {
         let text = Text(label.kind == 7 ? "▲ \(label.name)" : label.name)
         switch label.kind {
         case 13:
-            return text.font(.system(size: 11, weight: .bold, design: .rounded))
+            return text.font(.system(size: 9, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         case 14:
-            return text.font(.system(size: 11, weight: .bold, design: .rounded))
+            return text.font(.system(size: 9, weight: .bold, design: .rounded))
                 .foregroundColor(.black.opacity(0.92))
         case 7:
             return text.font(.system(size: 12, weight: .light, design: .serif))
