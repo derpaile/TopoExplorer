@@ -55,6 +55,18 @@ Die optionalen Behörden- und Landesdaten werden nach lokaler Lizenzprüfung mit
 `scripts/preprocess_geoscience.sh` aufbereitet. Konfiguration, COG-Master,
 Quellenqualität und TVT2 sind in `docs/Geowissenschaften.md` beschrieben.
 
+Die Sentinel-Oberflächentextur wird für Deutschland fortsetzbar erzeugt. OAuth-
+Zugangsdaten liegen dabei im macOS-Schlüsselbund; RGB kann ohne zusätzlichen
+Satellitenabruf getrennt auf einem Archivlaufwerk gesichert werden:
+
+```sh
+./scripts/configure_cdse_credentials.sh
+./scripts/preprocess_surface_texture.sh --germany --band-profile rgb \
+  --archive-dir /Volumes/TopoArchiv/Sentinel-2025-Q2 --archive-format uint16
+```
+
+Details zu Quoten, Speicherbedarf und Prüfexport: `docs/Oberflaechentextur.md`.
+
 ## App bauen und starten
 
 ```sh
@@ -77,7 +89,7 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Landoberfläche: 40 Klassen durchsuchen, direkt färben, einzeln oder gruppenweise ausgrauen
 - Themen: Naturatlas, Kulturarten, Waldarten und Kontrastreich
 - Reliefregler: Stärke, Überhöhung und Kontrast ändern
-- Oberflächentextur: klassen- und zoomabhängige Sentinel-2-Feinstruktur mit Kantenverstärkung und Schnellvergleich bis 60 %
+- Oberflächentextur: deutschlandweite, klassen- und zoomabhängige Sentinel-2-Feinstruktur mit Kantenverstärkung und Schnellvergleich bis 60 %; gleichzeitig mit Relief und allen Farb-/Fachkarten
 - Referenzansichten: Harz, Alpen, Küste, Ruhrgebiet und Flachland direkt anspringen
 - Ebenen: Straßen, Bahn, Flüsse, Grenzen, Orte und Natur-/Geländenamen einzeln schalten
 - Energieinfrastruktur: 380-, 220- und 110-kV-Netze sowie Umspannwerke, Transformatoren, Wind-, Solar- und konventionelle Erzeugungsanlagen aus OpenStreetMap

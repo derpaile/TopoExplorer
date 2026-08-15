@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 """Create neutral Sentinel-2 surface-detail tiles for TopoExplorer.
 
-The pipeline never creates an RGB satellite product. Remote input is requested
-one band at a time and kept in memory; local input is read window by window.
-Only the centered, clipped high-pass signal is persisted as UInt8 ``surface.z``.
+The app dataset only persists the centered, clipped high-pass signal as UInt8
+``surface.z``. Remote bands are bundled per request and kept in memory. An
+explicit archive path can additionally retain exactly the RGB input used by the
+detail pipeline; it never causes a second satellite request.
 """
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import math
 import os
+import shutil
 import struct
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -50,6 +54,8 @@ SOURCE_URL = (
 HANNOVER_LON_LAT = (9.732, 52.375)
 STRENGTHS = (0.0, 0.20, 0.30, 0.40, 0.50, 0.60)
 EDGE_STRENGTH = 1.0
+KEYCHAIN_SERVICE = "de.topoexplorer.cdse"
+MAX_PROCESS_PIXELS = 2_500
 
 
 @dataclass(frozen=True)
@@ -58,12 +64,28 @@ class Tile:
     y: int
 
 
+@dataclass(frozen=True)
+class TileBlock:
+    tiles: tuple[Tile, ...]
+    min_x: int
+    min_y: int
+    max_x: int
+    max_y: int
+
+    @property
+    def identifier(self) -> str:
+        return f"{self.min_x}_{self.min_y}_{self.max_x}_{self.max_y}"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Sentinel-2-Oberflächendetails als TopoExplorer-Kacheln erzeugen"
     )
     parser.add_argument("--map-data", type=Path, default=Path("MapData/Germany"))
     parser.add_argument("--quarter", default="2025-Q2", help="Quartal, z. B. 2025-Q2")
+    parser.add_argument(
+        "--germany", action="store_true", help="Deutschland vollständig statt Hannover erzeugen"
+    )
     parser.add_argument("--radius-km", type=float, default=10.0, help="Hannover-PoC-Radius")
     parser.add_argument("--center-lon", type=float, default=HANNOVER_LON_LAT[0])
     parser.add_argument("--center-lat", type=float, default=HANNOVER_LON_LAT[1])
@@ -75,8 +97,36 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--highpass-radius", type=int, default=24, help="Filterradius in Pixeln")
     parser.add_argument("--nir-weight", type=float, default=0.22)
     parser.add_argument("--clip-percentile", type=float, default=98.0)
-    parser.add_argument("--minimum-observations", type=int, default=1)
+    parser.add_argument("--minimum-observations", type=int)
     parser.add_argument("--minimum-zoom", type=int, help="Niedrigste erzeugte Zoomstufe")
+    parser.add_argument("--chunk-tiles", type=int, default=4, help="Kacheln je API-Blockkante")
+    parser.add_argument(
+        "--calibration-tiles", type=int, default=24, help="Deutschland-Stichprobe zur Normierung"
+    )
+    parser.add_argument("--normalization-limit", type=float, help="Feste symmetrische Clip-Grenze")
+    parser.add_argument(
+        "--band-profile",
+        choices=("auto", "quota", "rgb", "rgbnir", "full"),
+        default="auto",
+        help="quota: Grün/Rot/NIR; rgb: RGB; rgbnir: RGB/NIR; full: plus Beobachtungen",
+    )
+    parser.add_argument(
+        "--archive-dir",
+        type=Path,
+        help="Dieselben genutzten RGB-Pixel zusätzlich als Farbkacheln sichern",
+    )
+    parser.add_argument(
+        "--archive-format",
+        choices=("jpeg", "uint16"),
+        default="jpeg",
+        help="JPEG-Sichtarchiv oder verlustfreue 16-Bit-DN-Kacheln",
+    )
+    parser.add_argument(
+        "--hannover-jpeg",
+        type=Path,
+        help="Pfad für den JPEG-Prüfexport; Standard: SurfaceTexture/hannover-check.jpg",
+    )
+    parser.add_argument("--restart", action="store_true", help="Deutschland-Blöcke neu berechnen")
     parser.add_argument("--compression", type=int, choices=range(1, 10), default=6)
     parser.add_argument("--preview-size", type=int, default=768)
     parser.add_argument("--no-preview", action="store_true")
@@ -116,7 +166,7 @@ def load_manifest(root: Path) -> dict:
     return manifest
 
 
-def select_tiles(manifest: dict, args: argparse.Namespace) -> tuple[dict, list[Tile]]:
+def select_hannover_tiles(manifest: dict, args: argparse.Namespace) -> tuple[dict, list[Tile]]:
     level = max(manifest["levels"], key=lambda item: int(item["z"]))
     resolution = float(level["resolution"])
     if not math.isclose(resolution, 10.0):
@@ -134,6 +184,61 @@ def select_tiles(manifest: dict, args: argparse.Namespace) -> tuple[dict, list[T
     if min_x > max_x or min_y > max_y:
         raise SystemExit("Die gewählte Testregion liegt außerhalb der Karte")
     return level, [Tile(x, y) for y in range(min_y, max_y + 1) for x in range(min_x, max_x + 1)]
+
+
+def landcover_suffix(manifest: dict) -> str:
+    return manifest.get("landcoverProduct", {}).get("suffix", "land.z")
+
+
+def select_germany_tiles(
+    root: Path, manifest: dict, level: dict, weights: list[float]
+) -> list[Tile]:
+    suffix = landcover_suffix(manifest)
+    weight_lookup = np.asarray(weights, dtype=np.float32)
+    selected = []
+    for path in sorted((root / f"z{level['z']}").glob(f"*.{suffix}")):
+        stem = path.name[: -len(suffix) - 1]
+        try:
+            x, y = map(int, stem.split("_"))
+            classes = np.frombuffer(zlib.decompress(path.read_bytes()), dtype=np.uint8)
+        except (ValueError, zlib.error) as error:
+            raise SystemExit(f"Landcover-Kachel nicht lesbar: {path}: {error}") from error
+        indices = np.minimum(classes, len(weight_lookup) - 1)
+        if np.any(weight_lookup[indices] > 0):
+            selected.append(Tile(x, y))
+    if not selected:
+        raise SystemExit("Keine texturierbaren Deutschland-Kacheln gefunden")
+    return selected
+
+
+def tile_blocks(tiles: list[Tile], chunk_tiles: int) -> list[TileBlock]:
+    groups: dict[tuple[int, int], list[Tile]] = {}
+    for tile in tiles:
+        groups.setdefault((tile.x // chunk_tiles, tile.y // chunk_tiles), []).append(tile)
+    result = []
+    for key in sorted(groups, key=lambda value: (value[1], value[0])):
+        members = tuple(sorted(groups[key], key=lambda tile: (tile.y, tile.x)))
+        result.append(
+            TileBlock(
+                members,
+                min(tile.x for tile in members),
+                min(tile.y for tile in members),
+                max(tile.x for tile in members),
+                max(tile.y for tile in members),
+            )
+        )
+    return result
+
+
+def estimated_processing_units(
+    blocks: list[TileBlock], tile_size: int, halo: int, input_bands: int
+) -> float:
+    pixels = sum(
+        ((block.max_x - block.min_x + 1) * tile_size + 2 * halo)
+        * ((block.max_y - block.min_y + 1) * tile_size + 2 * halo)
+        for block in blocks
+    )
+    return pixels / (512 * 512) * input_bands / 3
 
 
 def read_padded(dataset: rasterio.io.DatasetReader, window: Window) -> np.ndarray:
@@ -190,12 +295,14 @@ class LocalBands:
     def close(self) -> None:
         self.stack.close()
 
-    def read(self, tile: Tile, tile_size: int, halo: int) -> dict[str, np.ndarray]:
+    def read_window(
+        self, pixel_x: int, pixel_y: int, width: int, height: int
+    ) -> dict[str, np.ndarray]:
         window = Window(
-            tile.x * tile_size - halo,
-            tile.y * tile_size - halo,
-            tile_size + 2 * halo,
-            tile_size + 2 * halo,
+            pixel_x,
+            pixel_y,
+            width,
+            height,
         )
         result = {band: read_padded(dataset, window) for band, dataset in self.datasets.items()}
         if "observations" not in result:
@@ -204,21 +311,73 @@ class LocalBands:
             )
         return result
 
+    def read(self, tile: Tile, tile_size: int, halo: int) -> dict[str, np.ndarray]:
+        return self.read_window(
+            tile.x * tile_size - halo,
+            tile.y * tile_size - halo,
+            tile_size + 2 * halo,
+            tile_size + 2 * halo,
+        )
+
+
+def keychain_value(account: str) -> str | None:
+    try:
+        result = subprocess.run(
+            [
+                "security",
+                "find-generic-password",
+                "-s",
+                KEYCHAIN_SERVICE,
+                "-a",
+                account,
+                "-w",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+    return result.stdout.strip() or None
+
+
+def cdse_credentials() -> tuple[str, str, str]:
+    client_id = os.environ.get("CDSE_CLIENT_ID")
+    client_secret = os.environ.get("CDSE_CLIENT_SECRET")
+    if client_id and client_secret:
+        return client_id, client_secret, "Umgebungsvariablen"
+    client_id = keychain_value("client-id")
+    client_secret = keychain_value("client-secret")
+    if client_id and client_secret:
+        return client_id, client_secret, "macOS-Schlüsselbund"
+    raise SystemExit(
+        "CDSE-Zugangsdaten fehlen. Einmal ./scripts/configure_cdse_credentials.sh "
+        "ausführen oder CDSE_CLIENT_ID/CDSE_CLIENT_SECRET nur für diesen Prozess setzen."
+    )
+
 
 class SentinelHubBands:
-    def __init__(self, quarter: str, manifest: dict, level: dict):
-        client_id = os.environ.get("CDSE_CLIENT_ID")
-        client_secret = os.environ.get("CDSE_CLIENT_SECRET")
-        if not client_id or not client_secret:
-            raise SystemExit(
-                "Für den Copernicus-Abruf CDSE_CLIENT_ID und CDSE_CLIENT_SECRET setzen; "
-                "alternativ lokale Einzelbänder mit --b02/--b03/--b04 angeben."
-            )
+    def __init__(self, quarter: str, manifest: dict, level: dict, profile: str):
+        self.client_id, self.client_secret, credential_source = cdse_credentials()
+        self.profile = profile
+        self.token = ""
+        self.token_expires_at = 0.0
+        self._authenticate()
+        print(f"CDSE-Anmeldung: {credential_source}; Bandprofil: {profile}")
+        self.start, self.end = quarter_interval(quarter)
+        self.manifest = manifest
+        self.level = level
+
+    @property
+    def input_band_count(self) -> int:
+        return {"quota": 3, "rgb": 3, "rgbnir": 4, "full": 5}[self.profile]
+
+    def _authenticate(self) -> None:
         form = urllib.parse.urlencode(
             {
                 "grant_type": "client_credentials",
-                "client_id": client_id,
-                "client_secret": client_secret,
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
             }
         ).encode()
         request = urllib.request.Request(TOKEN_URL, data=form, method="POST")
@@ -228,37 +387,81 @@ class SentinelHubBands:
                 self.token = json.load(response)["access_token"]
         except (OSError, KeyError, json.JSONDecodeError) as error:
             raise SystemExit(f"CDSE-Anmeldung fehlgeschlagen: {error}") from error
-        self.start, self.end = quarter_interval(quarter)
-        self.manifest = manifest
-        self.level = level
+        self.token_expires_at = time.monotonic() + 50 * 60
 
     def read(self, tile: Tile, tile_size: int, halo: int) -> dict[str, np.ndarray]:
+        return self.read_window(
+            tile.x * tile_size - halo,
+            tile.y * tile_size - halo,
+            tile_size + 2 * halo,
+            tile_size + 2 * halo,
+        )
+
+    def read_window(
+        self, pixel_x: int, pixel_y: int, width: int, height: int
+    ) -> dict[str, np.ndarray]:
+        if width > MAX_PROCESS_PIXELS or height > MAX_PROCESS_PIXELS:
+            raise SystemExit(
+                f"Process-API-Limit überschritten: {width} × {height} statt maximal "
+                f"{MAX_PROCESS_PIXELS} × {MAX_PROCESS_PIXELS} Pixel"
+            )
         left, _, _, top = map(float, self.manifest["bounds"])
         resolution = float(self.level["resolution"])
-        pixel_x = tile.x * tile_size - halo
-        pixel_y = tile.y * tile_size - halo
-        width = height = tile_size + 2 * halo
         bounds = [
             left + pixel_x * resolution,
             top - (pixel_y + height) * resolution,
             left + (pixel_x + width) * resolution,
             top - pixel_y * resolution,
         ]
-        result = {}
-        for band in ("B02", "B03", "B04", "B08", "observations"):
-            result[band] = self._request_band(band, bounds, width, height)
-        return result
+        return self._request_window(bounds, width, height)
 
-    def _request_band(
-        self, band: str, bounds: list[float], width: int, height: int
-    ) -> np.ndarray:
-        evalscript = f"""//VERSION=3
-function setup() {{
-  return {{input: [{{bands: [\"{band}\", \"dataMask\"]}}],
-    output: {{bands: 2, sampleType: \"FLOAT32\"}}}};
-}}
-function evaluatePixel(sample) {{ return [sample.{band}, sample.dataMask]; }}
+    def _evalscript(self) -> str:
+        if self.profile == "quota":
+            return """//VERSION=3
+function setup() {
+  return {input: [{bands: ["B03", "B04", "B08", "dataMask"]}],
+    output: {bands: 3, sampleType: "UINT16"}};
+}
+function evaluatePixel(s) {
+  return [Math.max(0, 0.7874 * s.B03 + 0.2126 * s.B04),
+    Math.max(0, s.B08), s.dataMask];
+}
 """
+        if self.profile == "rgb":
+            return """//VERSION=3
+function setup() {
+  return {input: [{bands: ["B02", "B03", "B04", "dataMask"]}],
+    output: {bands: 4, sampleType: "UINT16"}};
+}
+function evaluatePixel(s) {
+  return [Math.max(0, s.B02), Math.max(0, s.B03), Math.max(0, s.B04), s.dataMask];
+}
+"""
+        if self.profile == "rgbnir":
+            return """//VERSION=3
+function setup() {
+  return {input: [{bands: ["B02", "B03", "B04", "B08", "dataMask"]}],
+    output: {bands: 5, sampleType: "UINT16"}};
+}
+function evaluatePixel(s) {
+  return [Math.max(0, s.B02), Math.max(0, s.B03), Math.max(0, s.B04),
+    Math.max(0, s.B08), s.dataMask];
+}
+"""
+        return """//VERSION=3
+function setup() {
+  return {input: [{bands: ["B02", "B03", "B04", "B08", "observations", "dataMask"]}],
+    output: {bands: 6, sampleType: "UINT16"}};
+}
+function evaluatePixel(s) {
+  return [Math.max(0, s.B02), Math.max(0, s.B03), Math.max(0, s.B04),
+    Math.max(0, s.B08), Math.max(0, s.observations), s.dataMask];
+}
+"""
+
+    def _request_window(
+        self, bounds: list[float], width: int, height: int
+    ) -> dict[str, np.ndarray]:
         payload = {
             "input": {
                 "bounds": {
@@ -283,10 +486,12 @@ function evaluatePixel(sample) {{ return [sample.{band}, sample.dataMask]; }}
                 "height": height,
                 "responses": [{"identifier": "default", "format": {"type": "image/tiff"}}],
             },
-            "evalscript": evalscript,
+            "evalscript": self._evalscript(),
         }
         data = json.dumps(payload).encode()
-        for attempt in range(4):
+        for attempt in range(6):
+            if time.monotonic() >= self.token_expires_at:
+                self._authenticate()
             request = urllib.request.Request(PROCESS_URL, data=data, method="POST")
             request.add_header("Authorization", f"Bearer {self.token}")
             request.add_header("Content-Type", "application/json")
@@ -294,14 +499,44 @@ function evaluatePixel(sample) {{ return [sample.{band}, sample.dataMask]; }}
                 with urllib.request.urlopen(request, timeout=120) as response:
                     encoded = response.read()
                 with MemoryFile(encoded) as memory, memory.open() as dataset:
-                    values = dataset.read(1).astype(np.float32)
-                    mask = dataset.read(2) > 0
-                values[~mask] = np.nan
-                return values
+                    values = dataset.read().astype(np.float32)
+                mask = values[-1] > 0
+                if self.profile == "quota":
+                    result = {"luminance": values[0], "B08": values[1]}
+                elif self.profile == "rgb":
+                    result = {"B02": values[0], "B03": values[1], "B04": values[2]}
+                elif self.profile == "rgbnir":
+                    result = {
+                        "B02": values[0],
+                        "B03": values[1],
+                        "B04": values[2],
+                        "B08": values[3],
+                    }
+                else:
+                    result = {
+                        "B02": values[0],
+                        "B03": values[1],
+                        "B04": values[2],
+                        "B08": values[3],
+                        "observations": values[4],
+                    }
+                for band in result.values():
+                    band[~mask] = np.nan
+                result["dataMask"] = mask
+                return result
+            except urllib.error.HTTPError as error:
+                if error.code == 401 and attempt < 5:
+                    self._authenticate()
+                    continue
+                retryable = error.code == 429 or 500 <= error.code < 600
+                if not retryable or attempt == 5:
+                    raise SystemExit(f"CDSE-Abruf fehlgeschlagen (HTTP {error.code})") from error
+                delay = min(float(error.headers.get("Retry-After", 2**attempt)), 30)
+                time.sleep(delay)
             except (urllib.error.URLError, rasterio.errors.RasterioError) as error:
-                if attempt == 3:
-                    raise SystemExit(f"CDSE-Abruf für {band} fehlgeschlagen: {error}") from error
-                time.sleep(2**attempt)
+                if attempt == 5:
+                    raise SystemExit(f"CDSE-Abruf fehlgeschlagen: {error}") from error
+                time.sleep(min(2**attempt, 30))
         raise AssertionError("unreachable")
 
 
@@ -339,24 +574,34 @@ def smooth_valid(values: np.ndarray, valid: np.ndarray, radius: int) -> np.ndarr
     return box_blur(box_blur(first, radius), radius)
 
 
-def detail_for_tile(
+def detail_for_region(
     bands: dict[str, np.ndarray],
-    tile_size: int,
+    core_width: int,
+    core_height: int,
     halo: int,
     radius: int,
     nir_weight: float,
     minimum_observations: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    blue, green, red = bands["B02"], bands["B03"], bands["B04"]
-    observations = bands["observations"]
+    if "luminance" in bands:
+        luminance = bands["luminance"]
+        spectral = [luminance]
+    else:
+        blue, green, red = bands["B02"], bands["B03"], bands["B04"]
+        spectral = [blue, green, red]
+        luminance = np.maximum(0, 0.0722 * blue + 0.7152 * green + 0.2126 * red)
+    observations = bands.get("observations")
+    data_mask = bands.get("dataMask")
     valid = (
-        np.isfinite(blue)
-        & np.isfinite(green)
-        & np.isfinite(red)
-        & np.isfinite(observations)
-        & (observations >= minimum_observations)
+        np.logical_and.reduce([np.isfinite(value) for value in spectral])
+        & (data_mask if data_mask is not None else True)
     )
-    luminance = np.maximum(0, 0.0722 * blue + 0.7152 * green + 0.2126 * red)
+    if minimum_observations > 0:
+        if observations is None:
+            raise SystemExit(
+                "--minimum-observations benötigt das Bandprofil full oder ein lokales Beobachtungsraster"
+            )
+        valid &= np.isfinite(observations) & (observations >= minimum_observations)
     log_luminance = np.log1p(luminance).astype(np.float32)
     detail = log_luminance - smooth_valid(log_luminance, valid, radius)
     nir = bands.get("B08")
@@ -365,8 +610,27 @@ def detail_for_tile(
         log_nir = np.log1p(np.maximum(0, nir)).astype(np.float32)
         detail += nir_weight * (log_nir - smooth_valid(log_nir, nir_valid, radius))
         valid &= nir_valid
-    core = np.s_[halo : halo + tile_size, halo : halo + tile_size]
+    core = np.s_[halo : halo + core_height, halo : halo + core_width]
     return np.ascontiguousarray(detail[core]), np.ascontiguousarray(valid[core])
+
+
+def detail_for_tile(
+    bands: dict[str, np.ndarray],
+    tile_size: int,
+    halo: int,
+    radius: int,
+    nir_weight: float,
+    minimum_observations: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    return detail_for_region(
+        bands,
+        tile_size,
+        tile_size,
+        halo,
+        radius,
+        nir_weight,
+        minimum_observations,
+    )
 
 
 def encode_detail(detail: np.ndarray, valid: np.ndarray, limit: float) -> np.ndarray:
@@ -384,11 +648,210 @@ def write_tile(path: Path, values: np.ndarray, compression: int) -> None:
     temporary.replace(path)
 
 
+def rgb_display_values(
+    blue: np.ndarray, green: np.ndarray, red: np.ndarray
+) -> np.ndarray:
+    reflectance = np.stack((red, green, blue)) / 10_000.0
+    display = np.power(np.clip(reflectance / 0.32, 0, 1), 1 / 1.8)
+    return np.rint(display * 255).astype(np.uint8)
+
+
+def write_rgb_archive_tile(
+    archive: Path,
+    level: dict,
+    manifest: dict,
+    tile: Tile,
+    rgb: tuple[np.ndarray, np.ndarray, np.ndarray],
+    archive_format: str,
+    compression: int,
+) -> Path:
+    directory = archive / "SourceRGB" / f"z{level['z']}"
+    directory.mkdir(parents=True, exist_ok=True)
+    blue, green, red = (np.nan_to_num(value, nan=0.0) for value in rgb)
+    if archive_format == "uint16":
+        output = directory / f"{tile.x}_{tile.y}.sentinel-rgb16.z"
+        values = np.clip(np.stack((red, green, blue)), 0, 65_535).astype("<u2")
+        payload = b"SRG1" + struct.pack("<HH", values.shape[2], values.shape[1]) + values.tobytes()
+        temporary = output.with_suffix(output.suffix + ".tmp")
+        temporary.write_bytes(zlib.compress(payload, compression))
+        temporary.replace(output)
+        return output
+
+    output = directory / f"{tile.x}_{tile.y}.sentinel-rgb.jpg"
+    values = rgb_display_values(blue, green, red)
+    resolution = float(level["resolution"])
+    left, _, _, top = map(float, manifest["bounds"])
+    transform_value = Affine(
+        resolution,
+        0,
+        left + tile.x * int(manifest["tileSize"]) * resolution,
+        0,
+        -resolution,
+        top - tile.y * int(manifest["tileSize"]) * resolution,
+    )
+    temporary = output.with_suffix(".tmp.jpg")
+    with rasterio.open(
+        temporary,
+        "w",
+        driver="JPEG",
+        width=values.shape[2],
+        height=values.shape[1],
+        count=3,
+        dtype="uint8",
+        crs=TARGET_CRS,
+        transform=transform_value,
+        quality=92,
+    ) as dataset:
+        dataset.write(values)
+    temporary.replace(output)
+    return output
+
+
+def read_rgb_archive_tile(
+    archive: Path, level: dict, tile: Tile, archive_format: str, tile_size: int
+) -> np.ndarray | None:
+    directory = archive / "SourceRGB" / f"z{level['z']}"
+    if archive_format == "uint16":
+        path = directory / f"{tile.x}_{tile.y}.sentinel-rgb16.z"
+        if not path.is_file():
+            return None
+        payload = zlib.decompress(path.read_bytes())
+        if len(payload) < 8 or payload[:4] != b"SRG1":
+            raise RuntimeError(f"Defekte Sentinel-RGB-Kachel: {path}")
+        width, height = struct.unpack_from("<HH", payload, 4)
+        values = np.frombuffer(payload, dtype="<u2", offset=8).reshape(3, height, width)
+        red, green, blue = values.astype(np.float32)
+        return rgb_display_values(blue, green, red)
+    path = directory / f"{tile.x}_{tile.y}.sentinel-rgb.jpg"
+    if not path.is_file():
+        return None
+    with rasterio.open(path) as dataset:
+        return dataset.read()[:3]
+
+
+def write_rgb_archive_preview(
+    archive: Path,
+    level: dict,
+    tiles: list[Tile],
+    archive_format: str,
+    tile_size: int,
+    crop_size: int,
+    output: Path,
+) -> Path | None:
+    min_x, max_x = min(tile.x for tile in tiles), max(tile.x for tile in tiles)
+    min_y, max_y = min(tile.y for tile in tiles), max(tile.y for tile in tiles)
+    width = (max_x - min_x + 1) * tile_size
+    height = (max_y - min_y + 1) * tile_size
+    mosaic = np.zeros((3, height, width), dtype=np.uint8)
+    found = False
+    for tile in tiles:
+        values = read_rgb_archive_tile(archive, level, tile, archive_format, tile_size)
+        if values is None:
+            continue
+        found = True
+        x0, y0 = (tile.x - min_x) * tile_size, (tile.y - min_y) * tile_size
+        mosaic[:, y0 : y0 + tile_size, x0 : x0 + tile_size] = values
+    if not found:
+        return None
+    crop = min(crop_size, width, height)
+    x0, y0 = (width - crop) // 2, (height - crop) // 2
+    values = mosaic[:, y0 : y0 + crop, x0 : x0 + crop]
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_suffix(".tmp.jpg")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", NotGeoreferencedWarning)
+        with rasterio.open(
+            temporary,
+            "w",
+            driver="JPEG",
+            width=crop,
+            height=crop,
+            count=3,
+            dtype="uint8",
+            quality=95,
+        ) as dataset:
+            dataset.write(values)
+    temporary.replace(output)
+    return output
+
+
+def write_jpeg_preview(source: Path, output: Path, prefix: Path | None = None) -> Path:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", NotGeoreferencedWarning)
+        with rasterio.open(source) as dataset:
+            values = dataset.read()
+    if prefix is not None and prefix.is_file():
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", NotGeoreferencedWarning)
+            with rasterio.open(prefix) as dataset:
+                first = dataset.read()[:3]
+        if first.shape[1] != values.shape[1]:
+            indices = np.linspace(0, first.shape[1] - 1, values.shape[1]).astype(np.int32)
+            first = first[:, indices]
+        values = np.concatenate((first, values[:3]), axis=2)
+    temporary = output.with_suffix(".tmp.jpg")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", NotGeoreferencedWarning)
+        with rasterio.open(
+            temporary,
+            "w",
+            driver="JPEG",
+            width=values.shape[2],
+            height=values.shape[1],
+            count=3,
+            dtype="uint8",
+            quality=95,
+        ) as dataset:
+            dataset.write(values[:3].astype(np.uint8))
+    temporary.replace(output)
+    return output
+
+
 def read_tile(path: Path, tile_size: int) -> np.ndarray:
     values = np.frombuffer(zlib.decompress(path.read_bytes()), dtype=np.uint8)
     if values.size != tile_size * tile_size:
         raise RuntimeError(f"Defekte Surface-Kachel: {path}")
     return values.reshape((tile_size, tile_size))
+
+
+def build_state_path(root: Path) -> Path:
+    return root / "SurfaceTexture" / "germany-build.json"
+
+
+def load_build_state(path: Path, configuration: dict, restart: bool) -> dict:
+    if not restart and path.is_file():
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            state = {}
+        if state.get("configuration") == configuration:
+            return state
+    return {"configuration": configuration, "completedBlocks": []}
+
+
+def save_build_state(path: Path, state: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def archive_preflight(archive: Path, tile_count: int, archive_format: str) -> None:
+    probe = archive
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    free = shutil.disk_usage(probe).free
+    rgb_per_tile = 1_650_000 if archive_format == "uint16" else 380_000
+    processed_per_tile = 210_000
+    estimated = int(tile_count * (rgb_per_tile + processed_per_tile) * 1.35)
+    reserve = 5 * 1024**3
+    if free < estimated + reserve:
+        raise SystemExit(
+            f"Zu wenig freier Speicher für das Sentinel-Archiv: etwa {estimated / 1024**3:.1f} GiB "
+            f"plus 5 GiB Reserve benötigt, {free / 1024**3:.1f} GiB frei. "
+            "Bitte --archive-dir auf ein externes Laufwerk legen."
+        )
 
 
 def derive_parent_tiles(
@@ -425,6 +888,212 @@ def derive_parent_tiles(
             )
         current = parents
     return current
+
+
+def process_germany(
+    root: Path,
+    manifest: dict,
+    level: dict,
+    tiles: list[Tile],
+    source: LocalBands | SentinelHubBands,
+    weights: list[float],
+    minimum_zoom: int,
+    args: argparse.Namespace,
+    profile: str,
+    minimum_observations: int,
+) -> float:
+    tile_size = int(manifest["tileSize"])
+    halo = args.highpass_radius * 3 + 2
+    blocks = tile_blocks(tiles, args.chunk_tiles)
+    input_bands = source.input_band_count if isinstance(source, SentinelHubBands) else 0
+    if input_bands:
+        estimate = estimated_processing_units(blocks, tile_size, halo, input_bands)
+        print(
+            f"Deutschland: {len(tiles)} Nutzkacheln in {len(blocks)} API-Blöcken; "
+            f"geschätzt {estimate:,.0f} Processing Units".replace(",", ".")
+        )
+
+    archive = args.archive_dir.resolve() if args.archive_dir else None
+    if archive is not None and profile not in ("rgb", "rgbnir", "full"):
+        raise SystemExit("Das Farbsichtarchiv benötigt --band-profile rgb, rgbnir oder full")
+    if archive is not None:
+        archive_preflight(archive, len(tiles), args.archive_format)
+
+    configuration = {
+        "quarter": args.quarter,
+        "profile": profile,
+        "highpassRadius": args.highpass_radius,
+        "nirWeight": args.nir_weight,
+        "clipPercentile": args.clip_percentile,
+        "minimumObservations": minimum_observations,
+        "maximumZoom": int(level["z"]),
+        "archive": str(archive) if archive else None,
+        "archiveFormat": args.archive_format if archive else None,
+    }
+    state_path = build_state_path(root)
+    state = load_build_state(state_path, configuration, args.restart)
+    completed = set() if args.restart else set(state.get("completedBlocks", []))
+    fine_directory = root / f"z{level['z']}"
+    archive_processed = archive / "Processed" if archive else None
+
+    def read_block(
+        block: TileBlock,
+    ) -> tuple[dict[str, np.ndarray], np.ndarray, np.ndarray]:
+        core_width = (block.max_x - block.min_x + 1) * tile_size
+        core_height = (block.max_y - block.min_y + 1) * tile_size
+        bands = source.read_window(
+            block.min_x * tile_size - halo,
+            block.min_y * tile_size - halo,
+            core_width + 2 * halo,
+            core_height + 2 * halo,
+        )
+        detail, valid = detail_for_region(
+            bands,
+            core_width,
+            core_height,
+            halo,
+            args.highpass_radius,
+            args.nir_weight,
+            minimum_observations,
+        )
+        return bands, detail, valid
+
+    def write_archive_sources(block: TileBlock, bands: dict[str, np.ndarray]) -> None:
+        if archive is None:
+            return
+        for tile in block.tiles:
+            x0 = (tile.x - block.min_x) * tile_size
+            y0 = (tile.y - block.min_y) * tile_size
+            rgb_crop = np.s_[
+                halo + y0 : halo + y0 + tile_size,
+                halo + x0 : halo + x0 + tile_size,
+            ]
+            write_rgb_archive_tile(
+                archive,
+                level,
+                manifest,
+                tile,
+                (bands["B02"][rgb_crop], bands["B03"][rgb_crop], bands["B04"][rgb_crop]),
+                args.archive_format,
+                args.compression,
+            )
+
+    def write_processed(
+        block: TileBlock, detail: np.ndarray, valid: np.ndarray, limit: float
+    ) -> None:
+        for tile in block.tiles:
+            x0 = (tile.x - block.min_x) * tile_size
+            y0 = (tile.y - block.min_y) * tile_size
+            crop = np.s_[y0 : y0 + tile_size, x0 : x0 + tile_size]
+            encoded = encode_detail(detail[crop], valid[crop], limit)
+            write_tile(
+                fine_directory / f"{tile.x}_{tile.y}.{SURFACE_SUFFIX}",
+                encoded,
+                args.compression,
+            )
+            if archive_processed is not None:
+                directory = archive_processed / f"z{level['z']}"
+                directory.mkdir(parents=True, exist_ok=True)
+                write_tile(
+                    directory / f"{tile.x}_{tile.y}.{SURFACE_SUFFIX}",
+                    encoded,
+                    args.compression,
+                )
+
+    limit = args.normalization_limit
+    if limit is None and state.get("normalizationLimit"):
+        limit = float(state["normalizationLimit"])
+    if limit is None:
+        candidates = [block for block in blocks if block.identifier not in completed]
+        if not candidates:
+            raise SystemExit("Build-Zustand enthält keine Normierungsgrenze; bitte --restart verwenden")
+        sample_count = min(args.calibration_tiles, len(candidates))
+        sample_indices = np.linspace(0, len(candidates) - 1, sample_count, dtype=np.int32)
+        calibration = [candidates[int(index)] for index in sample_indices]
+        calibration_directory = root / "SurfaceTexture" / "Calibration"
+        calibration_directory.mkdir(parents=True, exist_ok=True)
+        samples = []
+        for index, block in enumerate(calibration, 1):
+            path = calibration_directory / f"{block.identifier}.npz"
+            if path.is_file() and not args.restart:
+                with np.load(path) as saved:
+                    detail = saved["detail"]
+                    valid = saved["valid"]
+            else:
+                bands, detail, valid = read_block(block)
+                write_archive_sources(block, bands)
+                temporary = path.with_suffix(".tmp.npz")
+                np.savez_compressed(temporary, detail=detail, valid=valid)
+                temporary.replace(path)
+            if np.any(valid):
+                samples.append(np.abs(detail[valid][::32]))
+            state["calibrationBlocks"] = [item.identifier for item in calibration[:index]]
+            save_build_state(state_path, state)
+            print(f"\rNormierungsblöcke {index}/{len(calibration)}", end="", flush=True)
+        print()
+        if not samples:
+            raise SystemExit("Keine gültigen Sentinel-2-Beobachtungen in der Normierungsstichprobe")
+        limit = float(np.percentile(np.concatenate(samples), args.clip_percentile))
+        state["normalizationLimit"] = limit
+        save_build_state(state_path, state)
+        for block in calibration:
+            path = calibration_directory / f"{block.identifier}.npz"
+            with np.load(path) as saved:
+                write_processed(block, saved["detail"], saved["valid"], limit)
+            path.unlink()
+            completed.add(block.identifier)
+            state["completedBlocks"] = sorted(completed)
+            save_build_state(state_path, state)
+        state.pop("calibrationBlocks", None)
+        save_build_state(state_path, state)
+    if not math.isfinite(limit) or limit <= 1e-6:
+        raise SystemExit("--normalization-limit muss positiv und endlich sein")
+    print(f"Normierungsgrenze: ±{limit:.5f}")
+
+    remaining = [block for block in blocks if block.identifier not in completed]
+    for index, block in enumerate(remaining, 1):
+        bands, detail, valid = read_block(block)
+        write_archive_sources(block, bands)
+        write_processed(block, detail, valid, limit)
+        completed.add(block.identifier)
+        state["completedBlocks"] = sorted(completed)
+        save_build_state(state_path, state)
+        print(
+            f"\rDeutschland-Blöcke {len(completed)}/{len(blocks)} "
+            f"(dieser Lauf {index}/{len(remaining)})",
+            end="",
+            flush=True,
+        )
+    print()
+
+    maximum_zoom = int(level["z"])
+    derive_parent_tiles(
+        root, maximum_zoom, tiles, minimum_zoom, tile_size, args.compression
+    )
+    if archive_processed is not None:
+        derive_parent_tiles(
+            archive_processed,
+            maximum_zoom,
+            tiles,
+            minimum_zoom,
+            tile_size,
+            args.compression,
+        )
+        metadata = {
+            "quarter": args.quarter,
+            "crs": TARGET_CRS,
+            "tileSize": tile_size,
+            "sourceProfile": profile,
+            "sourceRGB": f"SourceRGB/z{maximum_zoom}",
+            "processedVariants": f"Processed/z{minimum_zoom}…z{maximum_zoom}",
+            "normalizationLimit": limit,
+            "note": "RGB und Detailkanal stammen aus denselben Process-API-Abrufen.",
+        }
+        archive.mkdir(parents=True, exist_ok=True)
+        (archive / "archive.json").write_text(
+            json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    return limit
 
 
 def class_weights(manifest: dict) -> list[float]:
@@ -653,33 +1322,90 @@ def update_manifest(
     temporary.replace(path)
 
 
+def resolved_band_profile(args: argparse.Namespace) -> str:
+    if args.band_profile != "auto":
+        return args.band_profile
+    if not args.germany:
+        return "full"
+    return "rgb" if args.archive_dir else "quota"
+
+
 def main() -> int:
     args = parse_args()
     if args.radius_km <= 0 or args.highpass_radius < 1:
         raise SystemExit("Radius und Hochpassradius müssen positiv sein")
     if not 90 <= args.clip_percentile < 100 or not 0 <= args.nir_weight <= 1:
         raise SystemExit("Ungültige Clip- oder NIR-Einstellung")
+    if args.chunk_tiles < 1 or args.calibration_tiles < 1:
+        raise SystemExit("Blockkante und Normierungsstichprobe müssen positiv sein")
     root = args.map_data.resolve()
     manifest = load_manifest(root)
-    level, tiles = select_tiles(manifest, args)
+    level, hannover_tiles = select_hannover_tiles(manifest, args)
     maximum_zoom = int(level["z"])
     default_minimum = max(int(manifest["minZoom"]), maximum_zoom - 4)
     minimum_zoom = args.minimum_zoom if args.minimum_zoom is not None else default_minimum
     if not int(manifest["minZoom"]) <= minimum_zoom <= maximum_zoom:
         raise SystemExit("--minimum-zoom liegt außerhalb des Manifests")
+    weights = class_weights(manifest)
+    tiles = select_germany_tiles(root, manifest, level, weights) if args.germany else hannover_tiles
+    profile = resolved_band_profile(args)
+    minimum_observations = (
+        args.minimum_observations
+        if args.minimum_observations is not None
+        else (1 if profile == "full" else 0)
+    )
+    halo = args.highpass_radius * 3 + 2
+    maximum_block_size = args.chunk_tiles * int(manifest["tileSize"]) + 2 * halo
+    if maximum_block_size > MAX_PROCESS_PIXELS:
+        raise SystemExit(
+            f"--chunk-tiles ist mit Filterhalo zu groß ({maximum_block_size} Pixel; "
+            f"Process-API-Limit {MAX_PROCESS_PIXELS})"
+        )
+    scope = "Deutschland" if args.germany else "Hannover-PoC"
     print(
-        f"Hannover-PoC: z{maximum_zoom}, {len(tiles)} Kacheln, "
-        f"{level['resolution']:g} m/Pixel; Filterpyramide bis z{minimum_zoom}"
+        f"{scope}: z{maximum_zoom}, {len(tiles)} Kacheln, {level['resolution']:g} m/Pixel; "
+        f"Filterpyramide bis z{minimum_zoom}; Profil {profile}"
     )
     if args.dry_run:
-        print("Feinkacheln:", " ".join(f"{tile.x}_{tile.y}" for tile in tiles))
+        if args.germany:
+            blocks = tile_blocks(tiles, args.chunk_tiles)
+            units = estimated_processing_units(
+                blocks,
+                int(manifest["tileSize"]),
+                halo,
+                {"quota": 3, "rgb": 3, "rgbnir": 4, "full": 5}[profile],
+            )
+            print(f"API-Blöcke: {len(blocks)}; geschätzt {units:.0f} Processing Units")
+        else:
+            print("Feinkacheln:", " ".join(f"{tile.x}_{tile.y}" for tile in tiles))
         return 0
 
-    weights = class_weights(manifest)
     if args.preview_only:
         update_manifest(root, manifest, minimum_zoom, maximum_zoom, weights, args)
-        preview = write_preview(root, manifest, level, tiles, weights, args.preview_size)
+        preview = write_preview(
+            root, manifest, level, hannover_tiles, weights, args.preview_size
+        )
+        source_preview = (
+            write_rgb_archive_preview(
+                args.archive_dir.resolve(),
+                level,
+                hannover_tiles,
+                args.archive_format,
+                int(manifest["tileSize"]),
+                args.preview_size,
+                root / "SurfaceTexture" / "hannover-sentinel-source.jpg",
+            )
+            if args.archive_dir
+            else None
+        )
+        jpeg = write_jpeg_preview(
+            preview,
+            args.hannover_jpeg
+            or root / "SurfaceTexture" / "hannover-check-00-20-30-40-50-60.jpg",
+            source_preview,
+        )
         print(f"Vergleich {'/'.join(f'{value:.0%}' for value in STRENGTHS)}: {preview}")
+        print(f"Hannover-JPEG: {jpeg}")
         return 0
 
     paths = {
@@ -690,49 +1416,131 @@ def main() -> int:
         "observations": args.observations,
     }
     local_mode = any(path is not None for path in paths.values())
-    source = LocalBands(paths, manifest, level) if local_mode else SentinelHubBands(args.quarter, manifest, level)
+    source = (
+        LocalBands(paths, manifest, level)
+        if local_mode
+        else SentinelHubBands(args.quarter, manifest, level, profile)
+    )
     tile_size = int(manifest["tileSize"])
-    halo = args.highpass_radius * 3 + 2
-    details: dict[Tile, tuple[np.ndarray, np.ndarray]] = {}
-    samples = []
     try:
-        for index, tile in enumerate(tiles, 1):
-            detail, valid = detail_for_tile(
-                source.read(tile, tile_size, halo),
-                tile_size,
-                halo,
-                args.highpass_radius,
-                args.nir_weight,
-                args.minimum_observations,
+        if args.germany:
+            limit = process_germany(
+                root,
+                manifest,
+                level,
+                tiles,
+                source,
+                weights,
+                minimum_zoom,
+                args,
+                profile,
+                minimum_observations,
             )
-            details[tile] = (detail, valid)
-            if np.any(valid):
-                samples.append(np.abs(detail[valid][::16]))
-            print(f"\rDetailkanal {index}/{len(tiles)}", end="", flush=True)
+        else:
+            details: dict[Tile, tuple[np.ndarray, np.ndarray]] = {}
+            rgb_tiles: dict[Tile, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+            samples = []
+            archive = args.archive_dir.resolve() if args.archive_dir else None
+            if archive is not None:
+                if profile not in ("rgb", "rgbnir", "full"):
+                    raise SystemExit(
+                        "Das Farbsichtarchiv benötigt --band-profile rgb, rgbnir oder full"
+                    )
+                archive_preflight(archive, len(tiles), args.archive_format)
+            for index, tile in enumerate(tiles, 1):
+                bands = source.read(tile, tile_size, halo)
+                detail, valid = detail_for_tile(
+                    bands,
+                    tile_size,
+                    halo,
+                    args.highpass_radius,
+                    args.nir_weight,
+                    minimum_observations,
+                )
+                details[tile] = (detail, valid)
+                if archive is not None:
+                    core = np.s_[halo : halo + tile_size, halo : halo + tile_size]
+                    rgb_tiles[tile] = (
+                        bands["B02"][core].copy(),
+                        bands["B03"][core].copy(),
+                        bands["B04"][core].copy(),
+                    )
+                if np.any(valid):
+                    samples.append(np.abs(detail[valid][::16]))
+                print(f"\rDetailkanal {index}/{len(tiles)}", end="", flush=True)
+            print()
+            if not samples:
+                raise SystemExit("Keine gültigen Sentinel-2-Beobachtungen in der Testregion")
+            limit = float(np.percentile(np.concatenate(samples), args.clip_percentile))
+            if not math.isfinite(limit) or limit <= 1e-6:
+                raise SystemExit("Der Detailkanal enthält keine verwertbare lokale Struktur")
+            fine_directory = root / f"z{maximum_zoom}"
+            for tile, (detail, valid) in details.items():
+                encoded = encode_detail(detail, valid, limit)
+                write_tile(
+                    fine_directory / f"{tile.x}_{tile.y}.{SURFACE_SUFFIX}",
+                    encoded,
+                    args.compression,
+                )
+                if archive is not None:
+                    directory = archive / "Processed" / f"z{maximum_zoom}"
+                    directory.mkdir(parents=True, exist_ok=True)
+                    write_tile(
+                        directory / f"{tile.x}_{tile.y}.{SURFACE_SUFFIX}",
+                        encoded,
+                        args.compression,
+                    )
+                    write_rgb_archive_tile(
+                        archive,
+                        level,
+                        manifest,
+                        tile,
+                        rgb_tiles[tile],
+                        args.archive_format,
+                        args.compression,
+                    )
+            derive_parent_tiles(
+                root, maximum_zoom, tiles, minimum_zoom, tile_size, args.compression
+            )
+            if archive is not None:
+                derive_parent_tiles(
+                    archive / "Processed",
+                    maximum_zoom,
+                    tiles,
+                    minimum_zoom,
+                    tile_size,
+                    args.compression,
+                )
     finally:
         if isinstance(source, LocalBands):
             source.close()
-    print()
-    if not samples:
-        raise SystemExit("Keine gültigen Sentinel-2-Beobachtungen in der Testregion")
-    limit = float(np.percentile(np.concatenate(samples), args.clip_percentile))
-    if not math.isfinite(limit) or limit <= 1e-6:
-        raise SystemExit("Der Detailkanal enthält keine verwertbare lokale Struktur")
-    fine_directory = root / f"z{maximum_zoom}"
-    for tile, (detail, valid) in details.items():
-        write_tile(
-            fine_directory / f"{tile.x}_{tile.y}.{SURFACE_SUFFIX}",
-            encode_detail(detail, valid, limit),
-            args.compression,
-        )
-    derive_parent_tiles(
-        root, maximum_zoom, tiles, minimum_zoom, tile_size, args.compression
-    )
     update_manifest(root, manifest, minimum_zoom, maximum_zoom, weights, args)
     print(f"Surface Texture: neutral 128, symmetrisch geclippt bei ±{limit:.5f}")
     if not args.no_preview:
-        preview = write_preview(root, manifest, level, tiles, weights, args.preview_size)
+        preview = write_preview(
+            root, manifest, level, hannover_tiles, weights, args.preview_size
+        )
+        source_preview = (
+            write_rgb_archive_preview(
+                args.archive_dir.resolve(),
+                level,
+                hannover_tiles,
+                args.archive_format,
+                tile_size,
+                args.preview_size,
+                root / "SurfaceTexture" / "hannover-sentinel-source.jpg",
+            )
+            if args.archive_dir
+            else None
+        )
+        jpeg = write_jpeg_preview(
+            preview,
+            args.hannover_jpeg
+            or root / "SurfaceTexture" / "hannover-check-00-20-30-40-50-60.jpg",
+            source_preview,
+        )
         print(f"Vergleich {'/'.join(f'{value:.0%}' for value in STRENGTHS)}: {preview}")
+        print(f"Hannover-JPEG: {jpeg}")
     return 0
 
 

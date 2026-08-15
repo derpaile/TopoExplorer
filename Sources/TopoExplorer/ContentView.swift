@@ -748,7 +748,7 @@ struct ContentView: View {
                     }
                 }
 
-                Text("Landwirtschaft stark · Wald mittel bis stark · Siedlung schwach · Wasser ohne Textur. Niedrige Zoomstufen werden gefiltert und ausgeblendet.")
+                Text("Wirkt in allen Farb- und Fachkarten gleichzeitig mit dem Relief. Landwirtschaft stark · Wald mittel bis stark · Siedlung schwach · Wasser ohne Textur. Niedrige Zoomstufen werden gefiltert und ausgeblendet.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

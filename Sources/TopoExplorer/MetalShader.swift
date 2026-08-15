@@ -114,7 +114,18 @@ enum MetalShader {
         float3 baseColor = muted
             ? mix(float3(0.58, 0.60, 0.57), float3(luminance), 0.18)
             : base.rgb;
-        float3 texturedBase = baseColor;
+        float2 thematicUV = thematic.uv.xy + in.uv * thematic.uv.zw;
+        uint2 thematicPosition = min(
+            uint2(thematicUV * float2(thematicRaster.get_width(), thematicRaster.get_height())),
+            uint2(thematicRaster.get_width() - 1, thematicRaster.get_height() - 1)
+        );
+        uint thematicIndex = thematic.active == 0u
+            ? 0u : thematicRaster.read(thematicPosition).r;
+        float thematicAmount = thematic.replacesBase != 0u
+            ? 1.0 : clamp(thematic.opacity, 0.0, 1.0);
+        float3 mapColor = thematicIndex == 0u
+            ? baseColor
+            : mix(baseColor, thematicPalette[thematicIndex].rgb, thematicAmount);
         if (surface.active != 0u && surface.strength > 0.0 && surface.zoomWeight > 0.0) {
             constexpr sampler surfaceSampler(coord::normalized, address::clamp_to_edge, filter::linear);
             float sampleValue = surfaceTexture.sample(surfaceSampler, in.uv).r;
@@ -134,20 +145,8 @@ enum MetalShader {
             float amount = clamp(surface.strength, 0.0, 0.60)
                 * clamp(surface.zoomWeight, 0.0, 1.0)
                 * clamp(surfaceWeights[classIndex], 0.0, 1.0);
-            texturedBase *= 1.0 + detail * amount;
+            mapColor *= 1.0 + detail * amount;
         }
-        float2 thematicUV = thematic.uv.xy + in.uv * thematic.uv.zw;
-        uint2 thematicPosition = min(
-            uint2(thematicUV * float2(thematicRaster.get_width(), thematicRaster.get_height())),
-            uint2(thematicRaster.get_width() - 1, thematicRaster.get_height() - 1)
-        );
-        uint thematicIndex = thematic.active == 0u
-            ? 0u : thematicRaster.read(thematicPosition).r;
-        float thematicAmount = thematic.replacesBase != 0u
-            ? 1.0 : clamp(thematic.opacity, 0.0, 1.0);
-        float3 mapColor = thematicIndex == 0u
-            ? texturedBase
-            : mix(texturedBase, thematicPalette[thematicIndex].rgb, thematicAmount);
         if (classIndex == 0u) {
             return float4(mapColor, 1.0);
         }

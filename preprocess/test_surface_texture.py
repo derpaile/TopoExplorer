@@ -102,6 +102,10 @@ class SurfaceTexturePipelineTests(unittest.TestCase):
                 "surface_texture.py",
                 "--map-data",
                 str(root),
+                "--archive-dir",
+                str(Path(temporary) / "archive"),
+                "--archive-format",
+                "uint16",
                 "--radius-km",
                 "1",
                 "--highpass-radius",
@@ -129,6 +133,46 @@ class SurfaceTexturePipelineTests(unittest.TestCase):
                 warnings.simplefilter("ignore", NotGeoreferencedWarning)
                 with rasterio.open(preview) as dataset:
                     self.assertEqual((dataset.width, dataset.height), (384, 64))
+            self.assertTrue(
+                (root / "SurfaceTexture" / "hannover-check-00-20-30-40-50-60.jpg").is_file()
+            )
+            self.assertTrue(
+                (Path(temporary) / "archive" / "SourceRGB" / "z0" / "0_0.sentinel-rgb16.z").is_file()
+            )
+            self.assertTrue(
+                (Path(temporary) / "archive" / "Processed" / "z0" / "0_0.surface.z").is_file()
+            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", NotGeoreferencedWarning)
+                with rasterio.open(
+                    root / "SurfaceTexture" / "hannover-check-00-20-30-40-50-60.jpg"
+                ) as dataset:
+                    self.assertEqual((dataset.width, dataset.height), (448, 64))
+
+            with patch.object(sys, "argv", arguments + ["--germany", "--restart"]):
+                self.assertEqual(surface_texture.main(), 0)
+            state = json.loads(
+                (root / "SurfaceTexture" / "germany-build.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(state["completedBlocks"]), 1)
+            self.assertFalse(any((root / "SurfaceTexture" / "Calibration").glob("*.npz")))
+
+    def test_germany_block_estimate_and_band_profiles(self) -> None:
+        tiles = [surface_texture.Tile(x, y) for y in range(5) for x in range(6)]
+        blocks = surface_texture.tile_blocks(tiles, 4)
+        self.assertEqual(len(blocks), 4)
+        self.assertLessEqual(max(block.max_x - block.min_x + 1 for block in blocks), 4)
+        quota = surface_texture.estimated_processing_units(blocks, 512, 74, 3)
+        full = surface_texture.estimated_processing_units(blocks, 512, 74, 5)
+        self.assertGreater(full, quota)
+
+        source = object.__new__(surface_texture.SentinelHubBands)
+        source.profile = "rgb"
+        script = source._evalscript()
+        self.assertIn('"B02", "B03", "B04"', script)
+        self.assertNotIn("B08", script)
+        source.profile = "rgbnir"
+        self.assertIn("B08", source._evalscript())
 
 
 if __name__ == "__main__":

@@ -103,6 +103,24 @@ struct RuntimeVerifier {
             )
             print("Referenz \(reference.name): \(outputURL.path)")
         }
+        if let hannover = MapReference.all.first(where: { $0.id == "hannover" }) {
+            let combinedURL = outputDirectory.appendingPathComponent(
+                "hannover-fachkarte-surface-relief.png"
+            )
+            try render(
+                hannover,
+                root: root,
+                manifest: manifest,
+                device: device,
+                queue: queue,
+                pipeline: pipeline,
+                palette: palette,
+                comparisonMode: 0,
+                thematicReplacement: true,
+                outputURL: combinedURL
+            )
+            print("Fachkarte + Surface + Relief: \(combinedURL.path)")
+        }
         if let harz = MapReference.all.first(where: { $0.id == "harz" }), manifest.hasLandcover2020 {
             let comparisonURL = outputDirectory.appendingPathComponent("vergleich-2015-2020.png")
             try render(
@@ -463,6 +481,7 @@ struct RuntimeVerifier {
         _ = renderer
     }
 
+    @MainActor
     private static func render(
         _ reference: MapReference,
         root: URL,
@@ -472,6 +491,7 @@ struct RuntimeVerifier {
         pipeline: MTLRenderPipelineState,
         palette: [SIMD4<Float>],
         comparisonMode: UInt32,
+        thematicReplacement: Bool = false,
         outputURL: URL
     ) throws {
         let level = manifest.levels.min {
@@ -523,11 +543,20 @@ struct RuntimeVerifier {
             length: MemoryLayout<PreviewComparison>.stride,
             index: 2
         )
-        let thematicPalette = Array(repeating: SIMD4<Float>(0, 0, 0, 0), count: 256)
+        var thematicPalette = Array(repeating: SIMD4<Float>(0, 0, 0, 0), count: 256)
+        if thematicReplacement {
+            for (index, color) in StyleSettings.forestColors.enumerated() {
+                thematicPalette[index] = color.vector
+            }
+        }
         thematicPalette.withUnsafeBytes {
             encoder.setFragmentBytes($0.baseAddress!, length: $0.count, index: 3)
         }
-        var thematic = PreviewThematic()
+        var thematic = PreviewThematic(
+            active: thematicReplacement ? 1 : 0,
+            replacesBase: thematicReplacement ? 1 : 0,
+            opacity: thematicReplacement ? 1 : 0
+        )
         encoder.setFragmentBytes(
             &thematic, length: MemoryLayout<PreviewThematic>.stride, index: 4
         )
