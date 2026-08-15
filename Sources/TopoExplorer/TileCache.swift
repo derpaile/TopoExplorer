@@ -17,6 +17,7 @@ final class TileTextures: NSObject {
     let elevation: MTLTexture
     let thematic: MTLTexture?
     let thematicUV: SIMD4<Float>
+    let surface: MTLTexture?
     let byteCount: Int
 
     init(
@@ -25,6 +26,7 @@ final class TileTextures: NSObject {
         elevation: MTLTexture,
         thematic: MTLTexture?,
         thematicUV: SIMD4<Float>,
+        surface: MTLTexture?,
         byteCount: Int
     ) {
         self.landcover = landcover
@@ -32,6 +34,7 @@ final class TileTextures: NSObject {
         self.elevation = elevation
         self.thematic = thematic
         self.thematicUV = thematicUV
+        self.surface = surface
         self.byteCount = byteCount
     }
 }
@@ -98,6 +101,7 @@ final class TileCache: NSObject, NSCacheDelegate {
     private let elevationSizes: [Int: Int]
     private let landcoverSuffix: String
     private let thematicSuffix: String?
+    private let surfaceSuffix: String?
     private let cache = NSCache<NSString, TileTextures>()
     private let loadingQueue = DispatchQueue(label: "TopoExplorer.tile-loading", qos: .userInitiated, attributes: .concurrent)
     private let stateLock = NSLock()
@@ -114,7 +118,8 @@ final class TileCache: NSObject, NSCacheDelegate {
         elevationBorder: Int,
         elevationSizes: [Int: Int] = [:],
         landcoverSuffix: String = "land.z",
-        thematicSuffix: String? = nil
+        thematicSuffix: String? = nil,
+        surfaceSuffix: String? = nil
     ) {
         self.device = device
         self.tileSize = tileSize
@@ -122,6 +127,7 @@ final class TileCache: NSObject, NSCacheDelegate {
         self.elevationSizes = elevationSizes
         self.landcoverSuffix = landcoverSuffix
         self.thematicSuffix = thematicSuffix
+        self.surfaceSuffix = surfaceSuffix
         super.init()
         cache.totalCostLimit = 384 * 1024 * 1024
         cache.delegate = self
@@ -250,6 +256,12 @@ final class TileCache: NSObject, NSCacheDelegate {
                 .flatMap { ZlibDecoder.decode($0, expectedSize: tileSize * tileSize) }
             : nil
         let thematic = loadThematic(key, from: directory)
+        let surface = surfaceSuffix.flatMap { suffix in
+            (try? Data(
+                contentsOf: levelDirectory.appendingPathComponent("\(key.filename).\(suffix)"),
+                options: .mappedIfSafe
+            )).flatMap { ZlibDecoder.decode($0, expectedSize: tileSize * tileSize) }
+        }
 
         let landDescriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .r8Uint,
@@ -275,6 +287,15 @@ final class TileCache: NSObject, NSCacheDelegate {
         else { return nil }
         let land2020Texture = land2020.flatMap { _ in device.makeTexture(descriptor: landDescriptor) }
         let thematicTexture = thematic.flatMap { _ in device.makeTexture(descriptor: landDescriptor) }
+        let surfaceDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .r8Unorm,
+            width: tileSize,
+            height: tileSize,
+            mipmapped: false
+        )
+        surfaceDescriptor.usage = .shaderRead
+        surfaceDescriptor.storageMode = .shared
+        let surfaceTexture = surface.flatMap { _ in device.makeTexture(descriptor: surfaceDescriptor) }
 
         land.withUnsafeBytes { bytes in
             guard let address = bytes.baseAddress else { return }
@@ -307,6 +328,17 @@ final class TileCache: NSObject, NSCacheDelegate {
                 )
             }
         }
+        if let surface, let surfaceTexture {
+            surface.withUnsafeBytes { bytes in
+                guard let address = bytes.baseAddress else { return }
+                surfaceTexture.replace(
+                    region: MTLRegionMake2D(0, 0, tileSize, tileSize),
+                    mipmapLevel: 0,
+                    withBytes: address,
+                    bytesPerRow: tileSize
+                )
+            }
+        }
         elevation.withUnsafeBytes { bytes in
             guard let address = bytes.baseAddress else { return }
             elevationTexture.replace(
@@ -323,8 +355,9 @@ final class TileCache: NSObject, NSCacheDelegate {
             elevation: elevationTexture,
             thematic: thematicTexture,
             thematicUV: thematic?.uv ?? SIMD4<Float>(0, 0, 1, 1),
+            surface: surfaceTexture,
             byteCount: land.count + (land2020?.count ?? 0) + elevation.count
-                + (thematic?.data.count ?? 0)
+                + (thematic?.data.count ?? 0) + (surface?.count ?? 0)
         )
     }
 

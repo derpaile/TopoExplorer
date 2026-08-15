@@ -39,6 +39,13 @@ enum MetalShader {
         float4 uv;
     };
 
+    struct SurfaceUniforms {
+        uint active;
+        float strength;
+        float zoomWeight;
+        float padding;
+    };
+
     struct VectorSegment {
         short2 start;
         short2 end;
@@ -79,11 +86,14 @@ enum MetalShader {
         texture2d<float, access::sample> elevation [[texture(1)]],
         texture2d<uint, access::read> landcover2020 [[texture(2)]],
         texture2d<uint, access::read> thematicRaster [[texture(3)]],
+        texture2d<float, access::sample> surfaceTexture [[texture(4)]],
         constant float4 *palette [[buffer(0)]],
         constant ReliefUniforms &relief [[buffer(1)]],
         constant ComparisonUniforms &comparison [[buffer(2)]],
         constant float4 *thematicPalette [[buffer(3)]],
-        constant ThematicUniforms &thematic [[buffer(4)]])
+        constant ThematicUniforms &thematic [[buffer(4)]],
+        constant float *surfaceWeights [[buffer(5)]],
+        constant SurfaceUniforms &surface [[buffer(6)]])
     {
         uint landWidth = landcover2015.get_width();
         uint landHeight = landcover2015.get_height();
@@ -104,6 +114,17 @@ enum MetalShader {
         float3 baseColor = muted
             ? mix(float3(0.58, 0.60, 0.57), float3(luminance), 0.18)
             : base.rgb;
+        float3 texturedBase = baseColor;
+        if (surface.active != 0u && surface.strength > 0.0 && surface.zoomWeight > 0.0) {
+            constexpr sampler surfaceSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+            float sampleValue = surfaceTexture.sample(surfaceSampler, in.uv).r;
+            // UInt8 128 ist exakt neutral; 0 und 255 bilden die Endpunkte.
+            float detail = clamp((sampleValue * 255.0 - 128.0) / 127.0, -1.0, 1.0);
+            float amount = clamp(surface.strength, 0.0, 0.15)
+                * clamp(surface.zoomWeight, 0.0, 1.0)
+                * clamp(surfaceWeights[classIndex], 0.0, 1.0);
+            texturedBase *= 1.0 + detail * amount;
+        }
         float2 thematicUV = thematic.uv.xy + in.uv * thematic.uv.zw;
         uint2 thematicPosition = min(
             uint2(thematicUV * float2(thematicRaster.get_width(), thematicRaster.get_height())),
@@ -114,8 +135,8 @@ enum MetalShader {
         float thematicAmount = thematic.replacesBase != 0u
             ? 1.0 : clamp(thematic.opacity, 0.0, 1.0);
         float3 mapColor = thematicIndex == 0u
-            ? baseColor
-            : mix(baseColor, thematicPalette[thematicIndex].rgb, thematicAmount);
+            ? texturedBase
+            : mix(texturedBase, thematicPalette[thematicIndex].rgb, thematicAmount);
         if (classIndex == 0u) {
             return float4(mapColor, 1.0);
         }

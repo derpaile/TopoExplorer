@@ -159,7 +159,12 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Hochauflösende Gesamtkarte")
                             .font(.subheadline.weight(.semibold))
-                        Text("Kultur · Wald · Natur · Siedlung")
+                        Text(
+                            manifest.surfaceTexture == nil ? "Kultur · Wald · Natur · Siedlung"
+                                : style.surfaceTextureEnabled
+                                    ? "Reale Feinstruktur · \(style.surfaceTextureStrength.formatted(.percent.precision(.fractionLength(0))))"
+                                    : "Oberflächentextur aus"
+                        )
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -688,10 +693,57 @@ struct ContentView: View {
                 }
             }
 
+            if let texture = manifest.surfaceTexture {
+                surfaceTextureSection(texture)
+            }
+
             surfaceEditorSection(manifest: manifest)
 
             if manifest.hasLandcover2020 {
                 landcoverSection
+            }
+        }
+    }
+
+    private func surfaceTextureSection(_ texture: MapManifest.SurfaceTexture) -> some View {
+        AtlasInspectorPanel(title: "Reale Feinstruktur", symbol: "square.3.layers.3d.down.right") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("Sentinel-2-Detailkanal", isOn: $style.surfaceTextureEnabled)
+                    .font(.subheadline.weight(.medium))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Modulation")
+                        Spacer()
+                        Text(style.surfaceTextureStrength.formatted(.percent.precision(.fractionLength(0))))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.caption)
+                    Slider(value: $style.surfaceTextureStrength, in: 0...0.15)
+                }
+                .disabled(!style.surfaceTextureEnabled)
+
+                HStack(spacing: 4) {
+                    ForEach([0.0, 0.05, 0.08, 0.12, 0.15], id: \.self) { strength in
+                        Button(strength.formatted(.percent.precision(.fractionLength(0)))) {
+                            style.surfaceTextureStrength = strength
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .tint(abs(style.surfaceTextureStrength - strength) < 0.001 ? .accentColor : .secondary)
+                    }
+                }
+
+                Text("Landwirtschaft stark · Wald mittel bis stark · Siedlung schwach · Wasser ohne Textur. Niedrige Zoomstufen werden gefiltert und ausgeblendet.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let source = texture.sources.first, let url = URL(string: source.url) {
+                    Link(source.name, destination: url)
+                        .font(.caption2)
+                }
             }
         }
     }
@@ -1331,6 +1383,7 @@ struct ContentView: View {
         case "alpen": "mountain.2"
         case "kueste": "water.waves"
         case "ruhrgebiet": "building.2.crop.circle.fill"
+        case "hannover": "square.3.layers.3d.down.right"
         default: "leaf.fill"
         }
     }
@@ -1341,6 +1394,7 @@ struct ContentView: View {
         case "alpen": "Hochgebirge & Täler"
         case "kueste": "Meer, Marsch & Häfen"
         case "ruhrgebiet": "Städte & Industrie"
+        case "hannover": "Surface-PoC · Felder, Wald & Stadt"
         default: "Felder & Siedlungen"
         }
     }

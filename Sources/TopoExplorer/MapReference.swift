@@ -13,5 +13,6 @@ struct MapReference: Identifiable, Equatable {
         MapReference(id: "kueste", name: "Küste", centerX: 4_458_876.725, centerY: 3_426_992.276, metersPerPoint: 100),
         MapReference(id: "ruhrgebiet", name: "Ruhrgebiet", centerX: 4_122_935.894, centerY: 3_152_671.123, metersPerPoint: 100),
         MapReference(id: "flachland", name: "Flachland", centerX: 4_439_293.455, centerY: 3_289_314.249, metersPerPoint: 100),
+        MapReference(id: "hannover", name: "Hannover · Surface-PoC", centerX: 4_302_748.3, centerY: 3_251_760.0, metersPerPoint: 20),
     ]
 }

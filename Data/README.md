@@ -68,3 +68,11 @@ kombiniert sie mit den vorhandenen Kultur-, Wald-, Siedlungs- und Naturklassen.
 
 Geowissenschaftliche COG-Master, Provenance-Raster und TVT2-Fachobjekte sind in
 `docs/Geowissenschaften.md` beschrieben.
+
+## Oberflächentextur
+
+`scripts/preprocess_surface_texture.sh` erzeugt für den Hannover-PoC optionale
+`*.surface.z`-Kacheln direkt in der bestehenden Pyramide. Sentinel-2-Bänder
+werden nur einzeln und fensterweise verarbeitet; gespeichert wird ausschließlich
+der neutrale UInt8-Detailkanal. Abruf, lokale Eingaben und Qualitätsvergleich
+sind in `docs/Oberflaechentextur.md` beschrieben.

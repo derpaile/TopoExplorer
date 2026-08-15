@@ -27,6 +27,21 @@ private struct PreviewComparison {
     var padding: Float = 0
 }
 
+private struct PreviewThematic {
+    var active: UInt32 = 0
+    var replacesBase: UInt32 = 0
+    var opacity: Float = 0
+    var padding: Float = 0
+    var uv = SIMD4<Float>(0, 0, 1, 1)
+}
+
+private struct PreviewSurface {
+    var active: UInt32
+    var strength: Float = 0.08
+    var zoomWeight: Float
+    var padding: Float = 0
+}
+
 private struct PreviewVectorUniforms {
     var tile: SIMD4<Float>
     var viewport: SIMD4<Float>
@@ -508,6 +523,17 @@ struct RuntimeVerifier {
             length: MemoryLayout<PreviewComparison>.stride,
             index: 2
         )
+        let thematicPalette = Array(repeating: SIMD4<Float>(0, 0, 0, 0), count: 256)
+        thematicPalette.withUnsafeBytes {
+            encoder.setFragmentBytes($0.baseAddress!, length: $0.count, index: 3)
+        }
+        var thematic = PreviewThematic()
+        encoder.setFragmentBytes(
+            &thematic, length: MemoryLayout<PreviewThematic>.stride, index: 4
+        )
+        manifest.surfaceClassWeights.withUnsafeBytes {
+            encoder.setFragmentBytes($0.baseAddress!, length: $0.count, index: 5)
+        }
 
         var retainedTextures: [MTLTexture] = []
         let elevationTileSize = manifest.elevationTileSize(at: level)
@@ -523,6 +549,9 @@ struct RuntimeVerifier {
                     ? try? Data(contentsOf: directory.appendingPathComponent("\(name).land2020.z"))
                     : nil
                 let packedElevation = try Data(contentsOf: directory.appendingPathComponent("\(name).elev.z"))
+                let packedSurface = manifest.surfaceTexture.flatMap { texture in
+                    try? Data(contentsOf: directory.appendingPathComponent("\(name).\(texture.suffix)"))
+                }
                 guard
                     let land = ZlibDecoder.decode(
                         packedLand,
@@ -536,6 +565,9 @@ struct RuntimeVerifier {
                 let land2020 = packedLand2020.flatMap {
                     ZlibDecoder.decode($0, expectedSize: manifest.tileSize * manifest.tileSize)
                 } ?? land
+                let surface = packedSurface.flatMap {
+                    ZlibDecoder.decode($0, expectedSize: manifest.tileSize * manifest.tileSize)
+                }
                 let landTexture = try texture(
                     device: device,
                     format: .r8Uint,
@@ -560,7 +592,18 @@ struct RuntimeVerifier {
                     bytes: land2020,
                     bytesPerRow: manifest.tileSize
                 )
+                let surfaceTexture = try surface.map {
+                    try texture(
+                        device: device,
+                        format: .r8Unorm,
+                        width: manifest.tileSize,
+                        height: manifest.tileSize,
+                        bytes: $0,
+                        bytesPerRow: manifest.tileSize
+                    )
+                }
                 retainedTextures.append(contentsOf: [landTexture, elevationTexture, land2020Texture])
+                if let surfaceTexture { retainedTextures.append(surfaceTexture) }
 
                 let left = manifest.left + Double(x) * tileMeters
                 let right = left + tileMeters
@@ -590,6 +633,17 @@ struct RuntimeVerifier {
                 encoder.setFragmentTexture(landTexture, index: 0)
                 encoder.setFragmentTexture(elevationTexture, index: 1)
                 encoder.setFragmentTexture(land2020Texture, index: 2)
+                encoder.setFragmentTexture(landTexture, index: 3)
+                encoder.setFragmentTexture(surfaceTexture ?? elevationTexture, index: 4)
+                var surfaceUniforms = PreviewSurface(
+                    active: surfaceTexture == nil ? 0 : 1,
+                    zoomWeight: manifest.surfaceZoomWeight(at: level)
+                )
+                encoder.setFragmentBytes(
+                    &surfaceUniforms,
+                    length: MemoryLayout<PreviewSurface>.stride,
+                    index: 6
+                )
                 encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertices.count)
             }
         }

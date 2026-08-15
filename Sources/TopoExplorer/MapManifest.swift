@@ -38,6 +38,17 @@ struct MapManifest: Codable, Equatable {
         var id: Int { year }
     }
 
+    struct SurfaceTexture: Codable, Equatable {
+        let suffix: String
+        let minZoom: Int
+        let maxZoom: Int
+        let defaultStrength: Double
+        let fullStrengthResolution: Double
+        let hiddenResolution: Double
+        let classWeights: [Double]
+        var sources: [GeoSource] = []
+    }
+
     struct Level: Codable, Equatable, Identifiable {
         let z: Int
         let resolution: Double
@@ -84,6 +95,7 @@ struct MapManifest: Codable, Equatable {
     var landcoverProduct: LandcoverProduct? = nil
     var sources: [LandcoverSource]? = nil
     var thematicRasters: [ThematicRaster]? = nil
+    var surfaceTexture: SurfaceTexture? = nil
 
     var left: Double { bounds[0] }
     var bottom: Double { bounds[1] }
@@ -98,9 +110,27 @@ struct MapManifest: Codable, Equatable {
     var availableThematicRasters: [ThematicRaster] {
         (thematicRasters ?? []).filter { $0.id != "resources" }
     }
+    var surfaceClassWeights: [Float] {
+        surfaceTexture?.classWeights.map(Float.init)
+            ?? Array(repeating: 0, count: classes.count)
+    }
 
     func elevationTileSize(at level: Level) -> Int {
         level.elevationTileSize ?? tileSize
+    }
+
+    func surfaceZoomWeight(at level: Level) -> Float {
+        guard
+            let surfaceTexture,
+            (surfaceTexture.minZoom...surfaceTexture.maxZoom).contains(level.z)
+        else { return 0 }
+        let full = surfaceTexture.fullStrengthResolution
+        let hidden = surfaceTexture.hiddenResolution
+        if level.resolution <= full { return 1 }
+        if level.resolution >= hidden { return 0 }
+        let position = log2(level.resolution / full) / log2(hidden / full)
+        let smooth = position * position * (3 - 2 * position)
+        return Float(1 - smooth)
     }
 
     func validated() throws -> MapManifest {
@@ -117,6 +147,18 @@ struct MapManifest: Codable, Equatable {
         }
         guard levels.allSatisfy({ elevationTileSize(at: $0) > 0 }) else {
             throw ManifestError.invalidTileLayout
+        }
+        if let surfaceTexture {
+            guard
+                !surfaceTexture.suffix.isEmpty,
+                (minZoom...maxZoom).contains(surfaceTexture.minZoom),
+                (surfaceTexture.minZoom...maxZoom).contains(surfaceTexture.maxZoom),
+                (0...0.15).contains(surfaceTexture.defaultStrength),
+                surfaceTexture.fullStrengthResolution > 0,
+                surfaceTexture.hiddenResolution > surfaceTexture.fullStrengthResolution,
+                surfaceTexture.classWeights.count == classes.count,
+                surfaceTexture.classWeights.allSatisfy({ (0...1).contains($0) })
+            else { throw ManifestError.invalidSurfaceTexture }
         }
         let thematic = availableThematicRasters
         guard Set(thematic.map(\.id)).count == thematic.count,
@@ -140,6 +182,7 @@ enum ManifestError: LocalizedError {
     case invalidLevels
     case invalidClasses
     case invalidThematicRasters
+    case invalidSurfaceTexture
 
     var errorDescription: String? {
         switch self {
@@ -150,6 +193,7 @@ enum ManifestError: LocalizedError {
         case .invalidLevels: "Die Zoomstufen sind unvollständig."
         case .invalidClasses: "Die Landklassen sind unvollständig."
         case .invalidThematicRasters: "Die geowissenschaftlichen Rasterprodukte sind ungültig."
+        case .invalidSurfaceTexture: "Die Oberflächentextur ist ungültig."
         }
     }
 }

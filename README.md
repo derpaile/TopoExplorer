@@ -9,6 +9,11 @@ Oberflächensubstrat, oberflächennahe Geologie, geomorphographische
 Reliefeinheiten und Grundwasserstufen, ohne die 40 Landbedeckungsklassen zu
 verändern.
 
+Für hohe Zoomstufen kann ein neutraler Sentinel-2-Detailkanal reale Feld-,
+Wald- und Siedlungsstruktur hinzufügen, ohne Satellitenfarben oder eine zweite
+Klassifikation zu übernehmen. Der Hannover-PoC ist in
+[`docs/Oberflaechentextur.md`](docs/Oberflaechentextur.md) beschrieben.
+
 ## Projektstruktur
 
 - `Sources/TopoExplorer/`: native SwiftUI-/Metal-App
@@ -72,6 +77,7 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Landoberfläche: 40 Klassen durchsuchen, direkt färben, einzeln oder gruppenweise ausgrauen
 - Themen: Naturatlas, Kulturarten, Waldarten und Kontrastreich
 - Reliefregler: Stärke, Überhöhung und Kontrast ändern
+- Oberflächentextur: klassen- und zoomabhängige Sentinel-2-Feinstruktur mit Schnellvergleich 0/5/8/12/15 %
 - Referenzansichten: Harz, Alpen, Küste, Ruhrgebiet und Flachland direkt anspringen
 - Ebenen: Straßen, Bahn, Flüsse, Grenzen, Orte und Natur-/Geländenamen einzeln schalten
 - Energieinfrastruktur: 380-, 220- und 110-kV-Netze sowie Umspannwerke, Transformatoren, Wind-, Solar- und konventionelle Erzeugungsanlagen aus OpenStreetMap

@@ -27,6 +27,8 @@ def main() -> int:
     has_2020 = any(item.get("year") == 2020 for item in manifest.get("landcoverYears", []))
     land_suffix = manifest.get("landcoverProduct", {}).get("suffix", "land.z")
     maximum_class = len(manifest["classes"]) - 1
+    surface = manifest.get("surfaceTexture")
+    surface_count = 0
 
     @lru_cache(maxsize=64)
     def elevation(z: int, x: int, y: int, size: int) -> np.ndarray:
@@ -64,8 +66,26 @@ def main() -> int:
                     seam_count += 1
                 tile_count += 1
 
+    if surface:
+        suffix = surface["suffix"]
+        for level in manifest["levels"]:
+            z = int(level["z"])
+            if not int(surface["minZoom"]) <= z <= int(surface["maxZoom"]):
+                continue
+            for path in (root / f"z{z}").glob(f"*.{suffix}"):
+                values = np.frombuffer(zlib.decompress(path.read_bytes()), dtype=np.uint8)
+                if values.size != tile_size * tile_size:
+                    raise RuntimeError(f"Defekte Surface-Kachel: {path}")
+                surface_count += 1
+        if surface_count == 0:
+            raise RuntimeError("Manifest nennt eine Surface Texture, aber es fehlen Kacheln")
+
     suffix = " einschließlich 2020" if has_2020 else ""
-    print(f"{tile_count} Kachelpaare{suffix} und {seam_count} Reliefübergänge sind exakt nahtlos.")
+    surface_note = f", {surface_count} Surface-Kacheln" if surface_count else ""
+    print(
+        f"{tile_count} Kachelpaare{suffix}{surface_note} und "
+        f"{seam_count} Reliefübergänge sind exakt nahtlos."
+    )
     return 0
 
 

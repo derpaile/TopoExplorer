@@ -31,6 +31,13 @@ private struct ThematicUniforms {
     var uv: SIMD4<Float>
 }
 
+private struct SurfaceUniforms {
+    var active: UInt32
+    var strength: Float
+    var zoomWeight: Float
+    var padding: Float = 0
+}
+
 private struct VectorUniforms {
     var tile: SIMD4<Float>
     var viewport: SIMD4<Float>
@@ -129,7 +136,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 }
             ),
             landcoverSuffix: manifest.landcoverSuffix,
-            thematicSuffix: nil
+            thematicSuffix: nil,
+            surfaceSuffix: manifest.surfaceTexture?.suffix
         )
         vectorCache = VectorTileCache(device: device)
         self.manifest = manifest
@@ -174,7 +182,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     }
                 ),
                 landcoverSuffix: newManifest.landcoverSuffix,
-                thematicSuffix: newGeoScience.suffix
+                thematicSuffix: newGeoScience.suffix,
+                surfaceSuffix: newManifest.surfaceTexture?.suffix
             )
             if dataChanged {
                 vectorCache = VectorTileCache(device: commandQueue.device)
@@ -248,6 +257,11 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 encoder.setFragmentBytes(address, length: bytes.count, index: 3)
             }
         }
+        manifest.surfaceClassWeights.withUnsafeBytes { bytes in
+            if let address = bytes.baseAddress {
+                encoder.setFragmentBytes(address, length: bytes.count, index: 5)
+            }
+        }
         var relief = ReliefUniforms(
             opacity: style.reliefOpacity,
             exaggeration: style.reliefExaggeration,
@@ -287,6 +301,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
             encoder.setFragmentTexture(textures.elevation, index: 1)
             encoder.setFragmentTexture(textures.landcover2020 ?? textures.landcover, index: 2)
             encoder.setFragmentTexture(textures.thematic ?? textures.landcover, index: 3)
+            encoder.setFragmentTexture(textures.surface ?? textures.elevation, index: 4)
             var thematicUniforms = ThematicUniforms(
                 active: textures.thematic == nil ? 0 : 1,
                 replacesBase: geoScience.replacesBase ? 1 : 0,
@@ -297,6 +312,16 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 &thematicUniforms,
                 length: MemoryLayout<ThematicUniforms>.stride,
                 index: 4
+            )
+            var surfaceUniforms = SurfaceUniforms(
+                active: textures.surface == nil || !style.surfaceEnabled ? 0 : 1,
+                strength: style.surfaceStrength,
+                zoomWeight: manifest.surfaceZoomWeight(at: level)
+            )
+            encoder.setFragmentBytes(
+                &surfaceUniforms,
+                length: MemoryLayout<SurfaceUniforms>.stride,
+                index: 6
             )
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertices.count)
         }
@@ -604,6 +629,11 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 encoder.setFragmentBytes(address, length: bytes.count, index: 3)
             }
         }
+        manifest.surfaceClassWeights.withUnsafeBytes { bytes in
+            if let address = bytes.baseAddress {
+                encoder.setFragmentBytes(address, length: bytes.count, index: 5)
+            }
+        }
         var relief = ReliefUniforms(
             opacity: request.renderStyle.reliefOpacity,
             exaggeration: request.renderStyle.reliefExaggeration,
@@ -642,6 +672,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 index: 2
             )
             encoder.setFragmentTexture(textures.thematic ?? textures.landcover, index: 3)
+            encoder.setFragmentTexture(textures.surface ?? textures.elevation, index: 4)
             var thematicUniforms = ThematicUniforms(
                 active: textures.thematic == nil ? 0 : 1,
                 replacesBase: geoScience.replacesBase ? 1 : 0,
@@ -652,6 +683,16 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 &thematicUniforms,
                 length: MemoryLayout<ThematicUniforms>.stride,
                 index: 4
+            )
+            var surfaceUniforms = SurfaceUniforms(
+                active: textures.surface == nil || !request.renderStyle.surfaceEnabled ? 0 : 1,
+                strength: request.renderStyle.surfaceStrength,
+                zoomWeight: manifest.surfaceZoomWeight(at: level)
+            )
+            encoder.setFragmentBytes(
+                &surfaceUniforms,
+                length: MemoryLayout<SurfaceUniforms>.stride,
+                index: 6
             )
             encoder.drawPrimitives(
                 type: .triangle, vertexStart: 0, vertexCount: tileVertices.count

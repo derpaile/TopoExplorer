@@ -34,6 +34,37 @@ final class TopoExplorerTests: XCTestCase {
         XCTAssertEqual(color.blue, 30.0 / 255.0, accuracy: 0.0001)
     }
 
+    func testSurfaceTextureManifestAndZoomFade() throws {
+        let levels = [
+            MapManifest.Level(z: 0, resolution: 320, width: 32, height: 32, tilesX: 1, tilesY: 1),
+            MapManifest.Level(z: 1, resolution: 160, width: 64, height: 64, tilesX: 1, tilesY: 1),
+            MapManifest.Level(z: 2, resolution: 80, width: 128, height: 128, tilesX: 1, tilesY: 1),
+            MapManifest.Level(z: 3, resolution: 40, width: 256, height: 256, tilesX: 1, tilesY: 1),
+            MapManifest.Level(z: 4, resolution: 20, width: 512, height: 512, tilesX: 1, tilesY: 1),
+            MapManifest.Level(z: 5, resolution: 10, width: 1024, height: 1024, tilesX: 2, tilesY: 2),
+        ]
+        let classes = (0...7).map {
+            MapManifest.LandClass(id: $0, name: "Klasse \($0)", defaultColor: "#000000")
+        }
+        var manifest = MapManifest(
+            version: 1, name: "Test", crs: "EPSG:3035", bounds: [0, 0, 10_240, 10_240],
+            tileSize: 512, elevationBorder: 1, minZoom: 0, maxZoom: 5,
+            elevationMin: -10, elevationMax: 3500, compression: "zlib",
+            levels: levels, classes: classes
+        )
+        manifest.surfaceTexture = MapManifest.SurfaceTexture(
+            suffix: "surface.z", minZoom: 1, maxZoom: 5, defaultStrength: 0.08,
+            fullStrengthResolution: 20, hiddenResolution: 320,
+            classWeights: [0, 0.4, 0.4, 0.4, 0, 0.7, 0.6, 1]
+        )
+        XCTAssertNoThrow(try manifest.validated())
+        XCTAssertEqual(manifest.surfaceZoomWeight(at: levels[0]), 0)
+        XCTAssertGreaterThan(manifest.surfaceZoomWeight(at: levels[2]), 0)
+        XCTAssertLessThan(manifest.surfaceZoomWeight(at: levels[2]), 1)
+        XCTAssertEqual(manifest.surfaceZoomWeight(at: levels[4]), 1)
+        XCTAssertEqual(manifest.surfaceZoomWeight(at: levels[5]), 1)
+    }
+
     func testThematicManifestValidation() throws {
         let levels = [
             MapManifest.Level(z: 0, resolution: 10, width: 1, height: 1, tilesX: 1, tilesY: 1),
