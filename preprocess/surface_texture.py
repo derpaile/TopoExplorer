@@ -10,13 +10,14 @@ detail pipeline; it never causes a second satellite request.
 from __future__ import annotations
 
 import argparse
-import getpass
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import json
 import math
 import os
 import shutil
 import struct
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -100,6 +101,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--minimum-observations", type=int)
     parser.add_argument("--minimum-zoom", type=int, help="Niedrigste erzeugte Zoomstufe")
     parser.add_argument("--chunk-tiles", type=int, default=4, help="Kacheln je API-Blockkante")
+    parser.add_argument(
+        "--workers", type=int, default=3, help="Parallele Deutschland-Blöcke"
+    )
     parser.add_argument(
         "--calibration-tiles", type=int, default=24, help="Deutschland-Stichprobe zur Normierung"
     )
@@ -398,6 +402,13 @@ class SentinelHubBands:
         self.profile = profile
         self.token = ""
         self.token_expires_at = 0.0
+        self.authentication_lock = threading.Lock()
+        self.statistics_lock = threading.Lock()
+        self.log_lock = threading.Lock()
+        self.successful_requests = 0
+        self.request_seconds = 0.0
+        self.downloaded_bytes = 0
+        self.retry_count = 0
         self._authenticate()
         print(f"CDSE-Anmeldung: {credential_source}; Bandprofil: {profile}")
         self.start, self.end = quarter_interval(quarter)
@@ -409,21 +420,42 @@ class SentinelHubBands:
         return {"quota": 3, "rgb": 3, "rgbnir": 4, "full": 5}[self.profile]
 
     def _authenticate(self) -> None:
-        form = urllib.parse.urlencode(
-            {
-                "grant_type": "client_credentials",
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-            }
-        ).encode()
-        request = urllib.request.Request(TOKEN_URL, data=form, method="POST")
-        request.add_header("Content-Type", "application/x-www-form-urlencoded")
-        try:
-            with urllib.request.urlopen(request, timeout=45) as response:
-                self.token = json.load(response)["access_token"]
-        except (OSError, KeyError, json.JSONDecodeError) as error:
-            raise SystemExit(f"CDSE-Anmeldung fehlgeschlagen: {error}") from error
-        self.token_expires_at = time.monotonic() + 50 * 60
+        with self.authentication_lock:
+            if self.token and time.monotonic() < self.token_expires_at:
+                return
+            form = urllib.parse.urlencode(
+                {
+                    "grant_type": "client_credentials",
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                }
+            ).encode()
+            request = urllib.request.Request(TOKEN_URL, data=form, method="POST")
+            request.add_header("Content-Type", "application/x-www-form-urlencoded")
+            try:
+                with urllib.request.urlopen(request, timeout=45) as response:
+                    self.token = json.load(response)["access_token"]
+            except (OSError, KeyError, json.JSONDecodeError) as error:
+                raise SystemExit(f"CDSE-Anmeldung fehlgeschlagen: {error}") from error
+            self.token_expires_at = time.monotonic() + 50 * 60
+
+    def statistics(self) -> tuple[int, float, int, int]:
+        with self.statistics_lock:
+            return (
+                self.successful_requests,
+                self.request_seconds,
+                self.downloaded_bytes,
+                self.retry_count,
+            )
+
+    def _log_retry(self, status: int | str, delay: float, attempt: int) -> None:
+        with self.statistics_lock:
+            self.retry_count += 1
+        with self.log_lock:
+            print(
+                f"\nAPI-Retry: {status}, Versuch {attempt}/6, Pause {delay:.1f}s",
+                flush=True,
+            )
 
     def read(self, tile: Tile, tile_size: int, halo: int) -> dict[str, np.ndarray]:
         return self.read_window(
@@ -531,9 +563,15 @@ function evaluatePixel(s) {
             request = urllib.request.Request(PROCESS_URL, data=data, method="POST")
             request.add_header("Authorization", f"Bearer {self.token}")
             request.add_header("Content-Type", "application/json")
+            started = time.monotonic()
             try:
                 with urllib.request.urlopen(request, timeout=120) as response:
                     encoded = response.read()
+                elapsed = time.monotonic() - started
+                with self.statistics_lock:
+                    self.successful_requests += 1
+                    self.request_seconds += elapsed
+                    self.downloaded_bytes += len(encoded)
                 with MemoryFile(encoded) as memory, memory.open() as dataset:
                     values = dataset.read().astype(np.float32)
                 mask = values[-1] > 0
@@ -562,17 +600,26 @@ function evaluatePixel(s) {
                 return result
             except urllib.error.HTTPError as error:
                 if error.code == 401 and attempt < 5:
+                    self.token_expires_at = 0
                     self._authenticate()
                     continue
                 retryable = error.code == 429 or 500 <= error.code < 600
                 if not retryable or attempt == 5:
                     raise SystemExit(f"CDSE-Abruf fehlgeschlagen (HTTP {error.code})") from error
-                delay = min(float(error.headers.get("Retry-After", 2**attempt)), 30)
+                retry_after = error.headers.get("Retry-After")
+                delay = (
+                    min(float(retry_after) / 1_000, 30)
+                    if error.code == 429 and retry_after is not None
+                    else min(2**attempt, 30)
+                )
+                self._log_retry(error.code, delay, attempt + 1)
                 time.sleep(delay)
             except (urllib.error.URLError, rasterio.errors.RasterioError) as error:
                 if attempt == 5:
                     raise SystemExit(f"CDSE-Abruf fehlgeschlagen: {error}") from error
-                time.sleep(min(2**attempt, 30))
+                delay = min(2**attempt, 30)
+                self._log_retry(type(error).__name__, delay, attempt + 1)
+                time.sleep(delay)
         raise AssertionError("unreachable")
 
 
@@ -1087,19 +1134,63 @@ def process_germany(
     print(f"Normierungsgrenze: ±{limit:.5f}")
 
     remaining = [block for block in blocks if block.identifier not in completed]
-    for index, block in enumerate(remaining, 1):
-        bands, detail, valid = read_block(block)
-        write_archive_sources(block, bands)
-        write_processed(block, detail, valid, limit)
-        completed.add(block.identifier)
-        state["completedBlocks"] = sorted(completed)
-        save_build_state(state_path, state)
-        print(
-            f"\rDeutschland-Blöcke {len(completed)}/{len(blocks)} "
-            f"(dieser Lauf {index}/{len(remaining)})",
-            end="",
-            flush=True,
-        )
+    workers = 1 if isinstance(source, LocalBands) else args.workers
+    print(f"Verarbeitung: {workers} parallele Worker, {len(remaining)} offene Blöcke")
+    started = time.monotonic()
+    processed_this_run = 0
+    iterator = iter(remaining)
+
+    def submit_next(executor: ThreadPoolExecutor, pending: dict) -> bool:
+        try:
+            block = next(iterator)
+        except StopIteration:
+            return False
+        pending[executor.submit(read_block, block)] = block
+        return True
+
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="cdse") as executor:
+        pending = {}
+        for _ in range(workers):
+            if not submit_next(executor, pending):
+                break
+        while pending:
+            finished, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in finished:
+                block = pending.pop(future)
+                bands, detail, valid = future.result()
+                write_archive_sources(block, bands)
+                write_processed(block, detail, valid, limit)
+                completed.add(block.identifier)
+                processed_this_run += 1
+                state["completedBlocks"] = sorted(completed)
+                save_build_state(state_path, state)
+                submit_next(executor, pending)
+
+                elapsed = max(time.monotonic() - started, 0.001)
+                rate = processed_this_run * 60 / elapsed
+                eta_seconds = (len(remaining) - processed_this_run) / max(rate / 60, 1e-6)
+                eta_minutes = int(math.ceil(eta_seconds / 60))
+                eta = (
+                    f"{eta_minutes // 60}h{eta_minutes % 60:02d}m"
+                    if eta_minutes >= 60
+                    else f"{eta_minutes}m"
+                )
+                if isinstance(source, SentinelHubBands):
+                    requests, request_seconds, downloaded, retries = source.statistics()
+                    api_average = request_seconds / max(requests, 1)
+                    api = (
+                        f"API Ø{api_average:.1f}s · {downloaded / 1024**2:.0f}MiB "
+                        f"· Retries {retries}"
+                    )
+                else:
+                    api = "lokale Raster"
+                print(
+                    f"\rDeutschland {len(completed)}/{len(blocks)} · Lauf "
+                    f"{processed_this_run}/{len(remaining)} · {rate:.1f} Bl/min · "
+                    f"ETA {eta} · {api}",
+                    end="",
+                    flush=True,
+                )
     print()
 
     maximum_zoom = int(level["z"])
@@ -1372,8 +1463,8 @@ def main() -> int:
         raise SystemExit("Radius und Hochpassradius müssen positiv sein")
     if not 90 <= args.clip_percentile < 100 or not 0 <= args.nir_weight <= 1:
         raise SystemExit("Ungültige Clip- oder NIR-Einstellung")
-    if args.chunk_tiles < 1 or args.calibration_tiles < 1:
-        raise SystemExit("Blockkante und Normierungsstichprobe müssen positiv sein")
+    if args.chunk_tiles < 1 or args.calibration_tiles < 1 or not 1 <= args.workers <= 8:
+        raise SystemExit("Blockkante/Stichprobe müssen positiv, Worker zwischen 1 und 8 sein")
     root = args.map_data.resolve()
     manifest = load_manifest(root)
     level, hannover_tiles = select_hannover_tiles(manifest, args)
@@ -1411,7 +1502,10 @@ def main() -> int:
                 halo,
                 {"quota": 3, "rgb": 3, "rgbnir": 4, "full": 5}[profile],
             )
-            print(f"API-Blöcke: {len(blocks)}; geschätzt {units:.0f} Processing Units")
+            print(
+                f"API-Blöcke: {len(blocks)}; geschätzt {units:.0f} Processing Units; "
+                f"Worker: {args.workers}"
+            )
         else:
             print("Feinkacheln:", " ".join(f"{tile.x}_{tile.y}" for tile in tiles))
         return 0

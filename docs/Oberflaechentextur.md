@@ -74,6 +74,12 @@ aller Zoomstufen. Bereits abgeschlossene Blöcke stehen in
 `SurfaceTexture/germany-build.json`; nach Abbruch oder Quotenreset wird ohne
 erneuten Download fortgesetzt. `--restart` berechnet alle Blöcke neu.
 
+Standardmäßig überlappen drei Worker API-Abruf, lokale Filterung und Schreiben.
+Die laufende Konsolenausgabe zeigt Blöcke pro Minute, ETA, mittlere API-Zeit,
+übertragene Daten und Retries. `--workers 1…8` erlaubt kontrollierte Tests;
+HTTP 429 und vorübergehende Netzfehler werden sichtbar protokolliert und mit
+Backoff erneut versucht.
+
 Mit `--band-profile rgbnir` fließt zusätzlich B08 tatsächlich in die Textur ein.
 Das benötigt ungefähr 35.600 Processing Units und damit mehr als ein
 30.000er-Monatskontingent. `full` ergänzt die gültigen Beobachtungen und liegt
