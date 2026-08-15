@@ -300,6 +300,16 @@ struct ContentView: View {
         )
     }
 
+    private func vectorPresetPicker(_ selection: Binding<VectorAppearancePreset>) -> some View {
+        Picker("Farbe & Deckkraft", selection: selection) {
+            ForEach(VectorAppearancePreset.allCases) { preset in
+                Text(preset.title).tag(preset)
+            }
+        }
+        .pickerStyle(.menu)
+        .font(.caption)
+    }
+
     private var landcoverSection: some View {
         AtlasInspectorPanel(title: "Historische Daten", symbol: "clock.arrow.circlepath") {
             DisclosureGroup(isExpanded: $showHistoricalControls) {
@@ -792,6 +802,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle("Straßennetz anzeigen", isOn: $layers.roads)
                         .font(.subheadline.weight(.medium))
+                    vectorPresetPicker($layers.roadPreset)
                     Divider().padding(.vertical, 3)
                     AtlasLayerSubheading("Überregional")
                     layerKindRow("Autobahnen", kind: 1, mask: \.roadKinds)
@@ -811,6 +822,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle("Schienennetz anzeigen", isOn: $layers.railways)
                         .font(.subheadline.weight(.medium))
+                    vectorPresetPicker($layers.railwayPreset)
                     Divider().padding(.vertical, 3)
                     AtlasLayerSubheading("Fern & regional")
                     layerKindRow("Eisenbahn", kind: 1, mask: \.railwayKinds)
@@ -830,15 +842,21 @@ struct ContentView: View {
     private var hydrographyDrawerContent: some View {
         VStack(alignment: .leading, spacing: 14) {
             AtlasInspectorPanel(title: "Fließgewässer", symbol: "water.waves") {
-                Toggle("Flüsse und Bäche anzeigen", isOn: $layers.waterways)
-                    .font(.subheadline.weight(.medium))
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Flüsse und Bäche anzeigen", isOn: $layers.waterways)
+                        .font(.subheadline.weight(.medium))
+                    vectorPresetPicker($layers.waterwayPreset)
+                }
             }
             AtlasInspectorPanel(
                 title: "Verwaltungsgrenzen",
                 symbol: "point.topleft.down.to.point.bottomright.curvepath"
             ) {
-                Toggle("Bundes- und Landesgrenzen", isOn: $layers.boundaries)
-                    .font(.subheadline.weight(.medium))
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle("Bundes- und Landesgrenzen", isOn: $layers.boundaries)
+                        .font(.subheadline.weight(.medium))
+                    vectorPresetPicker($layers.boundaryPreset)
+                }
             }
         }
     }
@@ -848,6 +866,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Toggle("Energieebene anzeigen", isOn: $layers.energy)
                     .font(.subheadline.weight(.medium))
+                vectorPresetPicker($layers.energyPreset)
                 Divider().padding(.vertical, 3)
                 AtlasLayerSubheading("Hochspannungsnetze")
                 layerKindRow("380-kV-Netz", kind: 1, mask: \.energyKinds)

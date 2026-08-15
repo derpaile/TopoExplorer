@@ -45,6 +45,10 @@ private struct VectorUniforms {
     var pass: UInt32
     var zoom: UInt32
     var kindMask: UInt32
+    var preset: UInt32
+    var padding0: UInt32 = 0
+    var padding1: UInt32 = 0
+    var padding2: UInt32 = 0
 }
 
 private struct RenderViewport {
@@ -77,7 +81,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         roads: true, roadKinds: .max, railways: true, railwayKinds: .max,
         energy: true, energyKinds: .max,
         waterways: true, boundaries: true, places: true,
-        geonames: true, geonameKinds: .max
+        geonames: true, geonameKinds: .max,
+        roadPreset: 2, railwayPreset: 2, waterwayPreset: 2,
+        boundaryPreset: 2, energyPreset: 2
     )
     private var comparison = RenderComparison(mode: 0, splitPosition: 0.5)
     private var geoScience = GeoScienceRenderOptions.disabled
@@ -923,7 +929,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     layer: 0,
                     pass: 0,
                     zoom: UInt32(max(0, visibleZoom)),
-                    kindMask: .max
+                    kindMask: .max,
+                    preset: 2
                 )
 
                 // Casings first, then cores: intersections retain the previous visual hierarchy.
@@ -931,6 +938,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     guard let layerSegments = tile.layers[layer] else { continue }
                     uniforms.layer = UInt32(layer.rawValue)
                     uniforms.kindMask = kindMask(for: layer, in: renderLayers)
+                    uniforms.preset = preset(for: layer, in: renderLayers)
                     uniforms.pass = 0
                     for group in layerSegments.zoomLevels where group.minimumZoom <= visibleZoom {
                         drawVectorBuffer(
@@ -942,6 +950,7 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                     guard let layerSegments = tile.layers[layer] else { continue }
                     uniforms.layer = UInt32(layer.rawValue)
                     uniforms.kindMask = kindMask(for: layer, in: renderLayers)
+                    uniforms.preset = preset(for: layer, in: renderLayers)
                     uniforms.pass = 1
                     for group in layerSegments.zoomLevels where group.minimumZoom <= visibleZoom {
                         drawVectorBuffer(
@@ -987,6 +996,16 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         case .railway: layers.railwayKinds
         case .energy: layers.energyKinds
         case .waterway, .boundary: .max
+        }
+    }
+
+    private func preset(for layer: VectorLayer, in layers: RenderLayers) -> UInt32 {
+        switch layer {
+        case .road: layers.roadPreset
+        case .railway: layers.railwayPreset
+        case .waterway: layers.waterwayPreset
+        case .boundary: layers.boundaryPreset
+        case .energy: layers.energyPreset
         }
     }
 

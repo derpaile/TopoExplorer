@@ -13,6 +13,52 @@ struct RenderLayers {
     let places: Bool
     let geonames: Bool
     let geonameKinds: UInt32
+    let roadPreset: UInt32
+    let railwayPreset: UInt32
+    let waterwayPreset: UInt32
+    let boundaryPreset: UInt32
+    let energyPreset: UInt32
+
+    init(
+        roads: Bool, roadKinds: UInt32, railways: Bool, railwayKinds: UInt32,
+        energy: Bool, energyKinds: UInt32, waterways: Bool, boundaries: Bool,
+        places: Bool, geonames: Bool, geonameKinds: UInt32,
+        roadPreset: UInt32 = 2, railwayPreset: UInt32 = 2,
+        waterwayPreset: UInt32 = 2, boundaryPreset: UInt32 = 2,
+        energyPreset: UInt32 = 2
+    ) {
+        self.roads = roads
+        self.roadKinds = roadKinds
+        self.railways = railways
+        self.railwayKinds = railwayKinds
+        self.energy = energy
+        self.energyKinds = energyKinds
+        self.waterways = waterways
+        self.boundaries = boundaries
+        self.places = places
+        self.geonames = geonames
+        self.geonameKinds = geonameKinds
+        self.roadPreset = roadPreset
+        self.railwayPreset = railwayPreset
+        self.waterwayPreset = waterwayPreset
+        self.boundaryPreset = boundaryPreset
+        self.energyPreset = energyPreset
+    }
+}
+
+enum VectorAppearancePreset: Int, CaseIterable, Identifiable {
+    case leise, hell, ausgewogen, klar, kontrast
+
+    var id: Int { rawValue }
+    var title: String {
+        switch self {
+        case .leise: "Leise"
+        case .hell: "Hell"
+        case .ausgewogen: "Ausgewogen"
+        case .klar: "Klar"
+        case .kontrast: "Kontrast"
+        }
+    }
 }
 
 @MainActor
@@ -28,6 +74,11 @@ final class LayerSettings: ObservableObject {
     @Published var places: Bool { didSet { save() } }
     @Published var geonames: Bool { didSet { save() } }
     @Published var geonameKinds: UInt32 { didSet { save() } }
+    @Published var roadPreset: VectorAppearancePreset { didSet { save() } }
+    @Published var railwayPreset: VectorAppearancePreset { didSet { save() } }
+    @Published var waterwayPreset: VectorAppearancePreset { didSet { save() } }
+    @Published var boundaryPreset: VectorAppearancePreset { didSet { save() } }
+    @Published var energyPreset: VectorAppearancePreset { didSet { save() } }
 
     private static let key = "TopoExplorer.layers.v1"
 
@@ -51,6 +102,14 @@ final class LayerSettings: ObservableObject {
         places = boolean("places")
         geonames = boolean("geonames")
         geonameKinds = mask("geonameKinds")
+        func preset(_ key: String) -> VectorAppearancePreset {
+            VectorAppearancePreset(rawValue: (saved[key] as? NSNumber)?.intValue ?? 2) ?? .ausgewogen
+        }
+        roadPreset = preset("roadPreset")
+        railwayPreset = preset("railwayPreset")
+        waterwayPreset = preset("waterwayPreset")
+        boundaryPreset = preset("boundaryPreset")
+        energyPreset = preset("energyPreset")
     }
 
     var renderLayers: RenderLayers {
@@ -65,7 +124,12 @@ final class LayerSettings: ObservableObject {
             boundaries: boundaries,
             places: places,
             geonames: geonames,
-            geonameKinds: geonameKinds
+            geonameKinds: geonameKinds,
+            roadPreset: UInt32(roadPreset.rawValue),
+            railwayPreset: UInt32(railwayPreset.rawValue),
+            waterwayPreset: UInt32(waterwayPreset.rawValue),
+            boundaryPreset: UInt32(boundaryPreset.rawValue),
+            energyPreset: UInt32(energyPreset.rawValue)
         )
     }
 
@@ -75,7 +139,10 @@ final class LayerSettings: ObservableObject {
              "railways": railways, "railwayKinds": railwayKinds,
              "energy": energy, "energyKinds": energyKinds,
              "waterways": waterways, "boundaries": boundaries,
-             "places": places, "geonames": geonames, "geonameKinds": geonameKinds],
+             "places": places, "geonames": geonames, "geonameKinds": geonameKinds,
+             "roadPreset": roadPreset.rawValue, "railwayPreset": railwayPreset.rawValue,
+             "waterwayPreset": waterwayPreset.rawValue, "boundaryPreset": boundaryPreset.rawValue,
+             "energyPreset": energyPreset.rawValue],
             forKey: Self.key
         )
     }

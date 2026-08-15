@@ -61,6 +61,10 @@ enum MetalShader {
         uint pass;
         uint zoom;
         uint kindMask;
+        uint preset;
+        uint padding0;
+        uint padding1;
+        uint padding2;
     };
 
     struct VectorOut {
@@ -221,39 +225,61 @@ enum MetalShader {
         return kind == 1u ? 2.0 : (kind == 2u ? 1.4 : 0.8);
     }
 
-    float4 vectorCoreColor(uint layer, uint kind)
+    float4 vectorPresetColor(float4 color, uint layer, uint preset)
     {
-        if (layer == 1u) {
-            if (kind <= 3u) return float4(0.93, 0.92, 0.89, 0.98);
-            if (kind <= 5u) return float4(0.88, 0.88, 0.85, 0.94);
-            return float4(0.82, 0.83, 0.80, 0.86);
+        if (preset == 0u) {
+            color.rgb = mix(color.rgb, float3(0.62), 0.28);
+            color.a *= 0.58;
+        } else if (preset == 1u) {
+            color.rgb = mix(color.rgb, float3(1.0), 0.20);
+            color.a *= 0.76;
+        } else if (preset == 3u) {
+            color.rgb *= 0.72;
+            color.a = min(1.0, color.a * 1.08);
+        } else if (preset >= 4u) {
+            if (layer == 1u) color.rgb = float3(0.98, 0.96, 0.90);
+            else if (layer == 2u) color.rgb = float3(0.10, 0.05, 0.07);
+            else if (layer == 3u) color.rgb = float3(0.00, 0.38, 0.82);
+            else if (layer == 4u) color.rgb = float3(0.98, 0.98, 0.96);
+            color.a = 1.0;
         }
-        if (layer == 2u) return float4(0.05, 0.04, 0.05, 0.86);
-        if (layer == 3u) {
-            float alpha = kind == 1u ? 0.76 : (kind == 2u ? 0.70 : (kind == 3u ? 0.70 : 0.58));
-            return float4(0.04, 0.36, 0.68, alpha);
-        }
-        if (layer == 8u) {
-            if (kind == 1u) return float4(0.72, 0.07, 0.22, 0.94);
-            if (kind == 2u) return float4(0.88, 0.29, 0.09, 0.94);
-            if (kind == 3u) return float4(0.39, 0.24, 0.68, 0.92);
-            if (kind == 4u) return float4(0.08, 0.55, 0.68, 0.96);
-            if (kind == 5u) return float4(0.88, 0.66, 0.08, 0.98);
-            if (kind == 6u) return float4(0.04, 0.58, 0.49, 0.98);
-            if (kind == 7u) return float4(0.96, 0.62, 0.06, 0.98);
-            return float4(0.76, 0.20, 0.10, 0.98);
-        }
-        return float4(0.96, 0.96, 0.94, kind <= 2u ? 0.72 : 0.42);
+        return color;
     }
 
-    float4 vectorCasingColor(uint layer, uint kind)
+    float4 vectorCoreColor(uint layer, uint kind, uint preset)
     {
         if (layer == 1u) {
-            return float4(0.30, 0.31, 0.30, 0.74);
+            float4 color = kind <= 3u ? float4(0.93, 0.92, 0.89, 0.98)
+                : (kind <= 5u ? float4(0.88, 0.88, 0.85, 0.94)
+                    : float4(0.82, 0.83, 0.80, 0.86));
+            return vectorPresetColor(color, layer, preset);
         }
-        if (layer == 2u) return float4(0.70, 0.25, 0.23, 0.86);
-        if (layer == 8u) return float4(0.98, 0.96, 0.91, 0.88);
-        return float4(0.05, 0.05, 0.05, 0.32);
+        if (layer == 2u) return vectorPresetColor(float4(0.05, 0.04, 0.05, 0.86), layer, preset);
+        if (layer == 3u) {
+            float alpha = kind == 1u ? 0.76 : (kind == 2u ? 0.70 : (kind == 3u ? 0.70 : 0.58));
+            return vectorPresetColor(float4(0.04, 0.36, 0.68, alpha), layer, preset);
+        }
+        if (layer == 8u) {
+            if (kind == 1u) return vectorPresetColor(float4(0.72, 0.07, 0.22, 0.94), layer, preset);
+            if (kind == 2u) return vectorPresetColor(float4(0.88, 0.29, 0.09, 0.94), layer, preset);
+            if (kind == 3u) return vectorPresetColor(float4(0.39, 0.24, 0.68, 0.92), layer, preset);
+            if (kind == 4u) return vectorPresetColor(float4(0.08, 0.55, 0.68, 0.96), layer, preset);
+            if (kind == 5u) return vectorPresetColor(float4(0.88, 0.66, 0.08, 0.98), layer, preset);
+            if (kind == 6u) return vectorPresetColor(float4(0.04, 0.58, 0.49, 0.98), layer, preset);
+            if (kind == 7u) return vectorPresetColor(float4(0.96, 0.62, 0.06, 0.98), layer, preset);
+            return vectorPresetColor(float4(0.76, 0.20, 0.10, 0.98), layer, preset);
+        }
+        return vectorPresetColor(float4(0.96, 0.96, 0.94, kind <= 2u ? 0.72 : 0.42), layer, preset);
+    }
+
+    float4 vectorCasingColor(uint layer, uint kind, uint preset)
+    {
+        if (layer == 1u) {
+            return vectorPresetColor(float4(0.30, 0.31, 0.30, 0.74), layer, preset);
+        }
+        if (layer == 2u) return vectorPresetColor(float4(0.70, 0.25, 0.23, 0.86), layer, preset);
+        if (layer == 8u) return vectorPresetColor(float4(0.98, 0.96, 0.91, 0.88), layer, preset);
+        return vectorPresetColor(float4(0.05, 0.05, 0.05, 0.32), layer, preset);
     }
 
     vertex VectorOut vectorVertex(
@@ -280,10 +306,14 @@ enum MetalShader {
         float2 delta = b - a;
         float segmentLength = max(length(delta), 0.0001);
         float width = vectorCoreWidth(uniforms.layer, kind);
-        float4 color = vectorCoreColor(uniforms.layer, kind);
+        float4 color = vectorCoreColor(uniforms.layer, kind, uniforms.preset);
         if (uniforms.pass == 0u) {
             width += (uniforms.layer == 1u || uniforms.layer == 2u) ? 0.9 : 1.4;
-            color = vectorCasingColor(uniforms.layer, kind);
+            color = vectorCasingColor(uniforms.layer, kind, uniforms.preset);
+        }
+        if (uniforms.layer == 1u) {
+            width *= uniforms.zoom <= 6u ? 0.72 : (uniforms.zoom >= 8u ? 1.04 : 1.0);
+            if (uniforms.zoom >= 8u) color.a = min(1.0, color.a * 1.16);
         }
         float2 normal = float2(-delta.y, delta.x) / segmentLength * (width * 0.5);
         constexpr float2 pointCorner[6] = {
