@@ -359,6 +359,10 @@ def dotenv_credentials(path: Path) -> tuple[str, str] | None:
             continue
         key, value = line.split("=", 1)
         key, value = key.strip(), value.strip()
+        key = {
+            "CDSE Client-ID": "CDSE_CLIENT_ID",
+            "CDSE Client-Secret": "CDSE_CLIENT_SECRET",
+        }.get(key, key)
         if key not in ("CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET"):
             continue
         if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):

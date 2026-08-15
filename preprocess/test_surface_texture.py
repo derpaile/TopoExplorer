@@ -177,7 +177,7 @@ class SurfaceTexturePipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             dotenv = Path(temporary) / ".env"
             dotenv.write_text(
-                'export CDSE_CLIENT_ID="client"\nCDSE_CLIENT_SECRET=secret\nIGNORED=value\n',
+                'CDSE Client-ID="client"\nCDSE Client-Secret=secret\nIGNORED=value\n',
                 encoding="utf-8",
             )
             self.assertEqual(
