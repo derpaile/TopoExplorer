@@ -120,7 +120,7 @@ enum MetalShader {
             float sampleValue = surfaceTexture.sample(surfaceSampler, in.uv).r;
             // UInt8 128 ist exakt neutral; 0 und 255 bilden die Endpunkte.
             float detail = clamp((sampleValue * 255.0 - 128.0) / 127.0, -1.0, 1.0);
-            float amount = clamp(surface.strength, 0.0, 0.15)
+            float amount = clamp(surface.strength, 0.0, 0.50)
                 * clamp(surface.zoomWeight, 0.0, 1.0)
                 * clamp(surfaceWeights[classIndex], 0.0, 1.0);
             texturedBase *= 1.0 + detail * amount;

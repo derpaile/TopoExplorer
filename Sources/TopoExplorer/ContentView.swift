@@ -720,12 +720,12 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                     .font(.caption)
-                    Slider(value: $style.surfaceTextureStrength, in: 0...0.15)
+                    Slider(value: $style.surfaceTextureStrength, in: 0...0.50)
                 }
                 .disabled(!style.surfaceTextureEnabled)
 
                 HStack(spacing: 4) {
-                    ForEach([0.0, 0.05, 0.08, 0.12, 0.15], id: \.self) { strength in
+                    ForEach([0.0, 0.20, 0.30, 0.40, 0.50], id: \.self) { strength in
                         Button(strength.formatted(.percent.precision(.fractionLength(0)))) {
                             style.surfaceTextureStrength = strength
                         }

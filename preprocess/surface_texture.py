@@ -47,7 +47,7 @@ SOURCE_URL = (
     "SentinelMissions/Sentinel2.html#sentinel-2-level-3-quarterly-mosaics"
 )
 HANNOVER_LON_LAT = (9.732, 52.375)
-STRENGTHS = (0.0, 0.05, 0.08, 0.12, 0.15)
+STRENGTHS = (0.0, 0.20, 0.30, 0.40, 0.50)
 
 
 @dataclass(frozen=True)
@@ -78,6 +78,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--compression", type=int, choices=range(1, 10), default=6)
     parser.add_argument("--preview-size", type=int, default=768)
     parser.add_argument("--no-preview", action="store_true")
+    parser.add_argument(
+        "--preview-only",
+        action="store_true",
+        help="Vorhandene Surface-Kacheln nur neu vergleichen; kein Satellitenabruf",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -486,7 +491,8 @@ def write_preview(
     comparison = np.concatenate(panels, axis=1)
     output_directory = root / "SurfaceTexture"
     output_directory.mkdir(parents=True, exist_ok=True)
-    output = output_directory / "hannover-comparison-00-05-08-12-15.png"
+    suffix = "-".join(f"{round(value * 100):02d}" for value in STRENGTHS)
+    output = output_directory / f"hannover-comparison-{suffix}.png"
     profile = {
         "driver": "PNG",
         "width": comparison.shape[1],
@@ -520,7 +526,7 @@ def update_manifest(
         "suffix": SURFACE_SUFFIX,
         "minZoom": minimum_zoom,
         "maxZoom": maximum_zoom,
-        "defaultStrength": 0.08,
+        "defaultStrength": 0.30,
         "fullStrengthResolution": 20.0,
         "hiddenResolution": 320.0,
         "classWeights": weights,
@@ -562,6 +568,13 @@ def main() -> int:
     )
     if args.dry_run:
         print("Feinkacheln:", " ".join(f"{tile.x}_{tile.y}" for tile in tiles))
+        return 0
+
+    weights = class_weights(manifest)
+    if args.preview_only:
+        update_manifest(root, manifest, minimum_zoom, maximum_zoom, weights, args)
+        preview = write_preview(root, manifest, level, tiles, weights, args.preview_size)
+        print(f"Vergleich {'/'.join(f'{value:.0%}' for value in STRENGTHS)}: {preview}")
         return 0
 
     paths = {
@@ -610,12 +623,11 @@ def main() -> int:
     derive_parent_tiles(
         root, maximum_zoom, tiles, minimum_zoom, tile_size, args.compression
     )
-    weights = class_weights(manifest)
     update_manifest(root, manifest, minimum_zoom, maximum_zoom, weights, args)
     print(f"Surface Texture: neutral 128, symmetrisch geclippt bei ±{limit:.5f}")
     if not args.no_preview:
         preview = write_preview(root, manifest, level, tiles, weights, args.preview_size)
-        print(f"Vergleich 0/5/8/12/15 %: {preview}")
+        print(f"Vergleich {'/'.join(f'{value:.0%}' for value in STRENGTHS)}: {preview}")
     return 0
 
 

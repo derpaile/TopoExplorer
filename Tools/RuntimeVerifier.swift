@@ -37,7 +37,7 @@ private struct PreviewThematic {
 
 private struct PreviewSurface {
     var active: UInt32
-    var strength: Float = 0.08
+    var strength: Float = 0.30
     var zoomWeight: Float
     var padding: Float = 0
 }

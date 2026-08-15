@@ -124,7 +124,7 @@ class SurfaceTexturePipelineTests(unittest.TestCase):
             updated = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(updated["surfaceTexture"]["suffix"], "surface.z")
             self.assertEqual(updated["surfaceTexture"]["classWeights"][4], 0)
-            preview = root / "SurfaceTexture" / "hannover-comparison-00-05-08-12-15.png"
+            preview = root / "SurfaceTexture" / "hannover-comparison-00-20-30-40-50.png"
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", NotGeoreferencedWarning)
                 with rasterio.open(preview) as dataset:

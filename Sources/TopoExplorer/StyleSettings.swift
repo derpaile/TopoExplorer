@@ -58,7 +58,7 @@ struct RenderStyle {
         ambientLight: Float,
         sunAzimuthRadians: Float = 5.4977871438,
         surfaceEnabled: Bool = true,
-        surfaceStrength: Float = 0.08
+        surfaceStrength: Float = 0.30
     ) {
         self.colors = colors
         self.reliefOpacity = reliefOpacity
@@ -333,7 +333,7 @@ final class StyleSettings: ObservableObject {
         let savedTextureStrength = UserDefaults.standard.object(
             forKey: Self.textureStrengthStorageKey
         ) as? Double
-        surfaceTextureStrength = min(max(savedTextureStrength ?? 0.08, 0), 0.15)
+        surfaceTextureStrength = min(max(savedTextureStrength ?? 0.30, 0), 0.50)
         activeStyleName = original.name
         activeStyleID = original.id
         errorMessage = nil

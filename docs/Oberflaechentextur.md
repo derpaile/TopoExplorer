@@ -42,8 +42,15 @@ vier Kindkacheln gemittelt; der Shader blendet sie zusätzlich zwischen 20 und
 Landwirtschaft 100 %, Wald 85 %, Grasland 65 %, Siedlung 42 %, Wasser 0 %.
 
 Unter `MapData/Germany/SurfaceTexture/` entsteht außerdem eine reine
-TopoExplorer-Vergleichsgrafik mit 0, 5, 8, 12 und 15 % Modulation. Sie enthält
+TopoExplorer-Vergleichsgrafik mit 0, 20, 30, 40 und 50 % Modulation. Sie enthält
 nur Klassenfarben plus Graustufen-Detail, keine Satellitenfarben.
+
+Nach einer Änderung der Vergleichsstärken lässt sie sich ohne erneuten Abruf
+aus den vorhandenen Tiles erzeugen:
+
+```sh
+./scripts/preprocess_surface_texture.sh --preview-only
+```
 
 Die Quartalsmosaike sind seit 2015 weltweit verfügbar und werden aus drei
 Monaten Level-2A-Daten mit SCL-Wolkenmaske und erstem Quartil aufgebaut. Technische
