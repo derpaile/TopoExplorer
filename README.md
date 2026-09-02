@@ -30,7 +30,7 @@ Analysen bleiben auf dem eigenen Mac.
 |---|---|
 | **10-m-Landoberfläche** | 40 durchsuchbare und frei färbbare Klassen für ganz Deutschland |
 | **Metal-Relief** | Live steuerbare Stärke, Überhöhung und Kontrast ohne vorgerenderte Schummerung |
-| **Fachkarten** | Substrat, Geologie, Reliefform und Grundwasser als eigenständige Kartenfamilie |
+| **Fachkarten** | Substrat, Geologie, Rohstoffe, Reliefform und Grundwasser als eigenständige Kartenfamilie |
 | **Lokale Analyse** | Flächen, Profile, Bevölkerung, Dichte, Höhenraum und Landschaftsmosaik auswerten |
 | **Offenes Feldbuch** | Fundstellen vergleichen, kommentieren und verlustfrei als GeoJSON austauschen |
 | **Kartografischer Export** | Karte bis 4× neu rendern, inklusive feinerer Kacheln, Maßstab und Stil-Datei |
@@ -103,19 +103,34 @@ sofern Rasterio sie lesen kann; sie werden automatisch nach EPSG:3035
 reprojiziert. Details und Datenanforderungen stehen unter
 [Datengrundlagen einrichten](docs/Datenquellen.md).
 
-### 2. Eingaben prüfen
+### 2. Copernicus-Zugang für den Screenshot-Inhalt einrichten
+
+Die gezeigte Feinstruktur stammt aus dem Sentinel-2-Quartalsmosaik 2025-Q2.
+Für denselben Kartenstand wird einmalig ein OAuth-Client im
+[Copernicus Data Space](https://dataspace.copernicus.eu/) benötigt. Client-ID
+und Secret werden im macOS-Schlüsselbund gespeichert, nicht im Repository:
+
+```sh
+./scripts/configure_cdse_credentials.sh
+```
+
+Der deutschlandweite RGB-Detailabruf benötigt ungefähr 26.700–28.000 Sentinel
+Hub Processing Units. Er passt damit knapp in ein 30.000-PU-Kontingent.
+
+### 3. Eingaben prüfen
 
 ```sh
 ./scripts/check_source_data.sh
 ```
 
-Der Check unterscheidet Pflichtquellen, optionale Daten und Dateien, die später
-automatisch geladen oder erzeugt werden.
+Der Check prüft die drei lokalen Pflichtquellen und den CDSE-Zugang. Zensus,
+BGR-Daten, GN250, WorldCover, EUCROPMAP und ForestPaths werden im Vollaufbau
+automatisch beschafft.
 
-### 3. Karte erzeugen und App bauen
+### 4. Vollständigen Screenshot-Stand erzeugen
 
 ```sh
-./scripts/prepare_all.sh
+./scripts/prepare_complete.sh
 ./scripts/build_app.sh
 ```
 
@@ -125,25 +140,30 @@ Danach liegt die startbereite Anwendung hier:
 open .build/app/TopoExplorer.app
 ```
 
-`prepare_all.sh` richtet die lokale Python-Umgebung ein, installiert bei
-vorhandenem Homebrew das benötigte `osmium-tool` und erzeugt die Karte
-fortsetzbar. ESA WorldCover, EUCROPMAP, ForestPaths und BKG GN250 werden dabei
-automatisch geladen. `railways.geojson` und `places.geojson` werden automatisch
-aus dem OSM-PBF abgeleitet. Abgebrochene Läufe können mit demselben Befehl
-fortgesetzt werden.
+`prepare_complete.sh` erzeugt genau die Datenausstattung, aus der die Bilder in
+dieser README gerendert werden:
 
-### Optionale Bevölkerungsanalyse
+- 40 Landbedeckungsklassen aus WorldCover, EUCROPMAP, ForestPaths und DLR,
+- GMTED-Relief sowie OSM-/GN250-Orientierungsebenen,
+- Zensus-2022-Bevölkerung im 100-m-Gitter,
+- BGR-Substrat, Geologie, Rohstoffe, Geomorphographie und Grundwasser,
+- deutschlandweite Sentinel-2-Oberflächentextur aus 2025-Q2,
+- neu gerenderte Dateien unter `References/Generated`.
 
-Für den ersten Kartenstart ist kein Bevölkerungsraster nötig. Wird ein
-100-m-GeoTIFF in **EPSG:3035** unter
-`Data/Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif` abgelegt, erzeugt
-`prepare_all.sh` zusätzlich Flächen-, Dichte- und Umgebungsanalysen. Geeignete
-Gitterdaten bietet das
-[Statistische Bundesamt](https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Bevoelkerung/Zensus2022/_inhalt.html).
+Downloads und Verarbeitung sind fortsetzbar. Nach einem Abbruch denselben
+Befehl erneut starten. Erst die abschließende Prüfung rendert die Screenshot-
+Galerie neu und bestätigt, dass alle dargestellten Inhalte vorhanden sind.
 
-Geowissenschaftliche BGR-Ebenen und die Sentinel-Oberflächentextur sind
-ebenfalls optional und werden erst nach dem erfolgreichen Basisaufbau ergänzt.
-Alternativ lässt sich der App-Code über `Package.swift` in Xcode öffnen.
+### Nur die reduzierte Basiskarte
+
+```sh
+./scripts/prepare_all.sh
+```
+
+Dieser kürzere Lauf ist für Entwicklung ohne Zensus, BGR-Fachkarten und
+Sentinel-Textur gedacht. Er reproduziert die vollständigen README-Screenshots
+ausdrücklich **nicht**. Der App-Code lässt sich unabhängig davon über
+`Package.swift` in Xcode öffnen.
 
 ## Was sich erkunden lässt
 
@@ -155,8 +175,8 @@ Alternativ lässt sich der App-Code über `Package.swift` in Xcode öffnen.
   Umgebung direkt am Mauszeiger oder an gespeicherten Punkten untersuchen.
 - **Analysen:** Rechtecke für Flächen- und Bevölkerungswerte sowie Linien für
   Höhenprofile und Landklassenabschnitte zeichnen.
-- **Fachkarten:** Geologie, Substrat, Reliefform und Grundwasser exklusiv als
-  Overlay oder Basiskarte verwenden.
+- **Fachkarten:** Geologie, Substrat, Rohstoffe, Reliefform und Grundwasser
+  exklusiv als Overlay oder Basiskarte verwenden.
 - **Oberflächentextur:** neutrale Sentinel-2-Feinstruktur klassen- und
   zoomabhängig mit Landbedeckung, Relief und Fachkarten kombinieren.
 

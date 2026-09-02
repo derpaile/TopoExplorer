@@ -5,17 +5,17 @@ im Git-Repository aus. Die App liest ein lokal erzeugtes Kachelverzeichnis unter
 `MapData/Germany`. Dieses Dokument beschreibt, welche Ausgangsdaten dafür nötig
 sind, wo sie liegen müssen und was die Skripte daraus erzeugen.
 
-## Welcher Umfang ist nötig?
+## Reproduktionsziel
 
 | Umfang | Manuell benötigte Quellen | Ergebnis |
 |---|---|---|
-| **Basiskarte** | DLR Land Cover DE, Höhenmodell, OSM Deutschland-PBF | 40 Landklassen, Relief, Straßen, Bahn, Gewässer, Grenzen, Orte und Energie |
-| **Mit Bevölkerung** | Basiskarte plus 100-m-Bevölkerungsraster | zusätzlich Einwohner, Dichte, Flächen- und Umgebungsanalyse |
-| **Mit Fachkarten** | Basiskarte plus BGR-/Landesdaten | zusätzlich Substrat, Geologie, Reliefform und Grundwasser |
-| **Mit Oberflächentextur** | Basiskarte plus CDSE-Zugang | zusätzlich Sentinel-2-Feinstruktur in hohen Zoomstufen |
+| **Vollständiger Screenshot-Stand** | DLR Land Cover DE, Höhenmodell, OSM Deutschland-PBF und CDSE-OAuth-Zugang | alle README-Bilder, Analysen, fünf BGR-Fachkarten und Sentinel-2-Textur |
+| **Reduzierte Basiskarte** | DLR Land Cover DE, Höhenmodell und OSM Deutschland-PBF | Landklassen, Relief und Orientierung, aber nicht der vollständige Bildinhalt |
 
-Für einen ersten Start genügt die **Basiskarte**. Bevölkerung, Fachkarten und
-Sentinel-Textur sind optional und können später ergänzt werden.
+Der dokumentierte Standard ist der **vollständige Screenshot-Stand**. Zensus-
+und BGR-Daten werden dafür automatisch geladen. Die Sentinel-Textur benötigt
+einen persönlichen OAuth-Client, weil ihr deutschlandweiter Abruf über das
+Kontingent des jeweiligen Copernicus-Data-Space-Kontos abgerechnet wird.
 
 ## Platz- und Zeitbedarf
 
@@ -128,15 +128,12 @@ Die ersten drei Quellen landen nur vorübergehend in
 Integration gelöscht. Mit `--keep-downloads` bleiben sie für Diagnosezwecke
 erhalten.
 
-## Optionale Bevölkerung
+## Automatisch erzeugte Zensus-Bevölkerung
 
-Die App funktioniert ohne Bevölkerungsdaten. Dann fehlen nur Einwohner-,
-Dichte- und darauf aufbauende Umgebungswerte.
-
-Als Quelle eignen sich die amtlichen
-[Zensus-Gitterdaten](https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Bevoelkerung/Zensus2022/_inhalt.html).
-Die aktuelle Pipeline erwartet ein bereits rasterisiertes GeoTIFF mit folgenden
-Eigenschaften:
+`prepare_complete.sh` lädt die amtliche
+[Zensus-2022-Bevölkerungszahl](https://www.destatis.de/static/DE/zensus/gitterdaten/Zensus2022_Bevoelkerungszahl.zip)
+und wandelt die enthaltene 100-m-CSV automatisch in das von der App benötigte
+GeoTIFF um:
 
 | Eigenschaft | Anforderung |
 |---|---|
@@ -144,25 +141,26 @@ Eigenschaften:
 | KBS | EPSG:3035 |
 | Zellgröße | quadratisch, üblicherweise 100 m |
 | Ausrichtung | nordorientiert, nicht gedreht |
-| Zellwert | Einwohnerzahl, ganzzahlig und nicht negativ |
-| NoData | negativer Wert oder korrektes NoData-Attribut |
+| Zellwert | Einwohnerzahl, UInt16; `0` = keine ausgewiesene Bevölkerung |
+| Quelle | Destatis, Zensus 2022, Bevölkerungszahl in Gitterzellen |
 
-Die Zensus-Portale liefern je nach Jahr CSV-Gitterdaten. Deren Zellkennungen
-beziehen sich auf das INSPIRE-100-m-Gitter in EPSG:3035; sie müssen vor dem
-TopoExplorer-Lauf in ein GeoTIFF rasterisiert werden. Ein beliebiger Dateiname
-ist möglich, wenn er explizit übergeben wird:
+Die Einzelschritte lassen sich bei Bedarf separat wiederholen:
 
 ```sh
-./scripts/preprocess_population.sh /pfad/zum/bevoelkerung-100m.tif
+./scripts/fetch_zensus_population.sh
+./scripts/preprocess_population.sh
 ```
 
-Liegt die Standarddatei beim Aufruf von `prepare_all.sh` nicht vor, wird dieser
-Schritt mit einem Hinweis übersprungen; die Basiskarte bleibt vollständig
-nutzbar.
+`fetch_zensus_population.sh` bewahrt das amtliche ZIP unter `Data/Raw/Population`
+auf und erzeugt daraus reproduzierbar das GeoTIFF. `preprocess_population.sh`
+schreibt anschließend die kompakten Analysekacheln nach
+`MapData/Germany/Analysis`. Der reduzierte Aufruf `prepare_all.sh` lädt diese
+Quelle nicht selbst, verarbeitet aber eine bereits vorhandene Standarddatei.
+`prepare_complete.sh` lädt und erzeugt sie immer.
 
 ## Erwartete Eingabestruktur
 
-Vor dem Basisaufbau sollte der relevante Teil von `Data/Raw` so aussehen:
+Vor dem Vollaufbau sollte der relevante Teil von `Data/Raw` so aussehen:
 
 ```text
 Data/Raw/
@@ -177,7 +175,8 @@ Data/Raw/
 ├── BKG/
 │   └── gn250/GN250.csv                     wird geladen
 └── Population/
-    └── Zensus_Bevoelkerung_100m-Gitter.tif optional
+    ├── Zensus2022_Bevoelkerungszahl.zip      wird geladen
+    └── Zensus_Bevoelkerung_100m-Gitter.tif  wird erzeugt
 ```
 
 Der Vorab-Check zeigt den Zustand ohne Änderungen an:
@@ -186,22 +185,55 @@ Der Vorab-Check zeigt den Zustand ohne Änderungen an:
 ./scripts/check_source_data.sh
 ```
 
-## Verarbeitung starten
+## CDSE-Zugang für den vollständigen Bildinhalt
+
+Im Sentinel-Hub-Dashboard des
+[Copernicus Data Space](https://dataspace.copernicus.eu/) unter
+„User Settings → OAuth clients“ einen Client anlegen und anschließend ausführen:
 
 ```sh
-./scripts/prepare_all.sh
+./scripts/configure_cdse_credentials.sh
 ```
 
-Der Befehl führt in dieser Reihenfolge aus:
+Die Werte werden verdeckt im macOS-Schlüsselbund gespeichert. Der vollständige
+Aufbau verwendet das Quartalsmosaik **2025-Q2** und das Bandprofil `rgb`, weil
+dieser Stand den Referenzbildern entspricht. Der Abruf benötigt ungefähr
+26.700–28.000 Processing Units und damit fast ein vollständiges 30.000-PU-
+Kontingent. Ein abgebrochener Lauf setzt anhand von
+`MapData/Germany/SurfaceTexture/germany-build.json` fort.
+
+## Vollständige Verarbeitung starten
+
+```sh
+./scripts/check_source_data.sh
+./scripts/prepare_complete.sh
+```
+
+`prepare_complete.sh` führt in dieser Reihenfolge aus:
 
 1. lokale Python-Umgebung und Rasterbibliotheken einrichten,
 2. WorldCover, EUCROPMAP und ForestPaths herunterladen und integrieren,
 3. Reliefkacheln aus dem Höhenmodell erzeugen,
 4. GN250 laden und OSM-Bahn-/Ortsdateien ableiten,
 5. Vektor- und Suchkacheln erzeugen,
-6. die fertige Karte als `MapData/Germany` aktivieren,
-7. optional das Bevölkerungsraster kacheln,
-8. vorhandene Bestandteile prüfen.
+6. Zensus 2022 laden, rasterisieren und als Analysekacheln schreiben,
+7. BGR-Substrat, Geologie, Rohstoffe, Geomorphographie und Grundwasser erzeugen,
+8. die deutschlandweite Sentinel-2-Textur 2025-Q2 abrufen,
+9. alle Laufzeitprüfungen ausführen und `References/Generated` neu rendern.
+
+Danach stammen die Bilder in der README aus genau demselben Datenstand, den die
+App unter `MapData/Germany` öffnet.
+
+Für reine Entwicklung ohne reproduzierbaren Screenshot-Inhalt bleibt der
+reduzierte Lauf verfügbar:
+
+```sh
+./scripts/prepare_all.sh
+```
+
+Dieser Lauf beschafft keine Zensus-/BGR-Produkte und keine Sentinel-2-Textur. Er
+verarbeitet lediglich ein schon vorhandenes Zensus-GeoTIFF und garantiert den
+Screenshot-Stand daher nicht.
 
 Ein vorhandenes `MapData/Germany` wird vor der Aktivierung mit Zeitstempel als
 `MapData/Germany-50m-backup-…` gesichert. Ein abgebrochener Neuaufbau unter
@@ -212,41 +244,62 @@ Ein vorhandenes `MapData/Germany` wird vor der Aktivierung mit Zeitstempel als
 ```text
 MapData/Germany/
 ├── manifest.json                    KBS, Grenzen, Zoomstufen, Klassen, Quellen
-├── z0/ … z8/                        Land- und Reliefkacheln
+├── z0/ … z8/                        Rasterkacheln aller Kartenfamilien
 │   ├── {x}_{y}.landrich.z           512×512 Landklassen, zlib
-│   └── {x}_{y}.elev.z               Höhenwerte mit Überlappungsrand, zlib
+│   ├── {x}_{y}.elev.z               Höhenwerte mit Überlappungsrand, zlib
+│   ├── {x}_{y}.surface.z            neutraler Sentinel-2-Detailkanal
+│   ├── {x}_{y}.substrate.z          Oberflächensubstrat
+│   ├── {x}_{y}.geology.z            oberflächennahe Geologie
+│   ├── {x}_{y}.resources.z          Rohstoffklassen
+│   ├── {x}_{y}.geomorphography.z    geomorphographische Einheiten
+│   ├── {x}_{y}.groundwater.z        Grundwasserflurabstand
+│   └── *.quality.z                  Quellqualität der jeweiligen Fachkarte
 ├── Vectors/
 │   ├── vector-manifest.json         Ebenen, Formate, Quellsignaturen
 │   ├── places-index.json.z          vollständiger Suchindex
 │   └── z*/{x}_{y}.tvt.z             Linien, Orte und Energieobjekte
-└── Analysis/                        nur bei optionaler Bevölkerung
-    ├── population.json              Rastergeometrie, Quelle und Prüfsummen
-    └── *.population.u16.z           512×512 Einwohnerkacheln
+├── Analysis/
+│   ├── population.json              Rastergeometrie, Quelle und Prüfsummen
+│   └── *.population.u16.z           512×512 Einwohnerkacheln
+├── Masters/Geoscience/              fachliche Master- und Qualitätsraster
+├── Intermediate/Geoscience/         reproduzierbare Zwischenprodukte
+└── SurfaceTexture/
+    ├── germany-build.json           fortsetzbarer Sentinel-Laufzustand
+    └── hannover-comparison-*.png    Vergleich der Texturstärken
 ```
 
 `manifest.json` ist der Einstiegspunkt der App. Wird ein anderer Kartenordner
 verwendet, muss dieser Ordner direkt das Manifest und die Zoomordner enthalten.
 
-## Optionale geowissenschaftliche Fachkarten
+## BGR-Fachkarten des Vollaufbaus
 
-Nach dem Basisaufbau können die amtlichen Bundesprodukte einzeln ergänzt werden:
+Der Vollaufbau ruft diese fünf Schritte automatisch auf. Sie können einzeln
+wiederholt werden:
 
 ```sh
 ./scripts/fetch_bgr_substrate.sh
 ./scripts/fetch_bgr_geology.sh
+./scripts/fetch_bgr_resources.sh
 ./scripts/fetch_bgr_geomorphography.sh
 ./scripts/fetch_bgr_groundwater.sh
 ```
 
-Enthalten sind BÜK250 V6.0, GÜK250, GMK1000R V2.0 und GWS1000_250 V1.0.
-Genauigkeit, Qualitätsraster und Landes-Overrides sind in
+Enthalten sind BÜK250 V6.0, GÜK250, KOR250/GK2000-Rohstoffe, GMK1000R V2.0 und
+GWS1000_250 V1.0. Genauigkeit, Qualitätsraster und Landes-Overrides sind in
 [Geowissenschaften.md](Geowissenschaften.md) beschrieben.
 
-## Optionale Sentinel-Oberflächentextur
+## Sentinel-Oberflächentextur des Vollaufbaus
 
-Die Oberflächentextur benötigt einen eigenen Copernicus-Data-Space-Zugang und
-ist wegen Quoten und Datenmenge kein Bestandteil des Basisaufbaus. Einrichtung,
-Schlüsselbundspeicherung, Archivoptionen und Kostenabschätzung stehen in
+Der Vollaufbau verwendet:
+
+```sh
+./scripts/preprocess_surface_texture.sh \
+  --germany --quarter 2025-Q2 --band-profile rgb
+```
+
+Damit werden genau die `surface.z`-Kacheln erzeugt, die in der README-Galerie
+mit Landbedeckung und Relief kombiniert sind. Schlüsselbundspeicherung,
+Archivoptionen und Kostenabschätzung stehen in
 [Oberflaechentextur.md](Oberflaechentextur.md).
 
 ## Prüfung und typische Fehler
@@ -256,14 +309,15 @@ Schlüsselbundspeicherung, Archivoptionen und Kostenabschätzung stehen in
 .venv/bin/python preprocess/verify_tiles.py MapData/Germany
 ```
 
-Mit vorhandener Bevölkerung führt `prepare_all.sh` zusätzlich die vollständige
-Laufzeit- und Referenzbildprüfung aus.
+`prepare_complete.sh` führt abschließend immer die vollständige Laufzeit- und
+Referenzbildprüfung aus. Ein erfolgreicher Abschluss bestätigt damit nicht nur
+einzelne Dateien, sondern den dargestellten Gesamtzustand.
 
 | Meldung | Ursache / Lösung |
 |---|---|
 | `Quelldatei fehlt` | Pfad und exakten Dateinamen mit `check_source_data.sh` prüfen |
 | `osmium-tool fehlt` | `brew install osmium-tool` ausführen |
-| `Bevölkerungsraster muss EPSG:3035 sein` | Raster vorab nach EPSG:3035 reprojizieren |
+| `Bevölkerungsraster muss EPSG:3035 sein` | selbst bereitgestelltes Raster reprojizieren; beim amtlichen Standard die erzeugte TIFF-Datei löschen und `fetch_zensus_population.sh` erneut ausführen |
 | Arbeitsgrenze überschritten | mehr freien Speicher schaffen oder bewusst `--max-work-gb` erhöhen |
 | weniger als 750 MB frei | der Lauf stoppt zum Schutz des Datenträgers; Speicher freigeben |
 | `.incomplete` vorhanden | denselben Vorbereitungslauf erneut starten; nicht manuell aktivieren |
@@ -279,8 +333,9 @@ Laufzeit- und Referenzbildprüfung aus.
 | USGS/NGA GMTED2010 | öffentlich verfügbar; Produktmetadaten beachten |
 | OpenStreetMap | ODbL 1.0, © OpenStreetMap-Mitwirkende |
 | BKG GN250 | Datenlizenz Deutschland – Namensnennung – Version 2.0, `© BKG 2026` |
-| Zensus-Gitterdaten | Datenlizenz des gewählten Jahrgangs und Quellenvermerk beachten |
+| Zensus 2022, Bevölkerungszahl | Datenlizenz Deutschland – Namensnennung – Version 2.0 |
 | BGR-Produkte | jeweilige amtliche Produktlizenz und Quellenangabe beachten |
+| Copernicus Sentinel-2 | Copernicus Sentinel Data Terms |
 
 Quellen- und Lizenzangaben werden in der interaktiven Karte, in Exporten und in
 den Manifesten mitgeführt. Bei eigenen oder ausgetauschten Quellen müssen diese

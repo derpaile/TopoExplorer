@@ -25,15 +25,19 @@ fi
 ./scripts/activate_landcover_10m.sh
 
 POPULATION_SOURCE="Data/Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif"
-if [[ -f "$POPULATION_SOURCE" ]]; then
+if [[ "${TOPO_DEFER_FULL_VERIFY:-0}" == "1" ]]; then
+  echo "Bevölkerung folgt in Stufe 2 des Vollaufbaus."
+elif [[ -f "$POPULATION_SOURCE" ]]; then
   ./scripts/preprocess_population.sh "$POPULATION_SOURCE"
 else
-  echo "Bevölkerungsraster fehlt; Bevölkerungsanalysen werden übersprungen."
-  echo "Optionaler Pfad: $POPULATION_SOURCE"
+  echo "Reduzierter Lauf: Bevölkerungsanalysen werden übersprungen."
+  echo "Für den vollständigen Stand ./scripts/prepare_complete.sh verwenden."
 fi
 
 ./scripts/verify_vectors.sh
-if [[ -f "$POPULATION_SOURCE" ]]; then
+if [[ "${TOPO_DEFER_FULL_VERIFY:-0}" == "1" ]]; then
+  .venv/bin/python preprocess/verify_tiles.py MapData/Germany
+elif [[ -f "$POPULATION_SOURCE" ]]; then
   ./scripts/verify_image_quality.sh
 else
   .venv/bin/python preprocess/verify_tiles.py MapData/Germany

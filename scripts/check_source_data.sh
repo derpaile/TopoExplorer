@@ -19,13 +19,13 @@ required() {
   fi
 }
 
-optional() {
+cached() {
   local path="$1"
   local label="$2"
   if [[ -f "$path" ]]; then
-    echo "OK       $label (optional)"
+    echo "OK       $label (bereits vorhanden)"
   else
-    echo "OPTIONAL $label"
+    echo "AUTO     $label"
     echo "         $path"
   fi
 }
@@ -36,22 +36,42 @@ required "Data/Raw/Elevation/gmted2010_mean_7p5arcsec.tiff" "GMTED2010 Mean 7,5 
 required "Data/Raw/OSM/germany-latest.osm.pbf" "OpenStreetMap Deutschland-PBF"
 
 echo
-echo "Optionale Analysequelle"
-optional "Data/Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif" "Bevölkerung im 100-m-Gitter, EPSG:3035"
+echo "Automatisch beschaffte Vollausstattung"
+cached "Data/Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif" "Zensus-2022-Bevölkerung im 100-m-Gitter"
+echo "AUTO     fünf BGR-Fachkarten einschließlich Rohstoffe"
+echo "AUTO     Zensus 2022 wird geladen und als EPSG:3035-GeoTIFF erzeugt"
+
+credentials=0
+if [[ -n "${CDSE_CLIENT_ID:-}" && -n "${CDSE_CLIENT_SECRET:-}" ]]; then
+  credentials=1
+elif [[ -f .env ]] && grep -q '^CDSE_CLIENT_ID=' .env && grep -q '^CDSE_CLIENT_SECRET=' .env; then
+  credentials=1
+elif security find-generic-password -s de.topoexplorer.cdse -a client-id -w >/dev/null 2>&1 \
+  && security find-generic-password -s de.topoexplorer.cdse -a client-secret -w >/dev/null 2>&1; then
+  credentials=1
+fi
+if (( credentials )); then
+  echo "OK       Copernicus-Data-Space-Zugang für die Sentinel-2-Textur"
+else
+  echo "FEHLT    Copernicus-Data-Space-Zugang für die Sentinel-2-Textur"
+  echo "         ./scripts/configure_cdse_credentials.sh"
+  missing=1
+fi
 
 echo
-echo "Automatisch erzeugt oder geladen"
-optional "Data/Raw/OSM/railways.geojson" "Bahnlinien aus dem OSM-PBF"
-optional "Data/Raw/OSM/places.geojson" "Orte aus dem OSM-PBF"
-optional "Data/Raw/BKG/gn250/GN250.csv" "BKG-Geonamen GN250"
+echo "Automatisch aus den Pflichtquellen erzeugt"
+cached "Data/Raw/OSM/railways.geojson" "Bahnlinien aus dem OSM-PBF"
+cached "Data/Raw/OSM/places.geojson" "Orte aus dem OSM-PBF"
+cached "Data/Raw/BKG/gn250/GN250.csv" "BKG-Geonamen GN250"
 echo "AUTO     ESA WorldCover, EUCROPMAP und ForestPaths"
 echo "         werden während ./scripts/prepare_all.sh einzeln geladen"
 
 if (( missing )); then
   echo
-  echo "Mindestens eine Pflichtquelle fehlt. Siehe README → Datengrundlagen."
+  echo "Der vollständige Screenshot-Aufbau ist noch nicht startbereit."
+  echo "Siehe README → Datengrundlagen."
   exit 1
 fi
 
 echo
-echo "Alle Pflichtquellen sind vorhanden."
+echo "Der vollständige Screenshot-Aufbau ist startbereit."
