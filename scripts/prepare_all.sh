@@ -23,8 +23,20 @@ fi
   --manifest MapData/Germany-10m/manifest.json \
   --output MapData/Germany-10m/Vectors
 ./scripts/activate_landcover_10m.sh
-./scripts/preprocess_population.sh
+
+POPULATION_SOURCE="Data/Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif"
+if [[ -f "$POPULATION_SOURCE" ]]; then
+  ./scripts/preprocess_population.sh "$POPULATION_SOURCE"
+else
+  echo "Bevölkerungsraster fehlt; Bevölkerungsanalysen werden übersprungen."
+  echo "Optionaler Pfad: $POPULATION_SOURCE"
+fi
+
 ./scripts/verify_vectors.sh
-./scripts/verify_image_quality.sh
+if [[ -f "$POPULATION_SOURCE" ]]; then
+  ./scripts/verify_image_quality.sh
+else
+  .venv/bin/python preprocess/verify_tiles.py MapData/Germany
+fi
 
 echo "Kartendaten vollständig: MapData/Germany"

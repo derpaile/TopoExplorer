@@ -62,8 +62,57 @@ Analysen bleiben auf dem eigenen Mac.
 
 ## Schnellstart
 
-Vorausgesetzt werden macOS 14 oder neuer, die Apple Command Line Tools und
-Python 3. Die großen Roh- und Kartendaten gehören bewusst nicht zum Repository.
+> **Wichtig:** Das Repository enthält den Quellcode, aber keine fertige
+> Deutschlandkarte. Der vollständige Datenaufbau erzeugt lokal etwa **9–10 GB**
+> Kartendaten und benötigt zusätzlich das aktuelle Deutschland-PBF von
+> OpenStreetMap. Für einen problemlosen Lauf sind mindestens **20 GB freier
+> Speicher** sinnvoll.
+
+Vorausgesetzt werden macOS 14 oder neuer, die Apple Command Line Tools,
+Python 3 und eine Internetverbindung. `osmium-tool` wird benötigt; bei
+vorhandenem Homebrew installiert das Vorbereitungsskript es automatisch.
+
+### 1. Drei Pflichtquellen ablegen
+
+| Datengrundlage | Wofür? | Erwarteter Pfad | Beschaffung |
+|---|---|---|---|
+| **DLR Land Cover DE 2015** | Deutschlandgrenze und Wald-Offenflächen | `Data/Raw/LandCover/Land_Cover_DE_2015.tif` | [DLR-Download, ZIP 244 MiB](https://download.geoservice.dlr.de/LCC_DE/files/Land_Cover_DE_2015_v1.zip) entpacken |
+| **GMTED2010 Mean, 7,5″** | Relief und Höhenabfragen | `Data/Raw/Elevation/gmted2010_mean_7p5arcsec.tiff` | [USGS GMTED2010](https://www.usgs.gov/centers/eros/science/usgs-eros-archive-digital-elevation-global-multi-resolution-terrain-elevation), als GeoTIFF für Deutschland |
+| **OpenStreetMap Deutschland** | Straßen, Bahn, Gewässer, Grenzen, Orte und Energie | `Data/Raw/OSM/germany-latest.osm.pbf` | [Geofabrik-PBF, derzeit etwa 4,5 GB](https://download.geofabrik.de/europe/germany-latest.osm.pbf) |
+
+Ordner anlegen und die beiden direkt verfügbaren Dateien laden:
+
+```sh
+mkdir -p Data/Raw/LandCover Data/Raw/Elevation Data/Raw/OSM
+
+curl -fL --continue-at - \
+  -o Data/Raw/LandCover/Land_Cover_DE_2015_v1.zip \
+  https://download.geoservice.dlr.de/LCC_DE/files/Land_Cover_DE_2015_v1.zip
+unzip -o -j Data/Raw/LandCover/Land_Cover_DE_2015_v1.zip \
+  -d Data/Raw/LandCover
+
+curl -fL --continue-at - \
+  -o Data/Raw/OSM/germany-latest.osm.pbf \
+  https://download.geofabrik.de/europe/germany-latest.osm.pbf
+```
+
+Beim USGS-Export **Mean**, **7,5 arc-seconds**, **GeoTIFF** und einen
+Deutschlandausschnitt wählen. Die Datei anschließend exakt
+`gmted2010_mean_7p5arcsec.tiff` nennen. Andere DEMs funktionieren ebenfalls,
+sofern Rasterio sie lesen kann; sie werden automatisch nach EPSG:3035
+reprojiziert. Details und Datenanforderungen stehen unter
+[Datengrundlagen einrichten](docs/Datenquellen.md).
+
+### 2. Eingaben prüfen
+
+```sh
+./scripts/check_source_data.sh
+```
+
+Der Check unterscheidet Pflichtquellen, optionale Daten und Dateien, die später
+automatisch geladen oder erzeugt werden.
+
+### 3. Karte erzeugen und App bauen
 
 ```sh
 ./scripts/prepare_all.sh
@@ -77,23 +126,24 @@ open .build/app/TopoExplorer.app
 ```
 
 `prepare_all.sh` richtet die lokale Python-Umgebung ein, installiert bei
-vorhandenem Homebrew das benötigte `osmium-tool` und erzeugt fortsetzbar die
-Landbedeckungs-, Vektor-, Orts- und Bevölkerungskacheln. Alternativ lässt sich
-das Projekt über `Package.swift` in Xcode öffnen.
+vorhandenem Homebrew das benötigte `osmium-tool` und erzeugt die Karte
+fortsetzbar. ESA WorldCover, EUCROPMAP, ForestPaths und BKG GN250 werden dabei
+automatisch geladen. `railways.geojson` und `places.geojson` werden automatisch
+aus dem OSM-PBF abgeleitet. Abgebrochene Läufe können mit demselben Befehl
+fortgesetzt werden.
 
-### Benötigte Quelldateien
+### Optionale Bevölkerungsanalyse
 
-```text
-Data/Raw/LandCover/Land_Cover_DE_2015.tif
-Data/Raw/Elevation/gmted2010_mean_7p5arcsec.tiff
-Data/Raw/OSM/germany-latest.osm.pbf
-Data/Raw/BKG/gn250/GN250.csv
-Data/Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif
-```
+Für den ersten Kartenstart ist kein Bevölkerungsraster nötig. Wird ein
+100-m-GeoTIFF in **EPSG:3035** unter
+`Data/Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif` abgelegt, erzeugt
+`prepare_all.sh` zusätzlich Flächen-, Dichte- und Umgebungsanalysen. Geeignete
+Gitterdaten bietet das
+[Statistische Bundesamt](https://www.destatis.de/DE/Themen/Gesellschaft-Umwelt/Bevoelkerung/Zensus2022/_inhalt.html).
 
-Die amtlichen GN250-Geonamen werden während der Vorbereitung automatisch
-geladen. Optionale Behörden-, Landes- und Sentinel-Daten werden getrennt
-aufbereitet; vor ihrer Nutzung ist die jeweilige Lizenz zu prüfen.
+Geowissenschaftliche BGR-Ebenen und die Sentinel-Oberflächentextur sind
+ebenfalls optional und werden erst nach dem erfolgreichen Basisaufbau ergänzt.
+Alternativ lässt sich der App-Code über `Package.swift` in Xcode öffnen.
 
 ## Was sich erkunden lässt
 
