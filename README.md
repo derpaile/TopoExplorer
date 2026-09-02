@@ -1,43 +1,87 @@
-# TopoExplorer
+<p align="center">
+  <img src="app/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" width="112" alt="TopoExplorer App-Icon">
+</p>
 
-Native macOS-Karte mit 10-m-Landbedeckung für Deutschland. Die App lädt nur
-sichtbare Kacheln, berechnet das Relief in Metal und lässt 40 Oberflächenfarben
-live verändern.
+<h1 align="center">TopoExplorer</h1>
 
-Optional ergänzt eine eigenständige geowissenschaftliche Produktfamilie
-Oberflächensubstrat, oberflächennahe Geologie, geomorphographische
-Reliefeinheiten und Grundwasserstufen, ohne die 40 Landbedeckungsklassen zu
-verändern.
+<p align="center">
+  <strong>Deutschland als interaktive 10-m-Landoberflächenkarte – nativ, lokal und mit Metal gerendert.</strong>
+</p>
 
-Für hohe Zoomstufen kann ein neutraler Sentinel-2-Detailkanal reale Feld-,
-Wald- und Siedlungsstruktur hinzufügen, ohne Satellitenfarben oder eine zweite
-Klassifikation zu übernehmen. Der Hannover-PoC ist in
-[`docs/Oberflaechentextur.md`](docs/Oberflaechentextur.md) beschrieben.
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-14%2B-111111?logo=apple&logoColor=white" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Swift-5.10-F05138?logo=swift&logoColor=white" alt="Swift 5.10">
+  <img src="https://img.shields.io/badge/Rendering-Metal-6E5CFF" alt="Metal Rendering">
+  <img src="https://img.shields.io/badge/Datenverarbeitung-lokal-2E8B57" alt="Lokale Datenverarbeitung">
+</p>
 
-## Projektstruktur
+![TopoExplorer zeigt Landbedeckung, Oberflächentextur und Relief im Raum Hannover](References/Generated/hannover-fachkarte-surface-relief.png)
 
-- `Sources/TopoExplorer/`: native SwiftUI-/Metal-App
-- `preprocess/`: fensterweise Kachelerzeugung
-- `Data/Raw/`: lokale Quelldaten, nach Datentyp geordnet und nicht in Git
-- `MapData/Germany/`: erzeugte Deutschland-Kacheln, nicht in Git
-- `References/`: kleine, reproduzierbare Bildreferenzen für fünf Landschaftstypen
-- `scripts/`: Build, Aufbereitung und Laufzeitprüfung
+<p align="center"><sub>Hannover: Landbedeckung, Sentinel-2-Feinstruktur und Relief in einer gemeinsamen Darstellung.</sub></p>
 
-## In zwei Befehlen vorbereiten und bauen
+TopoExplorer verbindet hochauflösende Landbedeckung mit Gelände, Infrastruktur,
+Bevölkerung und geowissenschaftlichen Fachkarten. Sichtbare Kacheln werden
+bedarfsgerecht geladen und direkt auf der GPU aufgebaut. Die Quelldaten und
+Analysen bleiben auf dem eigenen Mac.
+
+## Auf einen Blick
+
+| | |
+|---|---|
+| **10-m-Landoberfläche** | 40 durchsuchbare und frei färbbare Klassen für ganz Deutschland |
+| **Metal-Relief** | Live steuerbare Stärke, Überhöhung und Kontrast ohne vorgerenderte Schummerung |
+| **Fachkarten** | Substrat, Geologie, Reliefform und Grundwasser als eigenständige Kartenfamilie |
+| **Lokale Analyse** | Flächen, Profile, Bevölkerung, Dichte, Höhenraum und Landschaftsmosaik auswerten |
+| **Offenes Feldbuch** | Fundstellen vergleichen, kommentieren und verlustfrei als GeoJSON austauschen |
+| **Kartografischer Export** | Karte bis 4× neu rendern, inklusive feinerer Kacheln, Maßstab und Stil-Datei |
+
+## Kartenansichten
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="References/Generated/harz.png" alt="TopoExplorer-Kartenansicht des Harzes"><br>
+      <sub><b>Harz</b> · Waldarten, Landnutzung und ausgeprägtes Relief</sub>
+    </td>
+    <td width="50%">
+      <img src="References/Generated/alpen.png" alt="TopoExplorer-Kartenansicht der Alpen"><br>
+      <sub><b>Alpen</b> · Höhenstufen, Täler, Seen und Siedlungsachsen</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="References/Generated/ruhrgebiet.png" alt="TopoExplorer-Kartenansicht des Ruhrgebiets"><br>
+      <sub><b>Ruhrgebiet</b> · Verdichtungsraum und grüne Freiraumstruktur</sub>
+    </td>
+    <td width="50%">
+      <img src="References/Generated/kueste.png" alt="TopoExplorer-Kartenansicht der deutschen Küste"><br>
+      <sub><b>Küste</b> · Marsch, Ackerflächen, Gewässer und Inseln</sub>
+    </td>
+  </tr>
+</table>
+
+## Schnellstart
+
+Vorausgesetzt werden macOS 14 oder neuer, die Apple Command Line Tools und
+Python 3. Die großen Roh- und Kartendaten gehören bewusst nicht zum Repository.
 
 ```sh
 ./scripts/prepare_all.sh
 ./scripts/build_app.sh
 ```
 
-Der erste Befehl richtet die lokale Python-Umgebung ein und erzeugt die 10-m-
-Landbedeckung sowie Vektor- und Ortskacheln. Abgebrochene Läufe werden
-fortgesetzt. WorldCover, EUCROPMAP und ForestPaths werden Datei für Datei
-integriert und jeweils sofort gelöscht; das Arbeitslimit beträgt standardmäßig
-8 GB. Die bisherige Karte wird bei der Aktivierung nur umbenannt und bleibt als
-Sicherung erhalten.
+Danach liegt die startbereite Anwendung hier:
 
-Erwartete Quelldateien:
+```sh
+open .build/app/TopoExplorer.app
+```
+
+`prepare_all.sh` richtet die lokale Python-Umgebung ein, installiert bei
+vorhandenem Homebrew das benötigte `osmium-tool` und erzeugt fortsetzbar die
+Landbedeckungs-, Vektor-, Orts- und Bevölkerungskacheln. Alternativ lässt sich
+das Projekt über `Package.swift` in Xcode öffnen.
+
+### Benötigte Quelldateien
 
 ```text
 Data/Raw/LandCover/Land_Cover_DE_2015.tif
@@ -47,86 +91,63 @@ Data/Raw/BKG/gn250/GN250.csv
 Data/Raw/Population/Zensus_Bevoelkerung_100m-Gitter.tif
 ```
 
-Die amtlichen Deutschland-Geonamen GN250 werden bei `prepare_all.sh` automatisch
-geladen. Sie ergänzen die OSM-Orte um Berge, Landschaften, Gewässer, Naturgebiete,
-Inseln und Höhlen.
+Die amtlichen GN250-Geonamen werden während der Vorbereitung automatisch
+geladen. Optionale Behörden-, Landes- und Sentinel-Daten werden getrennt
+aufbereitet; vor ihrer Nutzung ist die jeweilige Lizenz zu prüfen.
 
-Die optionalen Behörden- und Landesdaten werden nach lokaler Lizenzprüfung mit
-`scripts/preprocess_geoscience.sh` aufbereitet. Konfiguration, COG-Master,
-Quellenqualität und TVT2 sind in `docs/Geowissenschaften.md` beschrieben.
+## Was sich erkunden lässt
 
-Die Sentinel-Oberflächentextur wird für Deutschland fortsetzbar erzeugt. OAuth-
-Zugangsdaten liegen dabei im macOS-Schlüsselbund; RGB kann ohne zusätzlichen
-Satellitenabruf getrennt auf einem Archivlaufwerk gesichert werden:
+- **Landoberfläche:** Klassen suchen, einzeln oder gruppenweise umfärben,
+  ausgrauen und als Naturatlas, Kulturarten-, Waldarten- oder Kontrastthema lesen.
+- **Orientierung:** Straßen, Bahn, Flüsse, Grenzen, Orte, Landschaften und
+  Energieinfrastruktur passend zur Zoomstufe einblenden.
+- **Fundstellen:** Höhe, Hangneigung, Exposition, Landklasse, Quellenmaßstab und
+  Umgebung direkt am Mauszeiger oder an gespeicherten Punkten untersuchen.
+- **Analysen:** Rechtecke für Flächen- und Bevölkerungswerte sowie Linien für
+  Höhenprofile und Landklassenabschnitte zeichnen.
+- **Fachkarten:** Geologie, Substrat, Reliefform und Grundwasser exklusiv als
+  Overlay oder Basiskarte verwenden.
+- **Oberflächentextur:** neutrale Sentinel-2-Feinstruktur klassen- und
+  zoomabhängig mit Landbedeckung, Relief und Fachkarten kombinieren.
 
-```sh
-./scripts/configure_cdse_credentials.sh
-./scripts/preprocess_surface_texture.sh --germany --band-profile rgb \
-  --archive-dir /Volumes/TopoArchiv/Sentinel-2025-Q2 --archive-format uint16
+## Bedienung in 30 Sekunden
+
+| Aktion | Steuerung |
+|---|---|
+| Karte verschieben | Ziehen |
+| Zoomen | Mausrad, Trackpad, Doppelklick oder `+` / `-` |
+| Deutschland einpassen | `0` |
+| Stöberpalette öffnen | `⌘K` |
+| Datenatlas, Sammlung und Analysen | adaptive Kartenleiste |
+| Stil austauschen | `.topostyle` importieren oder exportieren |
+
+Eine vollständige Einführung steht in der
+[Bedienungsanleitung](docs/Bedienungsanleitung.md).
+
+## Projektstruktur
+
+```text
+Sources/TopoExplorer/   SwiftUI-, AppKit- und Metal-Anwendung
+preprocess/             reproduzierbare Datenaufbereitung
+scripts/                Build, Vorbereitung und Qualitätsprüfung
+References/Generated/   Referenzrenderings für Landschaftstypen
+Data/Raw/               lokale Quelldaten, nicht in Git
+MapData/Germany/        erzeugte Kartenpyramide, nicht in Git
 ```
 
-Details zu Quoten, Speicherbedarf und Prüfexport: `docs/Oberflaechentextur.md`.
+## Dokumentation
 
-## App bauen und starten
+- [Bedienungsanleitung](docs/Bedienungsanleitung.md)
+- [Datenquellen und Lizenzen](docs/Datenquellen.md)
+- [Geowissenschaftliche Fachkarten](docs/Geowissenschaften.md)
+- [Sentinel-Oberflächentextur](docs/Oberflaechentextur.md)
+- [Datenordner und Sicherheitszugriff](docs/Datenordner-Lesezeichen.md)
 
-```sh
-open .build/app/TopoExplorer.app
-```
-
-Die App findet `MapData/Germany` automatisch. Alternativ kann der Datenordner über „Kartendaten wählen“ geöffnet werden.
-
-Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `Package.swift` geöffnet werden. Das direkte Build-Skript genügt auch mit den Apple Command Line Tools.
-
-## Bedienung
-
-- Ziehen: Karte verschieben
-- Mausrad oder Trackpad-Zoom: zoomen
-- Doppelklick: hineinzoomen
-- `0`: ganz Deutschland einpassen
-- `+` / `-`: zoomen
-- Ebenenstapel: hochauflösende Landoberfläche als feste Basis, genau eine aktive Raster-Fachkarte und kompakte Orientierungsebenen
-- Kontext-Schublade: ausgewählte Oberfläche oder Ebene rechts detailliert filtern und gestalten
-- Landoberfläche: 40 Klassen durchsuchen, direkt färben, einzeln oder gruppenweise ausgrauen
-- Themen: Naturatlas, Kulturarten, Waldarten und Kontrastreich
-- Reliefregler: Stärke, Überhöhung und Kontrast ändern
-- Oberflächentextur: deutschlandweite, klassen- und zoomabhängige Sentinel-2-Feinstruktur mit Kantenverstärkung und Schnellvergleich bis 60 %; gleichzeitig mit Relief und allen Farb-/Fachkarten
-- Referenzansichten: Harz, Alpen, Küste, Ruhrgebiet und Flachland direkt anspringen
-- Ebenen: Straßen, Bahn, Flüsse, Grenzen, Orte und Natur-/Geländenamen einzeln schalten
-- Energieinfrastruktur: 380-, 220- und 110-kV-Netze sowie Umspannwerke, Transformatoren, Wind-, Solar- und konventionelle Erzeugungsanlagen aus OpenStreetMap
-- Beschriftung: Gewässer blau, Naturgebiete grün und Landschaften typografisch vom Ortsnamen getrennt
-- Suche: Ortsname oder EPSG:3035-Koordinaten eingeben
-- Stöberpalette: mit `⌘K` Landschaftsfunde, freie Datensätze und Werkzeuge
-  gemeinsam durchsuchen und direkt öffnen
-- Datenatlas: alle verwendeten Quellen nach Kartenfamilie durchsuchen, Lizenz,
-  Jahr und Maßstab prüfen und den zugehörigen Karteninhalt direkt anzeigen
-- Mauszeiger: Höhe, Hangneigung, Exposition und Landklasse ablesen; ein Klick hält die Fundstelle mit
-  EPSG:3035-Koordinate, Fachklasse, Quellenmaßstab und Merkfunktion fest
-- Umgebung lesen: um Fundstellen 1-, 3- oder 10-km-Kreise aus Oberflächenanteilen,
-  Höhenraum, Relief, Bevölkerung, Dichte, Landschaftsmosaik, nahen Orts-/Naturnamen
-  und aktiver Fachkarte lokal auswerten; nummerierte Fundkonstellationen zeigen
-  die echte Lage, Namenskarten fliegen den Fund direkt an
-- Sammlung: Fundstellen samt Umgebungsmosaik, Radius, Höhenraum, Relief, Bevölkerung, eigenem Namen
-  und Notiz bewahren; je zwei Punkte oder Landschaftsbilder direkt vergleichen
-- Landschaftsorb: alle Einzelklassen als kompakte Gruppensignatur aus Siedlung,
-  Landwirtschaft, Wald und Natur lesen und zwischen Landschaftsbildern vergleichen
-- Offenes Feldbuch: Sammlung verlustfrei als GeoJSON mit WGS84-Geometrien,
-  EPSG:3035-Originalkoordinaten und Quellen/Lizenzen exportieren oder importieren
-- Fachkarten: Substrat, Geologie, Reliefform oder Grundwasser exklusiv als Overlay/Basiskarte, mit eigener Legende, Quelle und Erfassungsmaßstab
-- Flächenanalyse: Analyseknopf aktivieren, Rechteck ziehen und Einwohner, Dichte sowie alle vorkommenden Kultur-, Wald- und sonstigen Flächen auswerten
-- Landschaftsprofil: Linie von A nach B ziehen und Höhenverlauf, Auf-/Abstieg,
-  Landklassenabschnitte und aktive Fachklassen gemeinsam lesen
-- Adaptive Kartenleiste und zentrale Tastaturbefehle für Suche, Landschaftsfunde,
-  Datenatlas, Sammlung, Analyse, Profil, Export und Seitenleiste
-- Gesamtkarte: Kulturarten, Baumgattungen, Naturflächen und Siedlungsdichte
-- Export: echter Metal-Neuaufbau bis 4× mit feineren Kacheln, Maßstab und Stil-Datei
-
-Stile und Lesezeichen werden dauerhaft lokal gespeichert. Eigene Kartenstile
-lassen sich als `.topostyle` austauschen.
-
-## Bildqualität prüfen
+## Qualität prüfen
 
 ```sh
 ./scripts/verify_image_quality.sh
 ```
 
-Die Prüfung validiert alle Kacheldaten, vergleicht jeden überlappenden Relief-Kachelrand bytegenau und rendert die fünf Referenzansichten erneut.
+Die Prüfung validiert Kacheldaten, vergleicht überlappende Relief-Kachelränder
+bytegenau und rendert die Referenzlandschaften erneut.
