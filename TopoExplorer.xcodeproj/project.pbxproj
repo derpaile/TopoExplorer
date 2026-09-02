@@ -6,6 +6,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FBE34E6D22DC8C0C8E6D982C /* AtlasFieldbook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB3DC8218081397799BAEF7 /* AtlasFieldbook.swift */; };
 		CD485E41D9D4B2D91D35D6F8 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087BD4D49CCBB61F6644EC79 /* ContentView.swift */; };
 		26B47C6F329AF7B49859EA19 /* GeoScience.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB2E1DD5928BDE5E4D0A62A /* GeoScience.swift */; };
 		B8EB27A9954853E13CD463A7 /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95823F7FB89505016ED180E3 /* InspectorView.swift */; };
@@ -54,6 +55,7 @@
 		3FCB359592CCBC228FA7C222 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		535033033B7F7930338493E3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		55D065C4A04DF290E3175AD0 /* TopoExplorer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TopoExplorer.entitlements; sourceTree = "<group>"; };
+		1FB3DC8218081397799BAEF7 /* AtlasFieldbook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasFieldbook.swift; sourceTree = "<group>"; };
 		087BD4D49CCBB61F6644EC79 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		5DB2E1DD5928BDE5E4D0A62A /* GeoScience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeoScience.swift; sourceTree = "<group>"; };
 		95823F7FB89505016ED180E3 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
@@ -127,6 +129,7 @@
 		9642F1047C1002A1EE72F0DB /* TopoExplorer */ = {
 			isa = PBXGroup;
 			children = (
+				1FB3DC8218081397799BAEF7 /* AtlasFieldbook.swift */,
 				087BD4D49CCBB61F6644EC79 /* ContentView.swift */,
 				5DB2E1DD5928BDE5E4D0A62A /* GeoScience.swift */,
 				95823F7FB89505016ED180E3 /* InspectorView.swift */,
@@ -252,6 +255,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FBE34E6D22DC8C0C8E6D982C /* AtlasFieldbook.swift in Sources */,
 				CD485E41D9D4B2D91D35D6F8 /* ContentView.swift in Sources */,
 				26B47C6F329AF7B49859EA19 /* GeoScience.swift in Sources */,
 				B8EB27A9954853E13CD463A7 /* InspectorView.swift in Sources */,

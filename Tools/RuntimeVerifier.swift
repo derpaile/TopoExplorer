@@ -72,6 +72,10 @@ struct RuntimeVerifier {
             Set(StyleSettings.presets.map(\.id)).count == StyleSettings.presets.count,
             StyleSettings.presets.allSatisfy({ (try? $0.validated()) != nil })
         else { throw VerificationError.style }
+        try verifyDiscovery(manifest: manifest)
+        try verifyDataCatalog(manifest: manifest)
+        try verifyBookmarkCollection(manifest: manifest)
+        try verifyInteractionCommands()
         guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
             throw VerificationError.metalDevice
         }
@@ -131,10 +135,175 @@ struct RuntimeVerifier {
             print("Zeitvergleich: \(comparisonURL.path)")
         }
         try verifyAreaAnalysis(root: root, manifest: manifest)
+        try verifyPointInspection(root: root, manifest: manifest)
+        try verifyLandscapeContext(root: root, manifest: manifest)
+        try verifyLandscapeProfile(root: root, manifest: manifest)
         try verifyVectors(root: root, device: device, queue: queue, library: library)
         try verifyExport()
         try verifyHighResolutionExport(root: root, manifest: manifest)
         print("Kacheldekompression, Metal-Shader und Referenzbilder OK.")
+    }
+
+    private static func verifyDiscovery(manifest: MapManifest) throws {
+        guard
+            !MapReference.all.isEmpty,
+            Set(MapReference.all.map(\.id)).count == MapReference.all.count,
+            MapReference.all.allSatisfy({ reference in
+                !reference.name.isEmpty && !reference.subtitle.isEmpty && !reference.story.isEmpty
+                    && !reference.symbolName.isEmpty && reference.observations.count == 3
+                    && Set(reference.observations.map(\.id)).count == reference.observations.count
+                    && reference.observations.allSatisfy {
+                        !$0.title.isEmpty && !$0.detail.isEmpty && !$0.symbolName.isEmpty
+                    }
+            }),
+            MapReference.next(after: nil) == MapReference.all.first,
+            MapReference.next(after: MapReference.all.last) == MapReference.all.first,
+            manifest.sources?.allSatisfy({ URL(string: $0.url) != nil }) == true
+        else { throw VerificationError.discovery }
+        print(
+            "Landschaftsführer OK: \(MapReference.all.count) Ziele, "
+                + "\(MapReference.all.reduce(0) { $0 + $1.observations.count }) Beobachtungsimpulse"
+        )
+    }
+
+    private static func verifyDataCatalog(manifest: MapManifest) throws {
+        let catalog = manifest.dataCatalog
+        guard
+            catalog.count >= 12,
+            Set(catalog.map(\.id)).count == catalog.count,
+            Set(catalog.map(\.category)) == Set(MapManifest.DataCategory.allCases),
+            catalog.allSatisfy({ !$0.searchableText.isEmpty && URL(string: $0.url) != nil }),
+            catalog.contains(where: { $0.activation == .surface }),
+            catalog.contains(where: { $0.activation == .surfaceTexture }),
+            catalog.contains(where: { $0.activation == .thematic("geology") }),
+            catalog.contains(where: { $0.activation == .orientation }),
+            catalog.contains(where: { $0.activation == .geonames })
+        else { throw VerificationError.dataCatalog }
+        let summary = MapManifest.DataCategory.allCases.map { category in
+            "\(category.title) \(catalog.filter { $0.category == category }.count)"
+        }.joined(separator: " · ")
+        print("Datenatlas OK: \(catalog.count) Quellen · \(summary)")
+    }
+
+    @MainActor
+    private static func verifyInteractionCommands() throws {
+        let expected: [AtlasCommand] = [
+            .openPalette, .focusSearch, .nextLandscape, .openDataCatalog, .openCollection,
+            .toggleAreaAnalysis, .toggleLandscapeProfile, .exportMap, .toggleSidebar,
+        ]
+        let center = AtlasCommandCenter()
+        for command in expected { center.send(command) }
+        guard
+            AtlasCommand.allCases == expected,
+            center.sequence == expected.count,
+            center.command == .toggleSidebar
+        else { throw VerificationError.interactionCommands }
+        print("Bedienbefehle OK: \(expected.count) zentrale Aktionen")
+    }
+
+    private static func verifyBookmarkCollection(manifest: MapManifest) throws {
+        let legacy = """
+        [{"id":"00000000-0000-0000-0000-000000000001","name":"Alt","centerX":1,"centerY":2,"metersPerPoint":3}]
+        """.data(using: .utf8)!
+        guard
+            let migrated = try? JSONDecoder().decode([MapBookmark].self, from: legacy),
+            migrated.count == 1,
+            migrated[0].detail == nil,
+            migrated[0].note == nil
+        else { throw VerificationError.bookmarkCollection }
+        let legacyPoint = """
+        [{"id":"00000000-0000-0000-0000-000000000002","name":"Punkt","centerX":1,"centerY":2,"metersPerPoint":3,"detail":{"surfaceName":"Wald","surfaceGroup":"Wald","elevation":42,"thematicProductID":null,"thematicProductName":null,"thematicClassName":null,"thematicSourceSummary":null}}]
+        """.data(using: .utf8)!
+        guard
+            let migratedPoint = try? JSONDecoder().decode([MapBookmark].self, from: legacyPoint),
+            migratedPoint.first?.detail?.surfaceName == "Wald",
+            migratedPoint.first?.detail?.surfaceClassID == nil,
+            migratedPoint.first?.detail?.landscapeContext == nil
+        else { throw VerificationError.bookmarkCollection }
+
+        let firstProbe = MapProbe(
+            worldX: 4_302_748, worldY: 3_251_760, elevation: 55,
+            classID: 1, className: "Siedlung dicht", classGroup: "Siedlung", thematic: nil,
+            slopeDegrees: 1.5, aspectDegrees: 90, terrainResolutionMeters: 98.46
+        )
+        let secondProbe = MapProbe(
+            worldX: 4_363_816, worldY: 3_182_366, elevation: 655,
+            classID: 34, className: "Fichte", classGroup: "Wald", thematic: nil,
+            slopeDegrees: 12.5, aspectDegrees: 225, terrainResolutionMeters: 98.46
+        )
+        let firstContext = LandscapeContext(
+            centerX: firstProbe.worldX, centerY: firstProbe.worldY,
+            radiusMeters: 3_000, sampledResolution: 250, plannedSampleCount: 3,
+            probes: [firstProbe, firstProbe, firstProbe],
+            population: 120_000, populationSource: "Zensus"
+        )
+        let secondContext = LandscapeContext(
+            centerX: secondProbe.worldX, centerY: secondProbe.worldY,
+            radiusMeters: 3_000, sampledResolution: 250, plannedSampleCount: 3,
+            probes: [secondProbe, secondProbe, firstProbe],
+            population: 3_000, populationSource: "Zensus"
+        )
+        let first = MapBookmark(
+            id: UUID(), name: "Stadtrand", centerX: firstProbe.worldX,
+            centerY: firstProbe.worldY, metersPerPoint: 20, note: "Dichte Textur",
+            createdAt: Date(timeIntervalSince1970: 1),
+            detail: MapBookmarkDetail(probe: firstProbe, landscapeContext: firstContext)
+        )
+        let second = MapBookmark(
+            id: UUID(), name: "Harzwald", centerX: secondProbe.worldX,
+            centerY: secondProbe.worldY, metersPerPoint: 100, note: "Waldkörper",
+            createdAt: Date(timeIntervalSince1970: 2),
+            detail: MapBookmarkDetail(probe: secondProbe, landscapeContext: secondContext)
+        )
+        let comparison = MapBookmarkComparison(first: first, second: second)
+        let roundTrip = try JSONDecoder().decode(
+            [MapBookmark].self,
+            from: JSONEncoder().encode([first, second])
+        )
+        guard
+            roundTrip == [first, second],
+            comparison.elevationDifference == 600,
+            abs((comparison.slopeDifference ?? 0) - 11) < 0.001,
+            comparison.contextPopulationDifference == -117_000,
+            comparison.sharesSurfaceGroup == false,
+            comparison.sharesDominantContextClass == false,
+            comparison.contextClassDifference == 1,
+            comparison.contextElevationRangeDifference == 600,
+            first.isComparable,
+            first.detail?.hasLandscapeContext == true,
+            first.detail?.summary.contains("Siedlung") == true
+        else { throw VerificationError.bookmarkCollection }
+        guard
+            let geographic = ETRS89LAEA.toWGS84(
+                easting: firstProbe.worldX, northing: firstProbe.worldY
+            ),
+            abs(geographic.longitude - 9.732) < 0.000_01,
+            abs(geographic.latitude - 52.375) < 0.000_01,
+            let projected = ETRS89LAEA.fromWGS84(
+                longitude: geographic.longitude, latitude: geographic.latitude
+            ),
+            abs(projected.easting - firstProbe.worldX) < 0.01,
+            abs(projected.northing - firstProbe.worldY) < 0.01
+        else { throw VerificationError.fieldbook }
+        let fieldbookURL = URL(fileURLWithPath: "/tmp/topo-explorer-fieldbook.geojson")
+        let document = try AtlasFieldbookDocument(
+            bookmarks: [first, second], sources: manifest.dataCatalog,
+            exportedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        try AtlasFieldbookFile.write(document, to: fieldbookURL)
+        let decodedDocument = try AtlasFieldbookFile.read(from: fieldbookURL)
+        let imported = try decodedDocument.importedBookmarks()
+        guard
+            imported == [first, second],
+            decodedDocument.type == "FeatureCollection",
+            decodedDocument.features.allSatisfy({ $0.geometry?.type == "Point" }),
+            decodedDocument.topoExplorer?.sources.count == manifest.dataCatalog.count,
+            decodedDocument.topoExplorer?.coordinateReferenceSystem.contains("WGS84") == true
+        else { throw VerificationError.fieldbook }
+        print(
+            "Sammlung OK: Altformate migriert · Landschaftsbilder erhalten · "
+                + "GeoJSON-Feldbuch mit \(document.features.count) WGS84-Punkten"
+        )
     }
 
     @MainActor
@@ -172,6 +341,144 @@ struct RuntimeVerifier {
         print(
             "Flächenanalyse OK: \(expectedPopulation) Einwohner, "
                 + "\(result.classes.count) Flächenklassen"
+        )
+    }
+
+    @MainActor
+    private static func verifyPointInspection(root: URL, manifest: MapManifest) throws {
+        guard let reference = MapReference.all.first(where: { $0.id == "hannover" }) else {
+            throw VerificationError.pointInspection
+        }
+        let service = RasterQueryService(manifest: manifest, directory: root)
+        var result: MapProbe?
+        service.query(
+            worldX: reference.centerX,
+            worldY: reference.centerY,
+            year2020: false,
+            thematic: manifest.availableThematicRasters.first
+        ) { result = $0 }
+        let deadline = Date().addingTimeInterval(10)
+        while result == nil, Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+        guard
+            let result,
+            abs(result.worldX - reference.centerX) < 0.01,
+            abs(result.worldY - reference.centerY) < 0.01,
+            result.classID != nil,
+            result.className?.isEmpty == false,
+            result.classGroup?.isEmpty == false,
+            result.elevation != nil,
+            result.slopeDegrees != nil,
+            result.terrainResolutionMeters.map({ $0 > 90 && $0 < 110 }) == true,
+            result.discoveryTitle.isEmpty == false,
+            result.coordinateText.contains("·"),
+            result.copyText.hasPrefix("EPSG:3035 ")
+        else { throw VerificationError.pointInspection }
+        print(
+            "Punktinspektion OK: \(result.discoveryTitle) · "
+                + "\(result.terrainSummary ?? "ohne Relief") · \(result.coordinateText)"
+        )
+    }
+
+    @MainActor
+    private static func verifyLandscapeContext(root: URL, manifest: MapManifest) throws {
+        guard let reference = MapReference.all.first(where: { $0.id == "hannover" }) else {
+            throw VerificationError.landscapeContext
+        }
+        let probe = MapProbe(
+            worldX: reference.centerX, worldY: reference.centerY,
+            elevation: nil, classID: nil, className: nil, classGroup: nil, thematic: nil
+        )
+        let service = RasterQueryService(manifest: manifest, directory: root)
+        var result: LandscapeContext?
+        var failure: String?
+        service.queryLandscapeContext(
+            around: probe, radiusMeters: 3_000, year2020: false,
+            thematic: manifest.availableThematicRasters.first
+        ) { context, message in
+            result = context
+            failure = message
+        }
+        let deadline = Date().addingTimeInterval(20)
+        while result == nil, failure == nil, Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+        guard
+            failure == nil,
+            let result,
+            result.radiusMeters == 3_000,
+            result.sampleCount >= 300,
+            result.coverage > 0.95,
+            result.classes.count >= 2,
+            abs(result.classes.reduce(0) { $0 + $1.share } - 1) < 0.001,
+            result.groupShares.count >= 2,
+            abs(result.groupShares.reduce(0) { $0 + $1.share } - 1) < 0.001,
+            result.dominantGroup == result.groupShares.first?.name,
+            result.minimumElevation != nil,
+            result.maximumElevation != nil,
+            result.meanElevation != nil,
+            result.elevationStandardDeviation != nil,
+            result.meanSlopeDegrees != nil,
+            result.maximumSlopeDegrees != nil,
+            result.population != nil,
+            result.populationSource?.isEmpty == false,
+            result.populationDensity != nil,
+            result.namedFeatures?.count == 5,
+            result.namedFeatures?.contains(where: { $0.name == "Hannover" }) == true,
+            result.namedFeatures?.contains(where: { $0.name == "Maschsee" }) == true,
+            !result.title.isEmpty,
+            !result.narrative.isEmpty
+        else { throw VerificationError.landscapeContext }
+        print(
+            "Umgebungsanalyse OK: 3 km · \(result.sampleCount) Messpunkte · "
+                + "\(result.classes.count) Landklassen · Ø "
+                + "\((result.meanSlopeDegrees ?? 0).formatted(.number.precision(.fractionLength(1))))° · "
+                + "\((result.population ?? 0).formatted()) Einwohner · "
+                + "\(result.nearbyNames ?? "ohne Namen")"
+        )
+    }
+
+    @MainActor
+    private static func verifyLandscapeProfile(root: URL, manifest: MapManifest) throws {
+        guard let reference = MapReference.all.first(where: { $0.id == "hannover" }) else {
+            throw VerificationError.landscapeProfile
+        }
+        let selection = MapProfileSelection(
+            startX: reference.centerX - 15_000,
+            startY: reference.centerY,
+            endX: reference.centerX + 15_000,
+            endY: reference.centerY
+        )
+        let service = RasterQueryService(manifest: manifest, directory: root)
+        var result: LandscapeProfile?
+        var failure: String?
+        service.queryProfile(
+            selection: selection,
+            year2020: false,
+            thematic: manifest.availableThematicRasters.first
+        ) { profile, message in
+            result = profile
+            failure = message
+        }
+        let deadline = Date().addingTimeInterval(20)
+        while result == nil, failure == nil, Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        }
+        guard
+            failure == nil,
+            let result,
+            abs(result.distanceMeters - 30_000) < 0.1,
+            result.samples.count == 240,
+            result.samples.compactMap(\.elevation).count > 220,
+            result.minimumElevation != nil,
+            result.maximumElevation != nil,
+            result.segments.count >= 3,
+            result.distinctLandClasses >= 2
+        else { throw VerificationError.landscapeProfile }
+        print(
+            "Landschaftsprofil OK: 30,0 km · \(result.samples.count) Messpunkte · "
+                + "\(result.distinctLandClasses) Landklassen · \(result.segments.count) Abschnitte"
         )
     }
 
@@ -421,7 +728,8 @@ struct RuntimeVerifier {
             geoScience: .disabled,
             fitToken: 0,
             navigationToken: 0,
-            target: nil
+            target: nil,
+            reduceMotion: false
         )
         guard let harz = MapReference.all.first(where: { $0.id == "harz" }) else {
             throw VerificationError.image
@@ -766,6 +1074,14 @@ private enum VerificationError: Error {
     case metalTexture
     case image
     case outsideMap
+    case discovery
+    case dataCatalog
+    case interactionCommands
+    case bookmarkCollection
+    case fieldbook
+    case pointInspection
+    case landscapeContext
+    case landscapeProfile
     case style
     case vector
     case analysis

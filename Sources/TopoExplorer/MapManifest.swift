@@ -8,6 +8,60 @@ struct MapManifest: Codable, Equatable {
         let url: String
         var scale: Int? = nil
         var role: String? = nil
+        var year: Int? = nil
+    }
+
+    enum DataCategory: String, CaseIterable, Identifiable, Hashable {
+        case landscape
+        case detail
+        case geoscience
+        case orientation
+
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .landscape: "Land & Relief"
+            case .detail: "Feinstruktur"
+            case .geoscience: "Fachkarten"
+            case .orientation: "Orientierung"
+            }
+        }
+        var symbolName: String {
+            switch self {
+            case .landscape: "leaf.fill"
+            case .detail: "square.3.layers.3d.down.right"
+            case .geoscience: "fossil.shell.fill"
+            case .orientation: "point.bottomleft.forward.to.point.topright.scurvepath"
+            }
+        }
+    }
+
+    enum DataActivation: Equatable {
+        case surface
+        case surfaceTexture
+        case thematic(String)
+        case orientation
+        case geonames
+    }
+
+    struct DataCatalogEntry: Identifiable, Equatable {
+        let id: String
+        let name: String
+        let role: String
+        let license: String
+        let url: String
+        let year: Int?
+        let scale: Int?
+        let category: DataCategory
+        let productName: String?
+        let activation: DataActivation
+
+        var searchableText: String {
+            [name, role, license, productName ?? "", year.map { String($0) } ?? ""]
+                .joined(separator: " ")
+                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                .lowercased()
+        }
     }
 
     struct ThematicRaster: Codable, Equatable, Identifiable {
@@ -96,6 +150,7 @@ struct MapManifest: Codable, Equatable {
     var sources: [LandcoverSource]? = nil
     var thematicRasters: [ThematicRaster]? = nil
     var surfaceTexture: SurfaceTexture? = nil
+    var vectorSources: [GeoSource]? = nil
 
     var left: Double { bounds[0] }
     var bottom: Double { bounds[1] }
@@ -113,6 +168,49 @@ struct MapManifest: Codable, Equatable {
     var surfaceClassWeights: [Float] {
         surfaceTexture?.classWeights.map(Float.init)
             ?? Array(repeating: 0, count: classes.count)
+    }
+
+    var dataCatalog: [DataCatalogEntry] {
+        var entries = (sources ?? []).map { source in
+            DataCatalogEntry(
+                id: "land:\(source.id)", name: source.name, role: source.role,
+                license: source.license, url: source.url, year: source.year, scale: nil,
+                category: .landscape, productName: landcoverProduct?.name,
+                activation: .surface
+            )
+        }
+        if let surfaceTexture {
+            entries += surfaceTexture.sources.map { source in
+                DataCatalogEntry(
+                    id: "detail:\(source.id)", name: source.name,
+                    role: source.role ?? "Oberflächenstruktur", license: source.license,
+                    url: source.url, year: source.year, scale: source.scale,
+                    category: .detail, productName: "Reale Feinstruktur",
+                    activation: .surfaceTexture
+                )
+            }
+        }
+        for product in availableThematicRasters {
+            entries += product.sources.map { source in
+                DataCatalogEntry(
+                    id: "thematic:\(product.id):\(source.id)", name: source.name,
+                    role: source.role ?? product.name, license: source.license,
+                    url: source.url, year: source.year, scale: source.scale,
+                    category: .geoscience, productName: product.name,
+                    activation: .thematic(product.id)
+                )
+            }
+        }
+        entries += (vectorSources ?? []).map { source in
+            DataCatalogEntry(
+                id: "vector:\(source.id)", name: source.name,
+                role: source.role ?? "Orientierung", license: source.license,
+                url: source.url, year: source.year, scale: source.scale,
+                category: .orientation, productName: nil,
+                activation: source.id == "bkg-gn250" ? .geonames : .orientation
+            )
+        }
+        return entries
     }
 
     func elevationTileSize(at level: Level) -> Int {
@@ -170,6 +268,19 @@ struct MapManifest: Codable, Equatable {
                       && product.classes.allSatisfy { (0...255).contains($0.id) }
               })
         else { throw ManifestError.invalidThematicRasters }
+        if let vectorSources {
+            guard
+                Set(vectorSources.map(\.id)).count == vectorSources.count,
+                vectorSources.allSatisfy({
+                    !$0.id.isEmpty && !$0.name.isEmpty && !$0.license.isEmpty
+                        && $0.url.hasPrefix("http")
+                })
+            else { throw ManifestError.invalidSources }
+        }
+        guard
+            Set(dataCatalog.map(\.id)).count == dataCatalog.count,
+            dataCatalog.allSatisfy({ !$0.name.isEmpty && $0.url.hasPrefix("http") })
+        else { throw ManifestError.invalidSources }
         return self
     }
 }
@@ -183,6 +294,7 @@ enum ManifestError: LocalizedError {
     case invalidClasses
     case invalidThematicRasters
     case invalidSurfaceTexture
+    case invalidSources
 
     var errorDescription: String? {
         switch self {
@@ -194,6 +306,7 @@ enum ManifestError: LocalizedError {
         case .invalidClasses: "Die Landklassen sind unvollständig."
         case .invalidThematicRasters: "Die geowissenschaftlichen Rasterprodukte sind ungültig."
         case .invalidSurfaceTexture: "Die Oberflächentextur ist ungültig."
+        case .invalidSources: "Der Datenquellen-Katalog ist ungültig."
         }
     }
 }

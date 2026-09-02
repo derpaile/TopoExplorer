@@ -45,7 +45,7 @@ struct PlaceSearchRecord: Decodable, Identifiable, Equatable {
     }
 }
 
-private struct PlaceSearchIndex: Decodable {
+struct PlaceSearchIndex: Decodable {
     let places: [PlaceSearchRecord]
 }
 

@@ -1,6 +1,29 @@
 import Foundation
 import SwiftUI
 
+enum AtlasCommand: CaseIterable, Equatable {
+    case openPalette
+    case focusSearch
+    case nextLandscape
+    case openDataCatalog
+    case openCollection
+    case toggleAreaAnalysis
+    case toggleLandscapeProfile
+    case exportMap
+    case toggleSidebar
+}
+
+@MainActor
+final class AtlasCommandCenter: ObservableObject {
+    @Published private(set) var sequence = 0
+    private(set) var command: AtlasCommand?
+
+    func send(_ command: AtlasCommand) {
+        self.command = command
+        sequence &+= 1
+    }
+}
+
 struct RenderLayers {
     let roads: Bool
     let roadKinds: UInt32
@@ -216,8 +239,60 @@ struct MapProbe: Equatable {
     let elevation: Int?
     let classID: Int?
     let className: String?
+    let classGroup: String?
     let thematic: ThematicProbe?
+    let slopeDegrees: Double?
+    let aspectDegrees: Double?
+    let terrainResolutionMeters: Double?
 
+    init(
+        worldX: Double,
+        worldY: Double,
+        elevation: Int?,
+        classID: Int?,
+        className: String?,
+        classGroup: String?,
+        thematic: ThematicProbe?,
+        slopeDegrees: Double? = nil,
+        aspectDegrees: Double? = nil,
+        terrainResolutionMeters: Double? = nil
+    ) {
+        self.worldX = worldX
+        self.worldY = worldY
+        self.elevation = elevation
+        self.classID = classID
+        self.className = className
+        self.classGroup = classGroup
+        self.thematic = thematic
+        self.slopeDegrees = slopeDegrees
+        self.aspectDegrees = aspectDegrees
+        self.terrainResolutionMeters = terrainResolutionMeters
+    }
+
+    var discoveryTitle: String {
+        thematic?.className ?? className ?? "Fundstelle"
+    }
+
+    var coordinateText: String {
+        "\(Int(worldX.rounded())) · \(Int(worldY.rounded()))"
+    }
+
+    var copyText: String {
+        "EPSG:3035 \(Int(worldX.rounded())) \(Int(worldY.rounded()))"
+    }
+
+    var aspectDirection: String? {
+        guard let aspectDegrees else { return nil }
+        let directions = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"]
+        return directions[Int((aspectDegrees + 22.5) / 45).quotientAndRemainder(dividingBy: 8).remainder]
+    }
+
+    var terrainSummary: String? {
+        guard let slopeDegrees else { return nil }
+        if slopeDegrees < 0.5 { return "nahezu eben" }
+        let slope = slopeDegrees.formatted(.number.precision(.fractionLength(1)))
+        return aspectDirection.map { "\(slope)° nach \($0)" } ?? "\(slope)° geneigt"
+    }
 }
 
 struct ThematicProbe: Equatable {
@@ -232,6 +307,374 @@ struct ThematicProbe: Equatable {
         guard let sourceName else { return nil }
         if let sourceScale { return "\(sourceName) · Maßstab 1:\(sourceScale.formatted())" }
         return sourceName
+    }
+}
+
+struct LandscapeContextClass: Codable, Identifiable, Equatable {
+    let classID: Int
+    let name: String
+    let group: String
+    let share: Double
+
+    var id: Int { classID }
+}
+
+struct LandscapeContextThematicClass: Codable, Identifiable, Equatable {
+    let classID: Int
+    let name: String
+    let share: Double
+
+    var id: Int { classID }
+}
+
+struct LandscapeContextFeature: Codable, Identifiable, Equatable {
+    let name: String
+    let kind: Int
+    let population: Int?
+    let worldX: Double
+    let worldY: Double
+    let distanceMeters: Double
+    let directionDegrees: Double
+
+    var id: String { "\(kind)|\(name)|\(worldX)|\(worldY)" }
+
+    var kindTitle: String {
+        switch kind {
+        case 7: "Gipfel oder Höhe"
+        case 8: "Landschaft"
+        case 9: "Gewässer"
+        case 10: "Naturgebiet"
+        case 11: "Insel"
+        case 12: "Höhle"
+        default: "Ort"
+        }
+    }
+
+    var symbolName: String {
+        switch kind {
+        case 7: "mountain.2.fill"
+        case 8: "map.fill"
+        case 9: "water.waves"
+        case 10: "leaf.fill"
+        case 11: "globe.europe.africa.fill"
+        case 12: "triangle.fill"
+        default: "mappin.circle.fill"
+        }
+    }
+
+    var directionName: String {
+        let directions = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"]
+        return directions[Int((directionDegrees + 22.5) / 45) % directions.count]
+    }
+
+    var proximityText: String {
+        let distance = distanceMeters < 1_000
+            ? "\(Int(distanceMeters.rounded()).formatted()) m"
+            : "\((distanceMeters / 1_000).formatted(.number.precision(.fractionLength(1)))) km"
+        return "\(distance) · \(directionName)"
+    }
+}
+
+struct LandscapeContextGroupShare: Identifiable, Equatable {
+    let name: String
+    let share: Double
+
+    var id: String { name }
+}
+
+struct LandscapeContext: Codable, Equatable {
+    let centerX: Double
+    let centerY: Double
+    let radiusMeters: Double
+    let sampledResolution: Double
+    let sampleCount: Int
+    let plannedSampleCount: Int
+    let classes: [LandscapeContextClass]
+    let thematicProductName: String?
+    let thematicClasses: [LandscapeContextThematicClass]
+    let minimumElevation: Int?
+    let maximumElevation: Int?
+    let meanElevation: Int?
+    let elevationStandardDeviation: Double?
+    let meanSlopeDegrees: Double?
+    let maximumSlopeDegrees: Double?
+    let population: Int?
+    let populationSource: String?
+    let namedFeatures: [LandscapeContextFeature]?
+
+    init(
+        centerX: Double,
+        centerY: Double,
+        radiusMeters: Double,
+        sampledResolution: Double,
+        plannedSampleCount: Int,
+        probes: [MapProbe],
+        population: Int? = nil,
+        populationSource: String? = nil,
+        namedFeatures: [LandscapeContextFeature] = []
+    ) {
+        self.centerX = centerX
+        self.centerY = centerY
+        self.radiusMeters = radiusMeters
+        self.sampledResolution = sampledResolution
+        self.plannedSampleCount = plannedSampleCount
+        let valid = probes.filter { $0.classID != nil }
+        sampleCount = valid.count
+
+        var surfaceCounts: [Int: (name: String, group: String, count: Int)] = [:]
+        for probe in valid {
+            guard let classID = probe.classID, let name = probe.className else { continue }
+            let current = surfaceCounts[classID]
+            surfaceCounts[classID] = (
+                name, probe.classGroup ?? "Sonstige", (current?.count ?? 0) + 1
+            )
+        }
+        classes = surfaceCounts.map { classID, value in
+            LandscapeContextClass(
+                classID: classID, name: value.name, group: value.group,
+                share: valid.isEmpty ? 0 : Double(value.count) / Double(valid.count)
+            )
+        }.sorted { first, second in
+            first.share == second.share ? first.classID < second.classID : first.share > second.share
+        }
+
+        let thematic = probes.compactMap(\.thematic)
+        thematicProductName = thematic.first?.productName
+        var thematicCounts: [Int: (name: String, count: Int)] = [:]
+        for item in thematic {
+            let current = thematicCounts[item.classID]
+            thematicCounts[item.classID] = (item.className, (current?.count ?? 0) + 1)
+        }
+        thematicClasses = thematicCounts.map { classID, value in
+            LandscapeContextThematicClass(
+                classID: classID, name: value.name,
+                share: thematic.isEmpty ? 0 : Double(value.count) / Double(thematic.count)
+            )
+        }.sorted { first, second in
+            first.share == second.share ? first.classID < second.classID : first.share > second.share
+        }
+
+        let elevations = valid.compactMap(\.elevation)
+        minimumElevation = elevations.min()
+        maximumElevation = elevations.max()
+        meanElevation = elevations.isEmpty
+            ? nil : Int((Double(elevations.reduce(0, +)) / Double(elevations.count)).rounded())
+        if elevations.isEmpty {
+            elevationStandardDeviation = nil
+        } else {
+            let mean = Double(elevations.reduce(0, +)) / Double(elevations.count)
+            elevationStandardDeviation = sqrt(
+                elevations.reduce(0) { $0 + pow(Double($1) - mean, 2) }
+                    / Double(elevations.count)
+            )
+        }
+        let slopes = valid.compactMap(\.slopeDegrees)
+        meanSlopeDegrees = slopes.isEmpty ? nil : slopes.reduce(0, +) / Double(slopes.count)
+        maximumSlopeDegrees = slopes.max()
+        self.population = population
+        self.populationSource = populationSource
+        self.namedFeatures = namedFeatures
+    }
+
+    var coverage: Double {
+        plannedSampleCount > 0 ? Double(sampleCount) / Double(plannedSampleCount) : 0
+    }
+
+    var elevationRange: Int? {
+        guard let minimumElevation, let maximumElevation else { return nil }
+        return maximumElevation - minimumElevation
+    }
+
+    var populationDensity: Double? {
+        guard let population, radiusMeters > 0 else { return nil }
+        return Double(population) / (Double.pi * pow(radiusMeters / 1_000, 2))
+    }
+
+    var terrainCharacter: String? {
+        guard let meanSlopeDegrees else { return nil }
+        switch meanSlopeDegrees {
+        case ..<1: return "weitgehend eben"
+        case ..<3: return "sanft bewegt"
+        case ..<7: return "wellig"
+        case ..<15: return "stark bewegt"
+        default: return "steil reliefiert"
+        }
+    }
+
+    var nearbyNames: String? {
+        guard let namedFeatures, !namedFeatures.isEmpty else { return nil }
+        return namedFeatures.prefix(3).map(\.name).joined(separator: ", ")
+    }
+
+    var distinctGroups: Int { Set(classes.map(\.group)).count }
+
+    var groupShares: [LandscapeContextGroupShare] {
+        Dictionary(grouping: classes, by: \.group)
+            .map { group, classes in
+                LandscapeContextGroupShare(
+                    name: group,
+                    share: classes.reduce(0) { $0 + $1.share }
+                )
+            }
+            .sorted {
+                $0.share == $1.share
+                    ? $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                    : $0.share > $1.share
+            }
+    }
+
+    var dominantGroup: String? {
+        groupShares.first?.name
+    }
+
+    var title: String {
+        guard let first = classes.first else { return "Keine Umgebung lesbar" }
+        if first.share >= 0.60 { return "\(first.name) prägt die Umgebung" }
+        if classes.count > 1 { return "\(first.name) trifft auf \(classes[1].name)" }
+        return first.name
+    }
+
+    var narrative: String {
+        guard !classes.isEmpty else {
+            return "Der gewählte Kreis liegt außerhalb der verfügbaren Landschaftsdaten."
+        }
+        let texture: String
+        switch classes.count {
+        case 1: texture = "eine sehr geschlossene Landschaft"
+        case 2...4: texture = "eine klar gegliederte Landschaft"
+        case 5...8: texture = "ein abwechslungsreiches Landschaftsmosaik"
+        default: texture = "ein feingliedriges Landschaftsmosaik"
+        }
+        var result = "Hier zeigt sich \(texture) aus \(classes.count) Oberflächenklassen"
+        if let dominantGroup { result += ", überwiegend aus der Gruppe \(dominantGroup)" }
+        if let elevationRange {
+            result += ". Das Gelände überspannt \(elevationRange.formatted()) Höhenmeter"
+        }
+        if let terrainCharacter {
+            result += " und wirkt \(terrainCharacter)"
+        }
+        return result + "."
+    }
+}
+
+struct MapProfileSelection: Equatable {
+    let startX: Double
+    let startY: Double
+    let endX: Double
+    let endY: Double
+
+    var distanceMeters: Double { hypot(endX - startX, endY - startY) }
+
+    func point(at fraction: Double) -> (x: Double, y: Double) {
+        (
+            startX + (endX - startX) * fraction,
+            startY + (endY - startY) * fraction
+        )
+    }
+}
+
+struct MapScreenLine: Equatable {
+    let start: CGPoint
+    let end: CGPoint
+}
+
+struct LandscapeProfileSample: Equatable {
+    let distanceMeters: Double
+    let elevation: Int?
+    let classID: Int?
+    let className: String?
+    let classGroup: String?
+    let thematicClassName: String?
+}
+
+struct LandscapeProfileSegment: Equatable, Identifiable {
+    let id: Int
+    let startMeters: Double
+    let endMeters: Double
+    let classID: Int
+    let className: String
+    let classGroup: String?
+}
+
+struct LandscapeProfile: Equatable {
+    let selection: MapProfileSelection
+    let samples: [LandscapeProfileSample]
+    let segments: [LandscapeProfileSegment]
+    let minimumElevation: Int?
+    let maximumElevation: Int?
+    let ascentMeters: Int
+    let descentMeters: Int
+
+    init(selection: MapProfileSelection, samples: [LandscapeProfileSample]) {
+        self.selection = selection
+        self.samples = samples
+        let elevations = samples.compactMap(\.elevation)
+        minimumElevation = elevations.min()
+        maximumElevation = elevations.max()
+        var ascent = 0
+        var descent = 0
+        for pair in zip(elevations, elevations.dropFirst()) {
+            let difference = pair.1 - pair.0
+            if difference > 0 { ascent += difference } else { descent -= difference }
+        }
+        ascentMeters = ascent
+        descentMeters = descent
+
+        var built: [LandscapeProfileSegment] = []
+        var currentID: Int?
+        var currentName = ""
+        var currentGroup: String?
+        var start = 0.0
+        for sample in samples {
+            guard let classID = sample.classID, let className = sample.className else {
+                if let currentID {
+                    built.append(
+                        LandscapeProfileSegment(
+                            id: built.count, startMeters: start,
+                            endMeters: sample.distanceMeters, classID: currentID,
+                            className: currentName, classGroup: currentGroup
+                        )
+                    )
+                }
+                currentID = nil
+                continue
+            }
+            if currentID != classID {
+                if let currentID {
+                    built.append(
+                        LandscapeProfileSegment(
+                            id: built.count, startMeters: start,
+                            endMeters: sample.distanceMeters, classID: currentID,
+                            className: currentName, classGroup: currentGroup
+                        )
+                    )
+                }
+                currentID = classID
+                currentName = className
+                currentGroup = sample.classGroup
+                start = sample.distanceMeters
+            }
+        }
+        if let currentID, let last = samples.last {
+            built.append(
+                LandscapeProfileSegment(
+                    id: built.count, startMeters: start,
+                    endMeters: last.distanceMeters, classID: currentID,
+                    className: currentName, classGroup: currentGroup
+                )
+            )
+        }
+        segments = built
+    }
+
+    var distanceMeters: Double { selection.distanceMeters }
+    var elevationRange: Int? {
+        guard let minimumElevation, let maximumElevation else { return nil }
+        return maximumElevation - minimumElevation
+    }
+    var distinctLandClasses: Int { Set(segments.map(\.classID)).count }
+    var distinctThematicClasses: Int {
+        Set(samples.compactMap(\.thematicClassName)).count
     }
 }
 
@@ -290,16 +733,132 @@ struct ViewportSnapshot: Equatable {
     let visibleHeightMeters: Double
 }
 
+struct MapBookmarkDetail: Codable, Equatable {
+    let surfaceClassID: Int?
+    let surfaceName: String?
+    let surfaceGroup: String?
+    let elevation: Int?
+    let slopeDegrees: Double?
+    let aspectDegrees: Double?
+    let terrainResolutionMeters: Double?
+    let thematicProductID: String?
+    let thematicProductName: String?
+    let thematicClassID: Int?
+    let thematicClassName: String?
+    let thematicSourceSummary: String?
+    let landscapeContext: LandscapeContext?
+
+    init(probe: MapProbe, landscapeContext: LandscapeContext? = nil) {
+        surfaceClassID = probe.classID
+        surfaceName = probe.className
+        surfaceGroup = probe.classGroup
+        elevation = probe.elevation
+        slopeDegrees = probe.slopeDegrees
+        aspectDegrees = probe.aspectDegrees
+        terrainResolutionMeters = probe.terrainResolutionMeters
+        thematicProductID = probe.thematic?.productID
+        thematicProductName = probe.thematic?.productName
+        thematicClassID = probe.thematic?.classID
+        thematicClassName = probe.thematic?.className
+        thematicSourceSummary = probe.thematic?.qualitySummary
+        self.landscapeContext = landscapeContext
+    }
+
+    var summary: String {
+        landscapeContext?.title ?? thematicClassName ?? surfaceName ?? "Kartenansicht"
+    }
+
+    var hasLandscapeContext: Bool { landscapeContext != nil }
+}
+
 struct MapBookmark: Codable, Identifiable, Equatable {
     let id: UUID
     var name: String
     let centerX: Double
     let centerY: Double
     let metersPerPoint: Double
+    var note: String? = nil
+    var createdAt: Date? = nil
+    var detail: MapBookmarkDetail? = nil
+
+    var isComparable: Bool { detail != nil }
+    var coordinateText: String {
+        "\(Int(centerX.rounded())) · \(Int(centerY.rounded()))"
+    }
+}
+
+struct MapBookmarkComparison: Equatable {
+    let first: MapBookmark
+    let second: MapBookmark
+
+    var elevationDifference: Int? {
+        guard let first = first.detail?.elevation, let second = second.detail?.elevation else {
+            return nil
+        }
+        return second - first
+    }
+
+    var slopeDifference: Double? {
+        guard let first = first.detail?.slopeDegrees, let second = second.detail?.slopeDegrees else {
+            return nil
+        }
+        return second - first
+    }
+
+    var contextPopulationDifference: Int? {
+        guard
+            let first = first.detail?.landscapeContext?.population,
+            let second = second.detail?.landscapeContext?.population
+        else { return nil }
+        return second - first
+    }
+
+    var sharesSurfaceGroup: Bool? {
+        guard let first = first.detail?.surfaceGroup, let second = second.detail?.surfaceGroup else {
+            return nil
+        }
+        return first == second
+    }
+
+    var sharesThematicProduct: Bool {
+        guard let first = first.detail?.thematicProductID,
+              let second = second.detail?.thematicProductID
+        else { return false }
+        return first == second
+    }
+
+    var sharesDominantContextClass: Bool? {
+        guard
+            let first = first.detail?.landscapeContext?.classes.first?.classID,
+            let second = second.detail?.landscapeContext?.classes.first?.classID
+        else { return nil }
+        return first == second
+    }
+
+    var contextClassDifference: Int? {
+        guard
+            let first = first.detail?.landscapeContext?.classes.count,
+            let second = second.detail?.landscapeContext?.classes.count
+        else { return nil }
+        return second - first
+    }
+
+    var contextElevationRangeDifference: Int? {
+        guard
+            let first = first.detail?.landscapeContext?.elevationRange,
+            let second = second.detail?.landscapeContext?.elevationRange
+        else { return nil }
+        return second - first
+    }
 }
 
 @MainActor
 final class BookmarkStore: ObservableObject {
+    struct ImportResult: Equatable {
+        let added: Int
+        let skipped: Int
+    }
+
     @Published private(set) var bookmarks: [MapBookmark] = []
     private static let key = "TopoExplorer.bookmarks.v1"
 
@@ -312,13 +871,23 @@ final class BookmarkStore: ObservableObject {
         }
     }
 
-    func add(name proposedName: String, snapshot: ViewportSnapshot) {
+    func add(
+        name proposedName: String,
+        snapshot: ViewportSnapshot,
+        probe: MapProbe? = nil,
+        landscapeContext: LandscapeContext? = nil,
+        note proposedNote: String? = nil
+    ) {
         let trimmed = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = trimmed.isEmpty ? "Lesezeichen \(bookmarks.count + 1)" : trimmed
+        let trimmedNote = proposedNote?.trimmingCharacters(in: .whitespacesAndNewlines)
         bookmarks.append(
             MapBookmark(
                 id: UUID(), name: name, centerX: snapshot.centerX,
-                centerY: snapshot.centerY, metersPerPoint: snapshot.metersPerPoint
+                centerY: snapshot.centerY, metersPerPoint: snapshot.metersPerPoint,
+                note: trimmedNote?.isEmpty == false ? trimmedNote : nil,
+                createdAt: Date(),
+                detail: probe.map { MapBookmarkDetail(probe: $0, landscapeContext: landscapeContext) }
             )
         )
         save()
@@ -327,6 +896,35 @@ final class BookmarkStore: ObservableObject {
     func remove(_ bookmark: MapBookmark) {
         bookmarks.removeAll { $0.id == bookmark.id }
         save()
+    }
+
+    func mergeImported(_ candidates: [MapBookmark]) -> ImportResult {
+        var added = 0
+        var skipped = 0
+        for candidate in candidates {
+            let duplicate = bookmarks.contains { existing in
+                existing.id == candidate.id
+                    || (hypot(existing.centerX - candidate.centerX, existing.centerY - candidate.centerY) < 0.5
+                        && existing.name.compare(candidate.name, options: .caseInsensitive) == .orderedSame)
+            }
+            guard !duplicate else {
+                skipped += 1
+                continue
+            }
+            let id = bookmarks.contains(where: { $0.id == candidate.id }) ? UUID() : candidate.id
+            bookmarks.append(
+                MapBookmark(
+                    id: id, name: candidate.name,
+                    centerX: candidate.centerX, centerY: candidate.centerY,
+                    metersPerPoint: candidate.metersPerPoint,
+                    note: candidate.note, createdAt: candidate.createdAt,
+                    detail: candidate.detail
+                )
+            )
+            added += 1
+        }
+        if added > 0 { save() }
+        return ImportResult(added: added, skipped: skipped)
     }
 
     private func save() {

@@ -170,12 +170,24 @@ final class ViewportController: ObservableObject {
     @Published private(set) var status = ""
     @Published private(set) var labels: [MapLabel] = []
     @Published private(set) var probe: MapProbe?
+    @Published private(set) var pinnedProbe: MapProbe?
+    @Published private(set) var landscapeContext: LandscapeContext?
+    @Published private(set) var isReadingLandscapeContext = false
+    @Published private(set) var landscapeContextMessage: String?
+    @Published private(set) var landscapeContextRadius = 3_000.0
+    @Published private(set) var landscapeContextRequestToken = 0
     @Published private(set) var snapshot: ViewportSnapshot?
     @Published private(set) var analysisSelection: MapSelection?
     @Published private(set) var analysisScreenRect: CGRect?
     @Published private(set) var areaStatistics: AreaStatistics?
     @Published private(set) var isAnalyzing = false
     @Published private(set) var analysisMessage: String?
+    @Published private(set) var profileSelection: MapProfileSelection?
+    @Published private(set) var profileScreenLine: MapScreenLine?
+    @Published private(set) var landscapeProfile: LandscapeProfile?
+    @Published private(set) var isProfiling = false
+    @Published private(set) var profileMessage: String?
+    @Published private(set) var navigationArrivalToken = 0
 
     func fitGermany() {
         activeReference = nil
@@ -204,12 +216,44 @@ final class ViewportController: ObservableObject {
         if status != value { status = value }
     }
 
+    func markNavigationArrived() {
+        navigationArrivalToken &+= 1
+    }
+
     func updateLabels(_ value: [MapLabel]) {
         if labels != value { labels = value }
     }
 
     func updateProbe(_ value: MapProbe?) {
         if probe != value { probe = value }
+    }
+
+    func pinProbe(_ value: MapProbe) {
+        pinnedProbe = value
+        requestLandscapeContext(radiusMeters: landscapeContextRadius)
+    }
+
+    func clearPinnedProbe() {
+        pinnedProbe = nil
+        landscapeContext = nil
+        landscapeContextMessage = nil
+        isReadingLandscapeContext = false
+        landscapeContextRequestToken &+= 1
+    }
+
+    func requestLandscapeContext(radiusMeters: Double) {
+        landscapeContextRadius = min(10_000, max(1_000, radiusMeters))
+        landscapeContext = nil
+        landscapeContextMessage = nil
+        isReadingLandscapeContext = pinnedProbe != nil
+        landscapeContextRequestToken &+= 1
+    }
+
+    func finishLandscapeContext(_ context: LandscapeContext?, message: String? = nil) {
+        guard pinnedProbe != nil else { return }
+        landscapeContext = context
+        landscapeContextMessage = message
+        isReadingLandscapeContext = false
     }
 
     func updateSnapshot(_ value: ViewportSnapshot) {
@@ -246,5 +290,40 @@ final class ViewportController: ObservableObject {
         areaStatistics = nil
         analysisMessage = nil
         isAnalyzing = false
+    }
+
+    func updateProfileSelection(
+        _ selection: MapProfileSelection?,
+        screenLine: MapScreenLine?
+    ) {
+        profileSelection = selection
+        profileScreenLine = screenLine
+        landscapeProfile = nil
+        profileMessage = nil
+        isProfiling = false
+    }
+
+    func beginProfile() {
+        landscapeProfile = nil
+        profileMessage = nil
+        isProfiling = true
+    }
+
+    func updateProfileScreenLine(_ line: MapScreenLine?) {
+        if profileScreenLine != line { profileScreenLine = line }
+    }
+
+    func finishProfile(_ profile: LandscapeProfile?, message: String? = nil) {
+        landscapeProfile = profile
+        profileMessage = message
+        isProfiling = false
+    }
+
+    func clearProfile() {
+        profileSelection = nil
+        profileScreenLine = nil
+        landscapeProfile = nil
+        profileMessage = nil
+        isProfiling = false
     }
 }

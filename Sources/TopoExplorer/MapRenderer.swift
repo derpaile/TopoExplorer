@@ -59,7 +59,58 @@ private struct RenderViewport {
     let pixelSize: CGSize
 }
 
+struct MapCameraState: Equatable {
+    let centerX: Double
+    let centerY: Double
+    let pixelsPerMeter: Double
+}
+
+struct MapCameraFlight {
+    let start: MapCameraState
+    let destination: MapCameraState
+    let duration: Double
+    let zoomOutLogScale: Double
+
+    init(start: MapCameraState, destination: MapCameraState, viewportSize: CGSize) {
+        self.start = start
+        self.destination = destination
+        let distance = hypot(
+            destination.centerX - start.centerX,
+            destination.centerY - start.centerY
+        )
+        let minimumScale = max(
+            min(start.pixelsPerMeter, destination.pixelsPerMeter),
+            0.000_000_1
+        )
+        let visibleWorldSpan = max(
+            max(Double(viewportSize.width), Double(viewportSize.height)), 1
+        ) / minimumScale
+        let distanceRatio = distance / visibleWorldSpan
+        duration = 0.38 + min(0.30, log1p(distanceRatio) * 0.17)
+        zoomOutLogScale = log(min(4.5, max(1, distanceRatio * 1.15)))
+    }
+
+    func state(at progress: Double) -> MapCameraState {
+        let t = min(max(progress, 0), 1)
+        let eased = t * t * (3 - 2 * t)
+        let startLogScale = log(max(start.pixelsPerMeter, 0.000_000_1))
+        let destinationLogScale = log(max(destination.pixelsPerMeter, 0.000_000_1))
+        let logScale = startLogScale
+            + (destinationLogScale - startLogScale) * eased
+            - sin(.pi * eased) * zoomOutLogScale
+        return MapCameraState(
+            centerX: start.centerX + (destination.centerX - start.centerX) * eased,
+            centerY: start.centerY + (destination.centerY - start.centerY) * eased,
+            pixelsPerMeter: exp(logScale)
+        )
+    }
+}
+
 final class MapRenderer: NSObject, MTKViewDelegate {
+    private struct CameraAnimation {
+        let flight: MapCameraFlight
+        let startedAt: CFAbsoluteTime
+    }
     private weak var view: MapCanvasView?
     private weak var viewport: ViewportController?
     private let commandQueue: MTLCommandQueue
@@ -94,10 +145,18 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     private var lastFitToken = -1
     private var lastNavigationToken = -1
     private var pendingTarget: ViewportController.Target?
+    private var cameraAnimation: CameraAnimation?
+    private var reduceMotion = false
+    private var hasPresentedViewport = false
     private var probeGeneration = 0
+    private var pinnedProbeGeneration = 0
+    private var landscapeContextGeneration = 0
     private var analysisGeneration = 0
     private var analysisStartPoint: CGPoint?
     private var analysisSelection: MapSelection?
+    private var profileGeneration = 0
+    private var profileStartPoint: CGPoint?
+    private var profileSelection: MapProfileSelection?
 
     init?(view: MapCanvasView, manifest: MapManifest, viewport: ViewportController) {
         guard
@@ -171,7 +230,8 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         geoScience newGeoScience: GeoScienceRenderOptions,
         fitToken: Int,
         navigationToken: Int,
-        target: ViewportController.Target?
+        target: ViewportController.Target?,
+        reduceMotion newReduceMotion: Bool
     ) {
         let dataChanged = manifest != newManifest
             || dataDirectory?.standardizedFileURL != newDirectory.standardizedFileURL
@@ -197,12 +257,18 @@ final class MapRenderer: NSObject, MTKViewDelegate {
                 roadShields = RoadShieldIndex.load(from: newDirectory)
                 queryService = RasterQueryService(manifest: newManifest, directory: newDirectory)
                 needsFit = true
+                cameraAnimation = nil
             }
         }
         style = newStyle
         layers = newLayers
         comparison = newComparison
         geoScience = newGeoScience
+        reduceMotion = newReduceMotion
+        if newReduceMotion, let animation = cameraAnimation {
+            applyCameraState(animation.flight.destination)
+            cameraAnimation = nil
+        }
         if let color = newStyle.colors.first {
             view?.clearColor = MTLClearColorMake(Double(color.x), Double(color.y), Double(color.z), 1)
         }
@@ -233,12 +299,25 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         else { return }
 
         if let target = pendingTarget {
-            focus(target)
+            navigate(
+                to: MapCameraState(
+                    centerX: target.centerX,
+                    centerY: target.centerY,
+                    pixelsPerMeter: 1 / target.metersPerPoint
+                ),
+                in: view.bounds.size,
+                animated: hasPresentedViewport && !reduceMotion
+            )
             pendingTarget = nil
         } else if needsFit {
-            fit(manifest, in: view.bounds.size)
+            navigate(
+                to: fitState(manifest, in: view.bounds.size),
+                in: view.bounds.size,
+                animated: hasPresentedViewport && !reduceMotion
+            )
             needsFit = false
         }
+        advanceCameraAnimation()
 
         guard
             let commandBuffer = commandQueue.makeCommandBuffer(),
@@ -344,6 +423,10 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         encoder.endEncoding()
         commandBuffer.present(drawable)
         commandBuffer.commit()
+        hasPresentedViewport = true
+        if cameraAnimation != nil {
+            DispatchQueue.main.async { [weak self] in self?.requestDraw() }
+        }
 
         prefetch(around: keys, level: level, manifest: manifest, directory: dataDirectory)
         let elapsedMilliseconds = (CFAbsoluteTimeGetCurrent() - started) * 1_000
@@ -366,17 +449,33 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         let selectionRect = analysisSelection.map { selection in
             screenRect(for: selection, in: view.bounds.size)
         }
+        let profileLine = profileSelection.map { selection in
+            MapScreenLine(
+                start: screenPoint(
+                    worldX: selection.startX, worldY: selection.startY,
+                    in: view.bounds.size
+                ),
+                end: screenPoint(
+                    worldX: selection.endX, worldY: selection.endY,
+                    in: view.bounds.size
+                )
+            )
+        }
         Task { @MainActor [weak viewport] in
             viewport?.updateStatus(status)
             viewport?.updateLabels(vectorResult.labels)
             viewport?.updateSnapshot(snapshot)
             viewport?.updateAnalysisScreenRect(selectionRect)
+            viewport?.updateProfileScreenLine(profileLine)
         }
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) { requestDraw() }
 
     func pan(deltaX: Double, deltaY: Double) {
+        cameraAnimation = nil
+        pendingTarget = nil
+        needsFit = false
         centerX -= deltaX / pixelsPerMeter
         centerY += deltaY / pixelsPerMeter
         constrainCenter()
@@ -385,6 +484,9 @@ final class MapRenderer: NSObject, MTKViewDelegate {
 
     func zoom(factor: Double, around point: CGPoint) {
         guard let view, let manifest, factor.isFinite, factor > 0 else { return }
+        cameraAnimation = nil
+        pendingTarget = nil
+        needsFit = false
         let size = view.bounds.size
         let worldX = centerX + (point.x - size.width / 2) / pixelsPerMeter
         let worldY = centerY - (point.y - size.height / 2) / pixelsPerMeter
@@ -407,21 +509,86 @@ final class MapRenderer: NSObject, MTKViewDelegate {
     }
 
     func inspect(at point: CGPoint) {
+        probeGeneration &+= 1
+        let generation = probeGeneration
+        queryProbe(at: point) { [weak self] probe in
+            guard let self, self.probeGeneration == generation else { return }
+            Task { @MainActor [weak viewport] in viewport?.updateProbe(probe) }
+        }
+    }
+
+    func pinInspection(at point: CGPoint) {
+        pinnedProbeGeneration &+= 1
+        let generation = pinnedProbeGeneration
+        queryProbe(at: point) { [weak self] probe in
+            guard let self, self.pinnedProbeGeneration == generation else { return }
+            Task { @MainActor [weak viewport] in viewport?.pinProbe(probe) }
+        }
+    }
+
+    func refreshPinnedInspection(_ probe: MapProbe) {
+        pinnedProbeGeneration &+= 1
+        let generation = pinnedProbeGeneration
+        guard let queryService else { return }
+        let use2020 = usesLandcover2020(atWorldX: probe.worldX, worldY: probe.worldY)
+        let thematic = manifest?.availableThematicRasters.first { $0.id == geoScience.productID }
+        queryService.query(
+            worldX: probe.worldX, worldY: probe.worldY,
+            year2020: use2020, thematic: thematic
+        ) { [weak self] refreshed in
+            guard let self, self.pinnedProbeGeneration == generation else { return }
+            Task { @MainActor [weak viewport] in viewport?.pinProbe(refreshed) }
+        }
+    }
+
+    func queryLandscapeContext(around probe: MapProbe, radiusMeters: Double) {
+        landscapeContextGeneration &+= 1
+        let generation = landscapeContextGeneration
+        guard let queryService else {
+            Task { @MainActor [weak viewport] in
+                viewport?.finishLandscapeContext(nil, message: "Die Kartendaten sind noch nicht bereit.")
+            }
+            return
+        }
+        let use2020 = usesLandcover2020(atWorldX: probe.worldX, worldY: probe.worldY)
+        let thematic = manifest?.availableThematicRasters.first { $0.id == geoScience.productID }
+        queryService.queryLandscapeContext(
+            around: probe, radiusMeters: radiusMeters,
+            year2020: use2020, thematic: thematic
+        ) { [weak self] context, message in
+            guard let self, self.landscapeContextGeneration == generation else { return }
+            Task { @MainActor [weak viewport] in
+                viewport?.finishLandscapeContext(context, message: message)
+            }
+        }
+    }
+
+    func cancelLandscapeContextQuery() {
+        landscapeContextGeneration &+= 1
+    }
+
+    private func usesLandcover2020(atWorldX worldX: Double, worldY: Double) -> Bool {
+        if comparison.mode == UInt32(LandcoverMode.year2020.rawValue) { return true }
+        guard
+            comparison.mode == UInt32(LandcoverMode.comparison.rawValue),
+            let view
+        else { return false }
+        let point = screenPoint(worldX: worldX, worldY: worldY, in: view.bounds.size)
+        return point.x >= view.bounds.width * CGFloat(comparison.splitPosition)
+    }
+
+    private func queryProbe(at point: CGPoint, completion: @escaping (MapProbe) -> Void) {
         guard let view, let queryService else { return }
         let worldX = centerX + (point.x - view.bounds.width / 2) / pixelsPerMeter
         let worldY = centerY - (point.y - view.bounds.height / 2) / pixelsPerMeter
         let use2020 = comparison.mode == UInt32(LandcoverMode.year2020.rawValue)
             || (comparison.mode == UInt32(LandcoverMode.comparison.rawValue)
                 && point.x >= view.bounds.width * CGFloat(comparison.splitPosition))
-        probeGeneration &+= 1
-        let generation = probeGeneration
         let thematic = manifest?.availableThematicRasters.first { $0.id == geoScience.productID }
         queryService.query(
-            worldX: worldX, worldY: worldY, year2020: use2020, thematic: thematic
-        ) { [weak self] probe in
-            guard let self, self.probeGeneration == generation else { return }
-            Task { @MainActor [weak viewport] in viewport?.updateProbe(probe) }
-        }
+            worldX: worldX, worldY: worldY, year2020: use2020,
+            thematic: thematic, completion: completion
+        )
     }
 
     func clearInspection() {
@@ -489,6 +656,62 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         Task { @MainActor [weak viewport] in viewport?.clearAnalysis() }
     }
 
+    func beginProfileSelection(at point: CGPoint) {
+        guard manifest != nil else { return }
+        profileGeneration &+= 1
+        profileStartPoint = point
+        updateProfileSelection(to: point)
+    }
+
+    func updateProfileSelection(to point: CGPoint) {
+        guard let view, let start = profileStartPoint else { return }
+        let startWorld = worldPoint(for: start, in: view.bounds.size)
+        let endWorld = worldPoint(for: point, in: view.bounds.size)
+        let selection = MapProfileSelection(
+            startX: startWorld.x, startY: startWorld.y,
+            endX: endWorld.x, endY: endWorld.y
+        )
+        profileSelection = selection
+        let line = MapScreenLine(start: start, end: point)
+        Task { @MainActor [weak viewport] in
+            viewport?.updateProfileSelection(selection, screenLine: line)
+        }
+    }
+
+    func finishProfileSelection(at point: CGPoint) {
+        updateProfileSelection(to: point)
+        guard
+            let start = profileStartPoint,
+            hypot(point.x - start.x, point.y - start.y) >= 12,
+            let selection = profileSelection,
+            let queryService
+        else {
+            cancelProfileSelection()
+            return
+        }
+        profileStartPoint = nil
+        profileGeneration &+= 1
+        let generation = profileGeneration
+        let use2020 = comparison.mode == UInt32(LandcoverMode.year2020.rawValue)
+        let thematic = manifest?.availableThematicRasters.first { $0.id == geoScience.productID }
+        Task { @MainActor [weak viewport] in viewport?.beginProfile() }
+        queryService.queryProfile(
+            selection: selection, year2020: use2020, thematic: thematic
+        ) { [weak self] profile, message in
+            guard let self, self.profileGeneration == generation else { return }
+            Task { @MainActor [weak viewport] in
+                viewport?.finishProfile(profile, message: message)
+            }
+        }
+    }
+
+    func cancelProfileSelection() {
+        profileGeneration &+= 1
+        profileStartPoint = nil
+        profileSelection = nil
+        Task { @MainActor [weak viewport] in viewport?.clearProfile() }
+    }
+
     private func worldPoint(for point: CGPoint, in size: CGSize) -> CGPoint {
         CGPoint(
             x: centerX + (point.x - size.width / 2) / pixelsPerMeter,
@@ -502,6 +725,13 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         let y1 = size.height / 2 + (centerY - selection.maxY) * pixelsPerMeter
         let y2 = size.height / 2 + (centerY - selection.minY) * pixelsPerMeter
         return CGRect(x: x1, y: y1, width: x2 - x1, height: y2 - y1)
+    }
+
+    private func screenPoint(worldX: Double, worldY: Double, in size: CGSize) -> CGPoint {
+        CGPoint(
+            x: size.width / 2 + (worldX - centerX) * pixelsPerMeter,
+            y: size.height / 2 + (centerY - worldY) * pixelsPerMeter
+        )
     }
 
     func export(_ request: MapExportRequest, completion: @escaping (Result<URL, Error>) -> Void) {
@@ -769,16 +999,59 @@ final class MapRenderer: NSObject, MTKViewDelegate {
         command.commit()
     }
 
-    private func fit(_ manifest: MapManifest, in size: CGSize) {
-        centerX = (manifest.left + manifest.right) / 2
-        centerY = (manifest.bottom + manifest.top) / 2
-        pixelsPerMeter = fitScale(manifest, in: size)
+    private func fitState(_ manifest: MapManifest, in size: CGSize) -> MapCameraState {
+        MapCameraState(
+            centerX: (manifest.left + manifest.right) / 2,
+            centerY: (manifest.bottom + manifest.top) / 2,
+            pixelsPerMeter: fitScale(manifest, in: size)
+        )
     }
 
-    private func focus(_ target: ViewportController.Target) {
-        centerX = target.centerX
-        centerY = target.centerY
-        pixelsPerMeter = 1 / target.metersPerPoint
+    private func navigate(
+        to destination: MapCameraState,
+        in viewportSize: CGSize,
+        animated: Bool
+    ) {
+        clearInspection()
+        let start = MapCameraState(
+            centerX: centerX, centerY: centerY, pixelsPerMeter: pixelsPerMeter
+        )
+        let distance = hypot(
+            destination.centerX - start.centerX,
+            destination.centerY - start.centerY
+        )
+        let scaleDifference = abs(log(
+            max(destination.pixelsPerMeter, 0.000_000_1)
+                / max(start.pixelsPerMeter, 0.000_000_1)
+        ))
+        guard animated, distance > 1 || scaleDifference > 0.002 else {
+            cameraAnimation = nil
+            applyCameraState(destination)
+            return
+        }
+        cameraAnimation = CameraAnimation(
+            flight: MapCameraFlight(
+                start: start, destination: destination, viewportSize: viewportSize
+            ),
+            startedAt: CFAbsoluteTimeGetCurrent()
+        )
+    }
+
+    private func advanceCameraAnimation() {
+        guard let animation = cameraAnimation else { return }
+        let progress = (CFAbsoluteTimeGetCurrent() - animation.startedAt)
+            / animation.flight.duration
+        applyCameraState(animation.flight.state(at: progress))
+        if progress >= 1 {
+            cameraAnimation = nil
+            Task { @MainActor [weak viewport] in viewport?.markNavigationArrived() }
+        }
+    }
+
+    private func applyCameraState(_ state: MapCameraState) {
+        centerX = state.centerX
+        centerY = state.centerY
+        pixelsPerMeter = state.pixelsPerMeter
         constrainCenter()
     }
 

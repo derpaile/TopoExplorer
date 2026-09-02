@@ -12,6 +12,7 @@ struct TopoExplorerApp: App {
     @StateObject private var bookmarks = BookmarkStore()
     @StateObject private var export = MapExportController()
     @StateObject private var geoScience = GeoScienceSettings()
+    @StateObject private var commands = AtlasCommandCenter()
 
     init() {
         Self.installDockIcon()
@@ -50,6 +51,7 @@ struct TopoExplorerApp: App {
                 .environmentObject(bookmarks)
                 .environmentObject(export)
                 .environmentObject(geoScience)
+                .environmentObject(commands)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
@@ -58,6 +60,32 @@ struct TopoExplorerApp: App {
                     .keyboardShortcut("0", modifiers: [])
                 Button("Kartendaten wählen …") { session.isChoosingDirectory = true }
                     .keyboardShortcut("o", modifiers: .command)
+            }
+            CommandMenu("Atlas") {
+                Button("Stöberpalette …") { commands.send(.openPalette) }
+                    .keyboardShortcut("k", modifiers: .command)
+                    .disabled(session.manifest == nil)
+                Divider()
+                Button("Suchen") { commands.send(.focusSearch) }
+                    .keyboardShortcut("f", modifiers: .command)
+                Button("Nächster Fund") { commands.send(.nextLandscape) }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                Divider()
+                Button("Datenatlas") { commands.send(.openDataCatalog) }
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                Button("Sammlung") { commands.send(.openCollection) }
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
+                    .disabled(bookmarks.bookmarks.isEmpty)
+                Divider()
+                Button("Flächenanalyse") { commands.send(.toggleAreaAnalysis) }
+                    .keyboardShortcut("a", modifiers: [.command, .shift])
+                Button("Landschaftsprofil") { commands.send(.toggleLandscapeProfile) }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
+                Button("Kartenausschnitt exportieren") { commands.send(.exportMap) }
+                    .keyboardShortcut("x", modifiers: [.command, .shift])
+                Divider()
+                Button("Seitenleiste ein-/ausblenden") { commands.send(.toggleSidebar) }
+                    .keyboardShortcut("l", modifiers: [.command, .shift])
             }
         }
     }

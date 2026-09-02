@@ -40,6 +40,15 @@ final class RasterQueryService {
     private let populationCache = NSCache<NSString, NSData>()
     private let queue = DispatchQueue(label: "TopoExplorer.map-query", qos: .userInteractive)
     private let populationGrid: PopulationGrid?
+    private lazy var placeRecords: [PlaceSearchRecord] = {
+        let url = directory.appendingPathComponent("Vectors/places-index.json.z")
+        guard
+            let packed = try? Data(contentsOf: url, options: .mappedIfSafe),
+            let data = ZlibDecoder.decodeUnknown(packed),
+            let index = try? JSONDecoder().decode(PlaceSearchIndex.self, from: data)
+        else { return [] }
+        return index.places
+    }()
 
     init(manifest: MapManifest, directory: URL) {
         self.manifest = manifest
@@ -372,16 +381,129 @@ final class RasterQueryService {
         thematic product: MapManifest.ThematicRaster?,
         completion: @escaping (MapProbe) -> Void
     ) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let result = self.probe(
+                worldX: worldX, worldY: worldY,
+                year2020: year2020, thematic: product
+            )
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
+    func queryLandscapeContext(
+        around probe: MapProbe,
+        radiusMeters: Double,
+        year2020: Bool,
+        thematic product: MapManifest.ThematicRaster?,
+        completion: @escaping (LandscapeContext?, String?) -> Void
+    ) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let radius = min(25_000, max(500, radiusMeters))
+            let targetSpacing = max(self.level.resolution * 4, radius / 12)
+            let steps = min(18, max(4, Int(ceil(radius / targetSpacing))))
+            let spacing = radius / Double(steps)
+            var samples: [MapProbe] = []
+            var planned = 0
+            samples.reserveCapacity((steps * 2 + 1) * (steps * 2 + 1))
+            for row in -steps...steps {
+                for column in -steps...steps {
+                    let offsetX = Double(column) * spacing
+                    let offsetY = Double(row) * spacing
+                    guard offsetX * offsetX + offsetY * offsetY <= radius * radius else { continue }
+                    planned += 1
+                    let sample = self.probe(
+                        worldX: probe.worldX + offsetX,
+                        worldY: probe.worldY + offsetY,
+                        year2020: year2020,
+                        thematic: product
+                    )
+                    if sample.classID != nil { samples.append(sample) }
+                }
+            }
+            guard !samples.isEmpty else {
+                DispatchQueue.main.async {
+                    completion(nil, "In diesem Radius sind keine Landschaftsdaten verfügbar.")
+                }
+                return
+            }
+            let population = self.population(
+                inCircleAtX: probe.worldX, y: probe.worldY, radius: radius
+            )
+            let namedFeatures = self.namedFeatures(
+                inCircleAtX: probe.worldX, y: probe.worldY, radius: radius
+            )
+            let context = LandscapeContext(
+                centerX: probe.worldX, centerY: probe.worldY,
+                radiusMeters: radius, sampledResolution: spacing,
+                plannedSampleCount: planned, probes: samples,
+                population: population,
+                populationSource: population == nil ? nil : self.populationGrid?.source,
+                namedFeatures: namedFeatures
+            )
+            DispatchQueue.main.async { completion(context, nil) }
+        }
+    }
+
+    func queryProfile(
+        selection: MapProfileSelection,
+        year2020: Bool,
+        thematic product: MapManifest.ThematicRaster?,
+        completion: @escaping (LandscapeProfile?, String?) -> Void
+    ) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let distance = selection.distanceMeters
+            guard distance >= self.level.resolution * 2 else {
+                DispatchQueue.main.async {
+                    completion(nil, "Ziehe eine längere Profillinie.")
+                }
+                return
+            }
+            let desiredSpacing = max(self.level.resolution * 4, distance / 239)
+            let sampleCount = min(240, max(2, Int(ceil(distance / desiredSpacing)) + 1))
+            var samples: [LandscapeProfileSample] = []
+            samples.reserveCapacity(sampleCount)
+            for index in 0..<sampleCount {
+                let fraction = Double(index) / Double(sampleCount - 1)
+                let point = selection.point(at: fraction)
+                let probe = self.probe(
+                    worldX: point.x, worldY: point.y,
+                    year2020: year2020, thematic: product
+                )
+                samples.append(
+                    LandscapeProfileSample(
+                        distanceMeters: distance * fraction,
+                        elevation: probe.elevation,
+                        classID: probe.classID,
+                        className: probe.className,
+                        classGroup: probe.classGroup,
+                        thematicClassName: probe.thematic?.className
+                    )
+                )
+            }
+            guard samples.compactMap(\.elevation).count >= 2 else {
+                DispatchQueue.main.async {
+                    completion(nil, "Die Profillinie liegt außerhalb der verfügbaren Kartendaten.")
+                }
+                return
+            }
+            let result = LandscapeProfile(selection: selection, samples: samples)
+            DispatchQueue.main.async { completion(result, nil) }
+        }
+    }
+
+    private func probe(
+        worldX: Double,
+        worldY: Double,
+        year2020: Bool,
+        thematic product: MapManifest.ThematicRaster?
+    ) -> MapProbe {
         guard
             worldX >= manifest.left, worldX < manifest.right,
             worldY >= manifest.bottom, worldY < manifest.top
-        else {
-            completion(MapProbe(
-                worldX: worldX, worldY: worldY,
-                elevation: nil, classID: nil, className: nil, thematic: nil
-            ))
-            return
-        }
+        else { return emptyProbe(worldX: worldX, worldY: worldY) }
         let pixelX = Int((worldX - manifest.left) / level.resolution)
         let pixelY = Int((manifest.top - worldY) / level.resolution)
         let tileX = pixelX / manifest.tileSize
@@ -389,60 +511,200 @@ final class RasterQueryService {
         let localX = pixelX % manifest.tileSize
         let localY = pixelY % manifest.tileSize
         let key = TileKey(z: level.z, x: tileX, y: tileY)
-        queue.async { [weak self] in
-            guard let self, let tile = self.tile(key) else { return }
-            let land = year2020 ? (tile.land2020 ?? tile.land2015) : tile.land2015
-            let classID = Int(land[localY * self.manifest.tileSize + localX])
-            let elevationTileSize = self.manifest.elevationTileSize(at: self.level)
-            let elevationSize = elevationTileSize + self.manifest.elevationBorder * 2
-            let elevationX = min(
-                elevationTileSize - 1,
-                localX * elevationTileSize / self.manifest.tileSize
-            ) + self.manifest.elevationBorder
-            let elevationY = min(
-                elevationTileSize - 1,
-                localY * elevationTileSize / self.manifest.tileSize
-            ) + self.manifest.elevationBorder
-            let elevationOffset = (elevationY * elevationSize + elevationX) * 2
-            let encoded = UInt16(tile.elevation[elevationOffset])
-                | (UInt16(tile.elevation[elevationOffset + 1]) << 8)
-            let normalized = Double(encoded) / 65_535
-            let meters = self.manifest.elevationMin
-                + normalized * (self.manifest.elevationMax - self.manifest.elevationMin)
-            let className = self.manifest.classes.first(where: { $0.id == classID })?.name
-            let thematicProbe: ThematicProbe?
-            if
-                let product,
-                let thematic = self.thematicData(key, suffix: product.suffix)
-            {
-                let thematicID = Int(thematic[localY * self.manifest.tileSize + localX])
-                let thematicClass = product.classes.first { $0.id == thematicID }
-                let quality = self.thematicData(key, suffix: product.qualitySuffix)
-                let sourceIndex = quality.map {
-                    Int($0[localY * self.manifest.tileSize + localX])
-                } ?? 0
-                let source = sourceIndex > 0 && product.sources.indices.contains(sourceIndex - 1)
-                    ? product.sources[sourceIndex - 1] : nil
-                thematicProbe = thematicID == 0 || thematicClass == nil ? nil : ThematicProbe(
-                    productID: product.id,
-                    productName: product.name,
-                    classID: thematicID,
-                    className: thematicClass!.name,
-                    sourceName: source?.name,
-                    sourceScale: source?.scale
-                )
-            } else {
-                thematicProbe = nil
-            }
-            let result = MapProbe(
-                worldX: worldX, worldY: worldY,
-                elevation: classID == 0 ? nil : Int(meters.rounded()),
-                classID: classID == 0 ? nil : classID,
-                className: classID == 0 ? nil : className,
-                thematic: thematicProbe
+        guard let tile = tile(key) else { return emptyProbe(worldX: worldX, worldY: worldY) }
+        let land = year2020 ? (tile.land2020 ?? tile.land2015) : tile.land2015
+        let classID = Int(land[localY * manifest.tileSize + localX])
+        let elevationTileSize = manifest.elevationTileSize(at: level)
+        let elevationSize = elevationTileSize + manifest.elevationBorder * 2
+        let elevationX = min(
+            elevationTileSize - 1,
+            localX * elevationTileSize / manifest.tileSize
+        ) + manifest.elevationBorder
+        let elevationY = min(
+            elevationTileSize - 1,
+            localY * elevationTileSize / manifest.tileSize
+        ) + manifest.elevationBorder
+        let elevationOffset = (elevationY * elevationSize + elevationX) * 2
+        let encoded = UInt16(tile.elevation[elevationOffset])
+            | (UInt16(tile.elevation[elevationOffset + 1]) << 8)
+        let normalized = Double(encoded) / 65_535
+        let meters = manifest.elevationMin
+            + normalized * (manifest.elevationMax - manifest.elevationMin)
+        let terrainResolution = level.resolution * Double(manifest.tileSize)
+            / Double(elevationTileSize)
+        let terrain = terrainMetrics(
+            data: tile.elevation,
+            x: elevationX,
+            y: elevationY,
+            size: elevationSize,
+            cellSize: terrainResolution
+        )
+        let landClass = manifest.classes.first(where: { $0.id == classID })
+        let thematicProbe: ThematicProbe?
+        if let product, let thematic = thematicData(key, suffix: product.suffix) {
+            let thematicID = Int(thematic[localY * manifest.tileSize + localX])
+            let thematicClass = product.classes.first { $0.id == thematicID }
+            let quality = thematicData(key, suffix: product.qualitySuffix)
+            let sourceIndex = quality.map {
+                Int($0[localY * manifest.tileSize + localX])
+            } ?? 0
+            let source = sourceIndex > 0 && product.sources.indices.contains(sourceIndex - 1)
+                ? product.sources[sourceIndex - 1] : nil
+            thematicProbe = thematicID == 0 || thematicClass == nil ? nil : ThematicProbe(
+                productID: product.id,
+                productName: product.name,
+                classID: thematicID,
+                className: thematicClass!.name,
+                sourceName: source?.name,
+                sourceScale: source?.scale
             )
-            DispatchQueue.main.async { completion(result) }
+        } else {
+            thematicProbe = nil
         }
+        return MapProbe(
+            worldX: worldX, worldY: worldY,
+            elevation: classID == 0 ? nil : Int(meters.rounded()),
+            classID: classID == 0 ? nil : classID,
+            className: classID == 0 ? nil : landClass?.name,
+            classGroup: classID == 0 ? nil : landClass?.group,
+            thematic: thematicProbe,
+            slopeDegrees: classID == 0 ? nil : terrain.slope,
+            aspectDegrees: classID == 0 ? nil : terrain.aspect,
+            terrainResolutionMeters: classID == 0 ? nil : terrainResolution
+        )
+    }
+
+    private func terrainMetrics(
+        data: Data,
+        x: Int,
+        y: Int,
+        size: Int,
+        cellSize: Double
+    ) -> (slope: Double, aspect: Double?) {
+        func height(_ dx: Int, _ dy: Int) -> Double {
+            let offset = ((y + dy) * size + x + dx) * 2
+            let encoded = UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+            return manifest.elevationMin
+                + Double(encoded) / 65_535 * (manifest.elevationMax - manifest.elevationMin)
+        }
+        let northWest = height(-1, -1)
+        let north = height(0, -1)
+        let northEast = height(1, -1)
+        let west = height(-1, 0)
+        let east = height(1, 0)
+        let southWest = height(-1, 1)
+        let south = height(0, 1)
+        let southEast = height(1, 1)
+        let eastward = ((northEast + 2 * east + southEast)
+            - (northWest + 2 * west + southWest)) / (8 * cellSize)
+        let northward = ((northWest + 2 * north + northEast)
+            - (southWest + 2 * south + southEast)) / (8 * cellSize)
+        let slope = atan(hypot(eastward, northward)) * 180 / .pi
+        guard slope >= 0.05 else { return (slope, nil) }
+        var aspect = atan2(-eastward, -northward) * 180 / .pi
+        if aspect < 0 { aspect += 360 }
+        return (slope, aspect)
+    }
+
+    private func population(inCircleAtX centerX: Double, y centerY: Double, radius: Double) -> Int? {
+        guard
+            let grid = populationGrid,
+            grid.version == 1,
+            grid.crs == manifest.crs,
+            grid.bounds.count == 4
+        else { return nil }
+        let bounds = MapSelection(
+            x1: max(grid.left, centerX - radius),
+            y1: max(grid.bottom, centerY - radius),
+            x2: min(grid.right, centerX + radius),
+            y2: min(grid.top, centerY + radius)
+        )
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        let range = pixelRange(
+            selection: bounds,
+            left: grid.left,
+            top: grid.top,
+            resolution: grid.resolution,
+            width: grid.width,
+            height: grid.height
+        )
+        guard !range.x.isEmpty, !range.y.isEmpty else { return nil }
+        let radiusSquared = radius * radius
+        var total = 0
+        var readableCells = 0
+        let firstTileX = range.x.lowerBound / grid.tileSize
+        let lastTileX = (range.x.upperBound - 1) / grid.tileSize
+        let firstTileY = range.y.lowerBound / grid.tileSize
+        let lastTileY = (range.y.upperBound - 1) / grid.tileSize
+        for tileY in firstTileY...lastTileY {
+            for tileX in firstTileX...lastTileX {
+                guard let data = populationTile(x: tileX, y: tileY, grid: grid) else { continue }
+                let startX = max(range.x.lowerBound, tileX * grid.tileSize)
+                let endX = min(range.x.upperBound, (tileX + 1) * grid.tileSize)
+                let startY = max(range.y.lowerBound, tileY * grid.tileSize)
+                let endY = min(range.y.upperBound, (tileY + 1) * grid.tileSize)
+                for globalY in startY..<endY {
+                    let dy = grid.top - (Double(globalY) + 0.5) * grid.resolution - centerY
+                    let localY = globalY - tileY * grid.tileSize
+                    for globalX in startX..<endX {
+                        let dx = grid.left + (Double(globalX) + 0.5) * grid.resolution - centerX
+                        guard dx * dx + dy * dy <= radiusSquared else { continue }
+                        let localX = globalX - tileX * grid.tileSize
+                        let offset = (localY * grid.tileSize + localX) * 2
+                        total += Int(data[offset]) | (Int(data[offset + 1]) << 8)
+                        readableCells += 1
+                    }
+                }
+            }
+        }
+        return readableCells > 0 ? total : nil
+    }
+
+    private func namedFeatures(
+        inCircleAtX centerX: Double,
+        y centerY: Double,
+        radius: Double
+    ) -> [LandscapeContextFeature] {
+        let candidates = placeRecords.compactMap { record -> LandscapeContextFeature? in
+            let dx = record.worldX - centerX
+            let dy = record.worldY - centerY
+            let distance = hypot(dx, dy)
+            guard distance <= radius else { return nil }
+            var direction = atan2(dx, dy) * 180 / .pi
+            if direction < 0 { direction += 360 }
+            return LandscapeContextFeature(
+                name: record.name,
+                kind: record.kind,
+                population: record.population > 0 ? record.population : nil,
+                worldX: record.worldX,
+                worldY: record.worldY,
+                distanceMeters: distance,
+                directionDegrees: direction
+            )
+        }.sorted { $0.distanceMeters < $1.distanceMeters }
+
+        var selected: [LandscapeContextFeature] = []
+        var categories = Set<Int>()
+        for candidate in candidates {
+            let category = candidate.kind <= 6 ? 0 : candidate.kind
+            guard categories.insert(category).inserted else { continue }
+            selected.append(candidate)
+            if selected.count == 5 { break }
+        }
+        if selected.count < 5 {
+            let selectedIDs = Set(selected.map(\.id))
+            selected.append(contentsOf: candidates.filter { !selectedIDs.contains($0.id) }
+                .prefix(5 - selected.count))
+        }
+        return selected.sorted { $0.distanceMeters < $1.distanceMeters }
+    }
+
+    private func emptyProbe(worldX: Double, worldY: Double) -> MapProbe {
+        MapProbe(
+            worldX: worldX, worldY: worldY,
+            elevation: nil, classID: nil, className: nil, classGroup: nil,
+            thematic: nil
+        )
     }
 
     private func tile(_ key: TileKey) -> RasterQueryTile? {

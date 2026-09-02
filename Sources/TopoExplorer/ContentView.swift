@@ -1,7 +1,9 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var session: MapSession
     @EnvironmentObject private var style: StyleSettings
     @EnvironmentObject private var viewport: ViewportController
@@ -11,7 +13,9 @@ struct ContentView: View {
     @EnvironmentObject private var bookmarks: BookmarkStore
     @EnvironmentObject private var export: MapExportController
     @EnvironmentObject private var geoScience: GeoScienceSettings
+    @EnvironmentObject private var commands: AtlasCommandCenter
     @FocusState private var searchFocused: Bool
+    @FocusState private var paletteFocused: Bool
     @State private var showSearchResults = false
     @State private var showHelp = false
     @State private var sidebarVisible = true
@@ -20,6 +24,16 @@ struct ContentView: View {
     @State private var selectedSurfaceID: Int?
     @State private var showHistoricalControls = false
     @State private var analysisMode = false
+    @State private var profileMode = false
+    @State private var catalogQuery = ""
+    @State private var catalogCategory: MapManifest.DataCategory?
+    @State private var comparisonBookmarkIDs: [UUID] = []
+    @State private var fieldbookMessage: String?
+    @State private var fieldbookMessageIsError = false
+    @State private var showQuickPalette = false
+    @State private var paletteQuery = ""
+    @State private var paletteSelectionIndex = 0
+    @State private var paletteNavigationSequence = 0
 
     var body: some View {
         Group {
@@ -40,6 +54,9 @@ struct ContentView: View {
         }
         .onChange(of: session.manifest) { _, manifest in
             if let manifest { geoScience.reconcile(with: manifest) }
+        }
+        .onChange(of: commands.sequence) { _, _ in
+            if let command = commands.command { handleCommand(command) }
         }
         .fileImporter(
             isPresented: $session.isChoosingDirectory,
@@ -67,7 +84,18 @@ struct ContentView: View {
 
             mapArea(manifest: manifest, directory: directory)
         }
-        .animation(.snappy(duration: 0.28), value: sidebarVisible)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.28), value: sidebarVisible)
+        .overlay {
+            if showQuickPalette {
+                quickPaletteOverlay(manifest: manifest)
+                    .transition(
+                        .scale(scale: reduceMotion ? 1 : 0.965, anchor: .top)
+                            .combined(with: .opacity)
+                    )
+                    .zIndex(20)
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.24), value: showQuickPalette)
     }
 
     private func sidebar(manifest: MapManifest) -> some View {
@@ -112,6 +140,7 @@ struct ContentView: View {
                     surfaceStackSection(manifest: manifest)
                     thematicStackSection(manifest: manifest)
                     orientationStackSection
+                    discoverySection
                     bookmarkSection
                 }
                 .padding(.horizontal, 12)
@@ -177,6 +206,7 @@ struct ContentView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(AtlasStackButtonStyle(isSelected: activeDrawer == .surface))
+            .atlasHoverGlow(tint: .green, cornerRadius: 13, lift: 1.5)
 
             AtlasCompactStackRow(
                 title: "Geländerelief",
@@ -460,7 +490,15 @@ struct ContentView: View {
     private var bookmarkSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                sidebarSectionTitle("Gemerkte Orte", systemImage: "bookmark.fill")
+                sidebarSectionTitle("Sammlung", systemImage: "bookmark.fill")
+                if !bookmarks.bookmarks.isEmpty {
+                    Text("\(bookmarks.bookmarks.count)")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.primary.opacity(0.06), in: Capsule())
+                }
                 Spacer()
                 if let snapshot = viewport.snapshot {
                     Button {
@@ -477,14 +515,14 @@ struct ContentView: View {
             }
 
             if bookmarks.bookmarks.isEmpty {
-                Text("Spannende Ausschnitte lassen sich hier für später sammeln.")
+                Text("Fundstellen und spannende Ausschnitte lassen sich hier für später sammeln.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 7)
                     .padding(.bottom, 4)
             } else {
-                ForEach(bookmarks.bookmarks) { bookmark in
+                ForEach(Array(bookmarks.bookmarks.suffix(3).reversed())) { bookmark in
                     HStack(spacing: 8) {
                         Button {
                             viewport.focus(
@@ -492,15 +530,28 @@ struct ContentView: View {
                                 metersPerPoint: bookmark.metersPerPoint, name: bookmark.name
                             )
                         } label: {
-                            Label(bookmark.name, systemImage: "mappin")
-                                .font(.subheadline)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
+                            HStack(spacing: 8) {
+                                Image(systemName: bookmark.isComparable ? "mappin.and.ellipse" : "map")
+                                    .font(.caption)
+                                    .foregroundStyle(bookmark.isComparable ? Color.green : Color.secondary)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(bookmark.name)
+                                        .font(.subheadline)
+                                        .lineLimit(1)
+                                    Text(bookmark.detail?.summary ?? bookmark.note ?? "Kartenansicht")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 
                         Button {
+                            comparisonBookmarkIDs.removeAll { $0 == bookmark.id }
                             bookmarks.remove(bookmark)
                         } label: {
                             Image(systemName: "xmark")
@@ -513,14 +564,133 @@ struct ContentView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                     .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+                    .atlasHoverGlow(tint: .green, cornerRadius: 8, lift: 0.75)
                 }
+
+                Button { toggleDrawer(.collection) } label: {
+                    HStack {
+                        Label("Sammlung öffnen", systemImage: "rectangle.stack.fill")
+                        Spacer()
+                        Text("Vergleichen")
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 7)
+                    .padding(.top, 3)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.985))
+                .atlasHoverGlow(tint: .teal, cornerRadius: 8, lift: 0.75)
             }
         }
+    }
+
+    private var discoverySection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("ENTDECKEN")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    if let reference = MapReference.next(after: viewport.activeReference) {
+                        viewport.show(reference)
+                    }
+                } label: {
+                    Label(
+                        viewport.activeReference == nil ? "Fund wählen" : "Weiterstöbern",
+                        systemImage: "arrow.right"
+                    )
+                    .font(.system(size: 9, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .help("Zur nächsten kuratierten Landschaft springen")
+            }
+            .padding(.horizontal, 5)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 8) {
+                    ForEach(MapReference.all) { reference in
+                        Button { viewport.show(reference) } label: {
+                            AtlasDiscoveryCard(
+                                reference: reference,
+                                isSelected: viewport.activeReference == reference
+                            )
+                        }
+                        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.975))
+                        .help("\(reference.name) erkunden · \(reference.subtitle)")
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
+
+            if let reference = viewport.activeReference {
+                Button { toggleDrawer(.discovery) } label: {
+                    HStack(spacing: 6) {
+                        Label("Du erkundest \(reference.name)", systemImage: "location.fill")
+                        Spacer()
+                        Text("Landschaft lesen")
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(RGBAColor(hex: reference.accentHex).color)
+                    .padding(.horizontal, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            } else {
+                Text("Kuratiere Ausschnitte zeigen, wie verschieden Landschaft gelesen werden kann.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 6)
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: viewport.activeReference)
     }
 
     private func sidebarFooter(manifest: MapManifest) -> some View {
         VStack(spacing: 9) {
             Divider().opacity(0.55)
+
+            Button { toggleDrawer(.catalog) } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "books.vertical.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.green)
+                        .frame(width: 28, height: 28)
+                        .background(.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Datenatlas")
+                            .font(.caption.weight(.semibold))
+                        Text("Quellen, Lizenzen & Kartenbezug")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text("\(manifest.dataCatalog.count)")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(7)
+                .contentShape(Rectangle())
+                .background(
+                    activeDrawer == .catalog
+                        ? Color.green.opacity(0.09) : Color.primary.opacity(0.025),
+                    in: RoundedRectangle(cornerRadius: 10)
+                )
+            }
+            .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.985))
+            .atlasHoverGlow(tint: .green, cornerRadius: 10, lift: 0.75)
 
             Button {
                 session.isChoosingDirectory = true
@@ -556,10 +726,45 @@ struct ContentView: View {
                 geoScience: geoScience,
                 export: export,
                 viewport: viewport,
-                analysisMode: analysisMode
+                analysisMode: analysisMode,
+                profileMode: profileMode,
+                reduceMotion: reduceMotion
             )
 
             labelsOverlay
+
+            if viewport.navigationArrivalToken > 0, !reduceMotion, !analysisMode, !profileMode {
+                MapArrivalPulse(
+                    color: viewport.activeReference.map {
+                        RGBAColor(hex: $0.accentHex).color
+                    } ?? .green
+                )
+                    .id(viewport.navigationArrivalToken)
+                    .allowsHitTesting(false)
+            }
+
+            if let probe = viewport.pinnedProbe, !analysisMode, !profileMode {
+                PinnedProbeMarker(
+                    probe: probe,
+                    snapshot: viewport.snapshot,
+                    radiusMeters: viewport.landscapeContextRadius,
+                    namedFeatures: viewport.landscapeContext?.namedFeatures ?? [],
+                    color: probe.classID.flatMap { id in
+                        probeColor(probe, landClassID: id, manifest: manifest)
+                    } ?? .accentColor,
+                    onNamedFeature: { feature in
+                        let metersPerPoint = viewport.snapshot?.metersPerPoint ?? 40
+                        viewport.clearPinnedProbe()
+                        viewport.focus(
+                            centerX: feature.worldX,
+                            centerY: feature.worldY,
+                            metersPerPoint: metersPerPoint,
+                            name: feature.name
+                        )
+                    }
+                )
+                .transition(.scale(scale: 0.62).combined(with: .opacity))
+            }
 
             if let rect = viewport.analysisScreenRect, rect.width > 0, rect.height > 0 {
                 RoundedRectangle(cornerRadius: 3)
@@ -573,6 +778,11 @@ struct ContentView: View {
                     .allowsHitTesting(false)
             }
 
+            if let line = viewport.profileScreenLine {
+                ProfileSelectionOverlay(line: line)
+                    .allowsHitTesting(false)
+            }
+
             if manifest.hasLandcover2020 && comparison.mode == .comparison {
                 comparisonOverlay
             }
@@ -583,7 +793,12 @@ struct ContentView: View {
             mapBottomBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 
-            if let probe = viewport.probe, viewport.analysisSelection == nil {
+            if viewport.pinnedProbe == nil,
+               let probe = viewport.probe,
+               viewport.analysisSelection == nil,
+               !analysisMode,
+               !profileMode
+            {
                 CursorInfoGlassOverlay(
                     probe: probe,
                     thematicProduct: visibleGeoProduct(in: manifest),
@@ -597,6 +812,67 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .allowsHitTesting(false)
+            }
+
+            if let probe = viewport.pinnedProbe, !analysisMode, !profileMode {
+                PinnedProbePanel(
+                    probe: probe,
+                    thematicProduct: visibleGeoProduct(in: manifest),
+                    baseSourceCount: manifest.sources?.count ?? 0,
+                    showsElevation: style.reliefEnabled,
+                    contentColor: probe.classID.flatMap { id in
+                        probeColor(probe, landClassID: id, manifest: manifest)
+                    },
+                    classColors: style.colors.map(\.color),
+                    landscapeContext: viewport.landscapeContext,
+                    isReadingLandscapeContext: viewport.isReadingLandscapeContext,
+                    landscapeContextMessage: viewport.landscapeContextMessage,
+                    landscapeContextRadius: viewport.landscapeContextRadius,
+                    onLandscapeContextRadiusChange: { radius in
+                        viewport.requestLandscapeContext(radiusMeters: radius)
+                    },
+                    onNamedFeature: { feature in
+                        let metersPerPoint = viewport.snapshot?.metersPerPoint ?? 40
+                        viewport.clearPinnedProbe()
+                        viewport.focus(
+                            centerX: feature.worldX,
+                            centerY: feature.worldY,
+                            metersPerPoint: metersPerPoint,
+                            name: feature.name
+                        )
+                    },
+                    onCenter: {
+                        viewport.focus(
+                            centerX: probe.worldX,
+                            centerY: probe.worldY,
+                            metersPerPoint: viewport.snapshot?.metersPerPoint ?? 40,
+                            name: probe.discoveryTitle
+                        )
+                    },
+                    onBookmark: { name, note in
+                        guard let snapshot = viewport.snapshot else { return }
+                        bookmarks.add(
+                            name: name,
+                            snapshot: ViewportSnapshot(
+                                centerX: probe.worldX,
+                                centerY: probe.worldY,
+                                metersPerPoint: snapshot.metersPerPoint,
+                                visibleWidthMeters: snapshot.visibleWidthMeters,
+                                visibleHeightMeters: snapshot.visibleHeightMeters
+                            ),
+                            probe: probe,
+                            landscapeContext: viewport.landscapeContext,
+                            note: note
+                        )
+                    },
+                    onClose: { viewport.clearPinnedProbe() }
+                )
+                .id("\(probe.worldX)-\(probe.worldY)")
+                .frame(width: 330)
+                .padding(.top, 76)
+                .padding(.leading, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .transition(.move(edge: .leading).combined(with: .opacity))
             }
 
             if viewport.analysisSelection != nil {
@@ -613,6 +889,24 @@ struct ContentView: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
+            if viewport.isProfiling
+                || viewport.landscapeProfile != nil
+                || viewport.profileMessage != nil
+            {
+                LandscapeProfilePanel(
+                    profile: viewport.landscapeProfile,
+                    isLoading: viewport.isProfiling,
+                    message: viewport.profileMessage,
+                    colors: style.colors,
+                    thematicName: visibleGeoProduct(in: manifest)?.name,
+                    onClose: { profileMode = false }
+                )
+                .frame(width: 560)
+                .padding(.bottom, 58)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             if let activeDrawer {
                 drawer(activeDrawer, manifest: manifest)
                 .frame(width: 354)
@@ -624,7 +918,8 @@ struct ContentView: View {
             }
         }
         .clipped()
-        .animation(.snappy(duration: 0.25), value: activeDrawer)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: activeDrawer)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: viewport.pinnedProbe != nil)
     }
 
     @ViewBuilder
@@ -668,6 +963,12 @@ struct ContentView: View {
                     hydrographyDrawerContent
                 case .energy:
                     energyDrawerContent
+                case .discovery:
+                    discoveryDrawerContent(manifest: manifest)
+                case .catalog:
+                    dataCatalogDrawerContent(manifest: manifest)
+                case .collection:
+                    collectionDrawerContent(manifest: manifest)
                 case .appearance:
                     EmptyView()
                 }
@@ -887,99 +1188,751 @@ struct ContentView: View {
         }
     }
 
-    private func mapTopBar(manifest: MapManifest) -> some View {
-        HStack(spacing: 8) {
-            MapChromeButton(
-                symbol: sidebarVisible ? "sidebar.left" : "sidebar.right",
-                help: sidebarVisible ? "Seitenleiste ausblenden" : "Seitenleiste einblenden"
-            ) {
-                sidebarVisible.toggle()
-            }
+    @ViewBuilder
+    private func discoveryDrawerContent(manifest: MapManifest) -> some View {
+        if let reference = viewport.activeReference {
+            let tint = RGBAColor(hex: reference.accentHex).color
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 11) {
+                        Image(systemName: reference.symbolName)
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(tint)
+                            .frame(width: 46, height: 46)
+                            .background(tint.opacity(0.14), in: Circle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(reference.name)
+                                .font(.title3.weight(.semibold))
+                            Text(reference.subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text(reference.story)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(13)
+                .background(
+                    LinearGradient(
+                        colors: [tint.opacity(0.16), tint.opacity(0.035)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(tint.opacity(0.22), lineWidth: 0.8)
+                }
 
-            HStack(spacing: 9) {
-                Image(systemName: viewport.activeReference.map(referenceSymbol) ?? "map")
-                    .foregroundStyle(Color(red: 0.18, green: 0.48, blue: 0.34))
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(viewport.activeReference?.name ?? "Deutschland")
-                        .font(.subheadline.weight(.semibold))
-                    Text(viewport.activeReference.map(referenceDescription) ?? "Topo Atlas")
-                        .font(.caption2)
+                AtlasInspectorPanel(title: "Achte auf", symbol: "binoculars.fill") {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(reference.observations.enumerated()), id: \.element.id) { index, observation in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: observation.symbolName)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(tint)
+                                    .frame(width: 26, height: 26)
+                                    .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(observation.title)
+                                        .font(.caption.weight(.semibold))
+                                    Text(observation.detail)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .padding(.vertical, 7)
+                            if index < reference.observations.count - 1 { Divider().opacity(0.45) }
+                        }
+                    }
+                }
+
+                AtlasInspectorPanel(title: "Mit der Karte prüfen", symbol: "slider.horizontal.3") {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Toggle("Geländerelief", isOn: $style.reliefEnabled)
+                        Toggle("Natur- und Geländenamen", isOn: $layers.geonames)
+                        Toggle("Flüsse und Gewässer", isOn: $layers.waterways)
+                        if manifest.surfaceTexture != nil {
+                            Toggle("Reale Oberflächenstruktur", isOn: $style.surfaceTextureEnabled)
+                        }
+                    }
+                    .font(.caption)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                }
+
+                discoverySources(manifest: manifest)
+
+                Button {
+                    if let next = MapReference.next(after: reference) { viewport.show(next) }
+                } label: {
+                    HStack {
+                        Label("Weiterstöbern", systemImage: "arrow.right.circle.fill")
+                        Spacer()
+                        if let next = MapReference.next(after: reference) { Text(next.name) }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 2)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(tint)
+            }
+        } else {
+            ContentUnavailableView(
+                "Keine Landschaft gewählt",
+                systemImage: "binoculars",
+                description: Text("Wähle einen Landschaftsausschnitt in der Seitenleiste.")
+            )
+        }
+    }
+
+    private func discoverySources(manifest: MapManifest) -> some View {
+        AtlasInspectorPanel(title: "Datenquellen dieser Ansicht", symbol: "checkmark.seal.fill") {
+            VStack(alignment: .leading, spacing: 9) {
+                ForEach(manifest.sources ?? []) { source in
+                    AtlasSourceRow(
+                        title: source.name,
+                        detail: "\(source.role) · \(source.year)",
+                        license: source.license,
+                        url: source.url
+                    )
+                }
+                if let texture = manifest.surfaceTexture, style.surfaceTextureEnabled {
+                    ForEach(texture.sources) { source in
+                        AtlasSourceRow(
+                            title: source.name,
+                            detail: source.role ?? "Oberflächenstruktur",
+                            license: source.license,
+                            url: source.url
+                        )
+                    }
+                }
+                Text("Die Quellenlinks führen direkt zu den veröffentlichten Datensätzen und Nutzungsbedingungen.")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    private func dataCatalogDrawerContent(manifest: MapManifest) -> some View {
+        let allEntries = manifest.dataCatalog
+        let query = catalogQuery
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .lowercased()
+        let entries = allEntries.filter { entry in
+            (catalogCategory == nil || entry.category == catalogCategory)
+                && (query.isEmpty || entry.searchableText.contains(query))
+        }
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(allEntries.count)")
+                        .font(.system(size: 32, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                    Text("dokumentierte Quellen")
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
+                Text("Jeder Datensatz bleibt mit Herkunft, Nutzungslizenz, Jahr und Kartenwirkung nachvollziehbar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .atlasGlass(cornerRadius: 13)
+            .padding(13)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(
+                    colors: [.green.opacity(0.16), .cyan.opacity(0.05)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(.green.opacity(0.18), lineWidth: 0.8)
+            }
 
-            Spacer()
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Quelle, Thema oder Lizenz", text: $catalogQuery)
+                    .textFieldStyle(.plain)
+                if !catalogQuery.isEmpty {
+                    Button { catalogQuery = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 34)
+            .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(.primary.opacity(0.07), lineWidth: 0.8)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    catalogFilterChip("Alle", symbol: "square.grid.2x2", category: nil)
+                    ForEach(MapManifest.DataCategory.allCases) { category in
+                        catalogFilterChip(
+                            category.title,
+                            symbol: category.symbolName,
+                            category: category
+                        )
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
+
+            if entries.isEmpty {
+                ContentUnavailableView(
+                    "Keine Quelle gefunden",
+                    systemImage: "magnifyingglass",
+                    description: Text("Ändere Suche oder Themenfilter.")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else {
+                ForEach(MapManifest.DataCategory.allCases) { category in
+                    let categoryEntries = entries.filter { $0.category == category }
+                    if !categoryEntries.isEmpty {
+                        AtlasInspectorPanel(title: category.title, symbol: category.symbolName) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(categoryEntries.enumerated()), id: \.element.id) { index, entry in
+                                    CatalogDatasetRow(
+                                        entry: entry,
+                                        tint: catalogTint(category),
+                                        isActive: catalogEntryIsActive(entry),
+                                        actionTitle: catalogActionTitle(entry),
+                                        action: { activateCatalogEntry(entry) }
+                                    )
+                                    .padding(.vertical, 7)
+                                    if index < categoryEntries.count - 1 { Divider().opacity(0.45) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func collectionDrawerContent(manifest: MapManifest) -> some View {
+        let selected = comparisonBookmarkIDs.compactMap { id in
+            bookmarks.bookmarks.first { $0.id == id }
+        }
+        let comparableCount = bookmarks.bookmarks.filter(\.isComparable).count
+        let landscapePortraitCount = bookmarks.bookmarks.filter {
+            $0.detail?.hasLandscapeContext == true
+        }.count
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(bookmarks.bookmarks.count)")
+                        .font(.system(size: 32, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                    Text(bookmarks.bookmarks.count == 1 ? "gemerkter Ort" : "gemerkte Orte")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                Text(
+                    "\(comparableCount) Fundstellen sind vergleichbar · "
+                        + "\(landscapePortraitCount) bewahren ein vollständiges Landschaftsbild."
+                )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(13)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(
+                    colors: [.teal.opacity(0.16), .green.opacity(0.05)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(.teal.opacity(0.18), lineWidth: 0.8)
+            }
+
+            HStack(spacing: 8) {
+                Button { exportFieldbook(manifest: manifest) } label: {
+                    Label("GeoJSON exportieren", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(bookmarks.bookmarks.isEmpty)
+                Button { importFieldbook(manifest: manifest) } label: {
+                    Label("Importieren", systemImage: "square.and.arrow.down")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .font(.system(size: 9, weight: .semibold))
+
+            if let fieldbookMessage {
+                Label(
+                    fieldbookMessage,
+                    systemImage: fieldbookMessageIsError
+                        ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+                )
+                .font(.caption2)
+                .foregroundStyle(fieldbookMessageIsError ? Color.orange : Color.teal)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 3)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
+            if selected.count == 2 {
+                BookmarkComparisonPanel(
+                    comparison: MapBookmarkComparison(first: selected[0], second: selected[1]),
+                    classColors: style.colors.map(\.color),
+                    show: showBookmark
+                )
+            } else if comparableCount >= 2 {
+                Label(
+                    "Wähle zwei Fundstellen mit A und B für den Vergleich.",
+                    systemImage: "arrow.left.arrow.right"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+            }
+
+            if bookmarks.bookmarks.isEmpty {
+                ContentUnavailableView(
+                    "Sammlung ist leer",
+                    systemImage: "bookmark",
+                    description: Text("Klicke auf die Karte und merke eine Fundstelle.")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 22)
+            } else {
+                AtlasInspectorPanel(title: "Gesammelte Orte", symbol: "rectangle.stack.fill") {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(bookmarks.bookmarks.reversed().enumerated()), id: \.element.id) { index, bookmark in
+                            BookmarkCollectionRow(
+                                bookmark: bookmark,
+                                classColors: style.colors.map(\.color),
+                                comparisonSlot: comparisonBookmarkIDs.firstIndex(of: bookmark.id),
+                                onSelectComparison: { toggleBookmarkComparison(bookmark) },
+                                onShow: { showBookmark(bookmark) },
+                                onDelete: {
+                                    comparisonBookmarkIDs.removeAll { $0 == bookmark.id }
+                                    bookmarks.remove(bookmark)
+                                }
+                            )
+                            .padding(.vertical, 7)
+                            if index < bookmarks.bookmarks.count - 1 { Divider().opacity(0.45) }
+                        }
+                    }
+                }
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: fieldbookMessage)
+    }
+
+    private func toggleBookmarkComparison(_ bookmark: MapBookmark) {
+        guard bookmark.isComparable else { return }
+        if let index = comparisonBookmarkIDs.firstIndex(of: bookmark.id) {
+            comparisonBookmarkIDs.remove(at: index)
+        } else {
+            if comparisonBookmarkIDs.count == 2 { comparisonBookmarkIDs.removeFirst() }
+            comparisonBookmarkIDs.append(bookmark.id)
+        }
+    }
+
+    private func showBookmark(_ bookmark: MapBookmark) {
+        viewport.focus(
+            centerX: bookmark.centerX,
+            centerY: bookmark.centerY,
+            metersPerPoint: bookmark.metersPerPoint,
+            name: bookmark.name
+        )
+    }
+
+    private func exportFieldbook(manifest: MapManifest) {
+        let panel = NSSavePanel()
+        panel.title = "Sammlung als GeoJSON-Feldbuch exportieren"
+        panel.prompt = "GeoJSON exportieren"
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "geojson", conformingTo: .json) ?? .json,
+        ]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "TopoExplorer-Feldbuch.geojson"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let document = try AtlasFieldbookDocument(
+                bookmarks: bookmarks.bookmarks,
+                sources: manifest.dataCatalog
+            )
+            try AtlasFieldbookFile.write(document, to: url)
+            fieldbookMessage = "\(bookmarks.bookmarks.count) Fundstellen als \(url.lastPathComponent) exportiert."
+            fieldbookMessageIsError = false
+        } catch {
+            fieldbookMessage = error.localizedDescription
+            fieldbookMessageIsError = true
+        }
+    }
+
+    private func importFieldbook(manifest: MapManifest) {
+        let panel = NSOpenPanel()
+        panel.title = "GeoJSON-Feldbuch importieren"
+        panel.prompt = "Zusammenführen"
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "geojson", conformingTo: .json) ?? .json,
+            .json,
+        ]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let imported = try AtlasFieldbookFile.read(from: url).importedBookmarks()
+            let inside = imported.filter {
+                $0.centerX >= manifest.left && $0.centerX <= manifest.right
+                    && $0.centerY >= manifest.bottom && $0.centerY <= manifest.top
+            }
+            let outside = imported.count - inside.count
+            guard !inside.isEmpty else {
+                fieldbookMessage = "Keine Fundstelle liegt im verfügbaren Kartengebiet."
+                fieldbookMessageIsError = true
+                return
+            }
+            let result = bookmarks.mergeImported(inside)
+            var parts = ["\(result.added) importiert"]
+            if result.skipped > 0 { parts.append("\(result.skipped) bereits vorhanden") }
+            if outside > 0 { parts.append("\(outside) außerhalb der Karte") }
+            fieldbookMessage = parts.joined(separator: " · ") + "."
+            fieldbookMessageIsError = false
+        } catch {
+            fieldbookMessage = error.localizedDescription
+            fieldbookMessageIsError = true
+        }
+    }
+
+    private func catalogFilterChip(
+        _ title: String,
+        symbol: String,
+        category: MapManifest.DataCategory?
+    ) -> some View {
+        let isSelected = catalogCategory == category
+        return Button { catalogCategory = category } label: {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 9, weight: .semibold))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .foregroundStyle(isSelected ? Color.white : Color.secondary)
+                .background(
+                    isSelected ? Color.accentColor : Color.primary.opacity(0.045),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func catalogTint(_ category: MapManifest.DataCategory) -> Color {
+        switch category {
+        case .landscape: .green
+        case .detail: .teal
+        case .geoscience: .indigo
+        case .orientation: .orange
+        }
+    }
+
+    private func catalogEntryIsActive(_ entry: MapManifest.DataCatalogEntry) -> Bool {
+        switch entry.activation {
+        case .surface: true
+        case .surfaceTexture: style.surfaceTextureEnabled
+        case .thematic(let id): geoScience.selectedRasterID == id
+        case .orientation:
+            layers.roads || layers.railways || layers.waterways || layers.boundaries
+                || layers.places || layers.energy
+        case .geonames: layers.geonames
+        }
+    }
+
+    private func catalogActionTitle(_ entry: MapManifest.DataCatalogEntry) -> String {
+        switch entry.activation {
+        case .surface: "Öffnen"
+        default: catalogEntryIsActive(entry) ? "Aktiv" : "Anzeigen"
+        }
+    }
+
+    private func activateCatalogEntry(_ entry: MapManifest.DataCatalogEntry) {
+        switch entry.activation {
+        case .surface:
+            activeDrawer = .surface
+        case .surfaceTexture:
+            style.surfaceTextureEnabled = true
+        case .thematic(let id):
+            geoScience.selectedRasterID = id
+        case .orientation:
+            layers.roads = true
+            layers.railways = true
+            layers.waterways = true
+            layers.boundaries = true
+            layers.places = true
+            layers.energy = true
+        case .geonames:
+            layers.geonames = true
+        }
+    }
+
+    private func mapTopBar(manifest: MapManifest) -> some View {
+        ViewThatFits(in: .horizontal) {
+            mapToolbar(manifest: manifest, compact: false)
+                .fixedSize(horizontal: true, vertical: false)
+            mapToolbar(manifest: manifest, compact: true)
+                .frame(maxWidth: .infinity)
+        }
+        .popover(isPresented: $showHelp, arrowEdge: .top) { mapHelpPopover }
+        .padding(12)
+    }
+
+    private func mapToolbar(manifest: MapManifest, compact: Bool) -> some View {
+        HStack(spacing: compact ? 6 : 8) {
+            MapChromeButton(
+                symbol: sidebarVisible ? "sidebar.left" : "sidebar.right",
+                help: sidebarVisible ? "Seitenleiste ausblenden · ⇧⌘L" : "Seitenleiste einblenden · ⇧⌘L"
+            ) { sidebarVisible.toggle() }
+
+            mapLocationPill(compact: compact)
+
+            Spacer(minLength: compact ? 4 : 12)
 
             if let product = geoScience.product(in: manifest) {
-                Button { toggleDrawer(.thematic) } label: {
-                    HStack(spacing: 7) {
-                        Circle()
-                            .fill(thematicTint(product))
-                            .frame(width: 7, height: 7)
-                        Text(product.name)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-                .atlasGlass(cornerRadius: 11)
-                .help("Aktive Fachkarte einstellen")
+                thematicProductPill(product, compact: compact)
             }
 
             HStack(spacing: 1) {
-                MapChromeButton(symbol: "minus", help: "Herauszoomen") { zoom(by: 1 / 1.55) }
-                MapChromeButton(symbol: "plus", help: "Hineinzoomen") { zoom(by: 1.55) }
-                MapChromeButton(symbol: "scope", help: "Deutschland einpassen") { viewport.fitGermany() }
+                MapChromeButton(symbol: "minus", help: "Herauszoomen · −") { zoom(by: 1 / 1.55) }
+                MapChromeButton(symbol: "plus", help: "Hineinzoomen · +") { zoom(by: 1.55) }
+                MapChromeButton(symbol: "scope", help: "Deutschland einpassen · 0") { viewport.fitGermany() }
             }
-
-            MapChromeButton(symbol: "square.and.arrow.up", help: "Kartenausschnitt exportieren") {
-                exportVisibleMap()
-            }
-
-            MapChromeButton(symbol: "questionmark", help: "Bedienung") {
-                showHelp.toggle()
-            }
-            .popover(isPresented: $showHelp, arrowEdge: .top) {
-                VStack(alignment: .leading, spacing: 9) {
-                    Text("Auf der Karte")
-                        .font(.headline)
-                    Label("Ziehen zum Verschieben", systemImage: "hand.draw")
-                    Label("Mausrad oder Trackpad zum Zoomen", systemImage: "plus.magnifyingglass")
-                    Label("Doppelklick zum Hineinzoomen", systemImage: "cursorarrow.click.2")
-                    Label("Mauszeiger erklärt die sichtbare Kartenklasse", systemImage: "info.circle")
-                    Label("Analyseknopf: Rechteck ziehen und Fläche auswerten", systemImage: "rectangle.dashed")
-                }
-                .font(.subheadline)
-                .padding(15)
-                .frame(width: 285, alignment: .leading)
-            }
-
 
             MapChromeButton(
                 symbol: analysisMode ? "xmark" : "rectangle.dashed",
-                help: analysisMode ? "Flächenanalyse beenden" : "Fläche analysieren"
-            ) {
-                analysisMode.toggle()
-                if analysisMode {
-                    activeDrawer = nil
-                    viewport.clearAnalysis()
+                help: analysisMode ? "Flächenanalyse beenden" : "Fläche analysieren · ⇧⌘A",
+                isActive: analysisMode,
+                tint: .cyan
+            ) { toggleAreaAnalysis() }
+
+            MapChromeButton(
+                symbol: profileMode ? "xmark" : "chart.xyaxis.line",
+                help: profileMode ? "Landschaftsprofil beenden" : "Landschaftsprofil ziehen · ⇧⌘P",
+                isActive: profileMode,
+                tint: .indigo
+            ) { toggleLandscapeProfile() }
+
+            if compact {
+                mapUtilityMenu
+            } else {
+                MapChromeButton(
+                    symbol: "sparkles",
+                    help: "Stöberpalette · ⌘K",
+                    isActive: showQuickPalette,
+                    tint: .green
+                ) { openQuickPalette() }
+                MapChromeButton(symbol: "square.and.arrow.up", help: "Kartenausschnitt exportieren · ⇧⌘X") {
+                    exportVisibleMap()
+                }
+                MapChromeButton(
+                    symbol: "books.vertical",
+                    help: "Datenatlas öffnen · ⇧⌘D",
+                    isActive: activeDrawer == .catalog,
+                    tint: .green
+                ) {
+                    toggleDrawer(.catalog)
+                }
+                if !bookmarks.bookmarks.isEmpty {
+                    MapChromeButton(
+                        symbol: "rectangle.stack",
+                        help: "Sammlung öffnen · ⇧⌘M",
+                        isActive: activeDrawer == .collection,
+                        tint: .teal
+                    ) {
+                        toggleDrawer(.collection)
+                    }
+                }
+                MapChromeButton(
+                    symbol: "questionmark",
+                    help: "Bedienung",
+                    isActive: showHelp,
+                    tint: .orange
+                ) { showHelp.toggle() }
+                MapChromeButton(
+                    symbol: "paintpalette",
+                    help: "Stile & Export",
+                    isActive: activeDrawer == .appearance,
+                    tint: .purple
+                ) {
+                    analysisMode = false
+                    profileMode = false
+                    toggleDrawer(.appearance)
                 }
             }
+        }
+    }
 
-            MapChromeButton(symbol: "paintpalette", help: "Stile & Export") {
-                analysisMode = false
-                toggleDrawer(.appearance)
+    private func mapLocationPill(compact: Bool) -> some View {
+        Button {
+            if viewport.activeReference != nil { toggleDrawer(.discovery) }
+        } label: {
+            HStack(spacing: compact ? 6 : 9) {
+                Image(systemName: viewport.activeReference?.symbolName ?? "map")
+                    .foregroundStyle(
+                        viewport.activeReference.map { RGBAColor(hex: $0.accentHex).color }
+                            ?? Color(red: 0.18, green: 0.48, blue: 0.34)
+                    )
+                    .contentTransition(.symbolEffect(.replace))
+                if compact {
+                    Text(viewport.activeReference?.name ?? "Deutschland")
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .frame(maxWidth: 92)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(viewport.activeReference?.name ?? "Deutschland")
+                            .font(.subheadline.weight(.semibold))
+                        Text(viewport.activeReference?.subtitle ?? "Topo Atlas")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    if viewport.activeReference != nil {
+                        Image(systemName: "info.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
         }
-        .padding(12)
+        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.975))
+        .padding(.horizontal, compact ? 9 : 12)
+        .padding(.vertical, compact ? 9 : 7)
+        .atlasGlass(cornerRadius: 13)
+        .atlasHoverGlow(
+            tint: viewport.activeReference.map { RGBAColor(hex: $0.accentHex).color } ?? .green,
+            cornerRadius: 13,
+            lift: viewport.activeReference == nil ? 0 : 1
+        )
+        .help(viewport.activeReference == nil ? "Gesamtansicht Deutschland" : "Landschaft lesen")
+    }
+
+    @ViewBuilder
+    private func thematicProductPill(
+        _ product: MapManifest.ThematicRaster,
+        compact: Bool
+    ) -> some View {
+        if compact {
+            MapChromeButton(
+                symbol: thematicSymbol(product),
+                help: "\(product.name) einstellen",
+                isActive: activeDrawer == .thematic,
+                tint: thematicTint(product)
+            ) {
+                toggleDrawer(.thematic)
+            }
+        } else {
+            Button { toggleDrawer(.thematic) } label: {
+                HStack(spacing: 7) {
+                    Circle()
+                        .fill(thematicTint(product))
+                        .frame(width: 7, height: 7)
+                    Text(product.name)
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.975))
+            .atlasGlass(cornerRadius: 11)
+            .atlasHoverGlow(tint: thematicTint(product), cornerRadius: 11, lift: 1)
+            .help("Aktive Fachkarte einstellen")
+        }
+    }
+
+    private var mapUtilityMenu: some View {
+        Menu {
+            Button { openQuickPalette() } label: {
+                Label("Stöberpalette", systemImage: "sparkles")
+            }
+            Divider()
+            Button { exportVisibleMap() } label: {
+                Label("Kartenausschnitt exportieren", systemImage: "square.and.arrow.up")
+            }
+            Button { toggleDrawer(.catalog) } label: {
+                Label("Datenatlas", systemImage: "books.vertical")
+            }
+            if !bookmarks.bookmarks.isEmpty {
+                Button { toggleDrawer(.collection) } label: {
+                    Label("Sammlung", systemImage: "rectangle.stack")
+                }
+            }
+            Divider()
+            Button {
+                analysisMode = false
+                profileMode = false
+                toggleDrawer(.appearance)
+            } label: {
+                Label("Stile & Export", systemImage: "paintpalette")
+            }
+            Button { showHelp.toggle() } label: {
+                Label("Bedienung", systemImage: "questionmark.circle")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 18, height: 18)
+                .padding(7)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .atlasGlass(cornerRadius: 11)
+        .help("Weitere Werkzeuge")
+    }
+
+    private var mapHelpPopover: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("Auf der Karte").font(.headline)
+            Label("Ziehen zum Verschieben", systemImage: "hand.draw")
+            Label("Mausrad oder Trackpad zum Zoomen", systemImage: "plus.magnifyingglass")
+            Label("Doppelklick zum Hineinzoomen", systemImage: "cursorarrow.click.2")
+            Label("Einmal klicken hält eine Fundstelle fest", systemImage: "mappin.and.ellipse")
+            Label("Rechteck ziehen und Fläche auswerten", systemImage: "rectangle.dashed")
+            Label("Linie ziehen und Landschaftswechsel lesen", systemImage: "chart.xyaxis.line")
+            Divider()
+            Text("Tastatur").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            HStack { Text("Stöberpalette"); Spacer(); Text("⌘K").monospaced() }
+            HStack { Text("Suchen"); Spacer(); Text("⌘F").monospaced() }
+            HStack { Text("Nächster Fund"); Spacer(); Text("⇧⌘E").monospaced() }
+            HStack { Text("Datenatlas"); Spacer(); Text("⇧⌘D").monospaced() }
+            HStack { Text("Fläche / Profil"); Spacer(); Text("⇧⌘A / ⇧⌘P").monospaced() }
+        }
+        .font(.subheadline)
+        .padding(15)
+        .frame(width: 300, alignment: .leading)
     }
 
     private func probeColor(
@@ -1004,12 +1957,8 @@ struct ContentView: View {
     private var mapBottomBar: some View {
         HStack(alignment: .bottom, spacing: 10) {
             if !viewport.status.isEmpty {
-                Text(viewport.status)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .atlasGlass(cornerRadius: 10)
+                MapStatusPill(status: viewport.status, snapshot: viewport.snapshot)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             Spacer()
@@ -1030,7 +1979,7 @@ struct ContentView: View {
             .atlasGlass(cornerRadius: 9)
         }
         .padding(12)
-        .animation(.snappy(duration: 0.20), value: viewport.probe != nil)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.20), value: viewport.probe != nil)
     }
 
     private var comparisonOverlay: some View {
@@ -1165,7 +2114,8 @@ struct ContentView: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(searchFocused ? Color.accentColor : Color.secondary)
+                .scaleEffect(searchFocused && !reduceMotion ? 1.08 : 1)
             TextField("Ort oder Koordinate", text: $search.query)
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
@@ -1179,15 +2129,25 @@ struct ContentView: View {
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
+                .transition(.scale(scale: 0.72).combined(with: .opacity))
             }
         }
         .padding(.horizontal, 10)
         .frame(height: 34)
-        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 10))
+        .background(
+            searchFocused ? Color.accentColor.opacity(0.055) : Color.primary.opacity(0.055),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.primary.opacity(searchFocused ? 0.16 : 0.07), lineWidth: 1)
+                .stroke(
+                    searchFocused ? Color.accentColor.opacity(0.34) : Color.primary.opacity(0.07),
+                    lineWidth: 1
+                )
         }
+        .shadow(color: Color.accentColor.opacity(searchFocused ? 0.12 : 0), radius: 9)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: searchFocused)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.16), value: search.query.isEmpty)
         .onChange(of: search.results) { _, results in
             showSearchResults = searchFocused && !results.isEmpty
         }
@@ -1331,8 +2291,398 @@ struct ContentView: View {
 
     private func toggleDrawer(_ selection: AtlasDrawer) {
         analysisMode = false
+        profileMode = false
         if viewport.analysisSelection != nil { viewport.clearAnalysis() }
+        if viewport.profileSelection != nil { viewport.clearProfile() }
         activeDrawer = activeDrawer == selection ? nil : selection
+    }
+
+    private func handleCommand(_ command: AtlasCommand) {
+        switch command {
+        case .openPalette:
+            openQuickPalette()
+        case .focusSearch:
+            if !sidebarVisible { sidebarVisible = true }
+            searchFocused = true
+        case .nextLandscape:
+            if let reference = MapReference.next(after: viewport.activeReference) {
+                viewport.show(reference)
+            }
+        case .openDataCatalog:
+            toggleDrawer(.catalog)
+        case .openCollection:
+            if !bookmarks.bookmarks.isEmpty { toggleDrawer(.collection) }
+        case .toggleAreaAnalysis:
+            toggleAreaAnalysis()
+        case .toggleLandscapeProfile:
+            toggleLandscapeProfile()
+        case .exportMap:
+            exportVisibleMap()
+        case .toggleSidebar:
+            sidebarVisible.toggle()
+        }
+    }
+
+    private func openQuickPalette() {
+        if showQuickPalette {
+            closeQuickPalette()
+            return
+        }
+        paletteQuery = ""
+        paletteSelectionIndex = 0
+        showQuickPalette = true
+        DispatchQueue.main.async { paletteFocused = true }
+    }
+
+    private func closeQuickPalette() {
+        paletteFocused = false
+        showQuickPalette = false
+    }
+
+    private func revealDrawer(_ selection: AtlasDrawer) {
+        if activeDrawer != selection { toggleDrawer(selection) }
+    }
+
+    private func paletteMatches(_ values: [String]) -> Bool {
+        let query = paletteQuery
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .lowercased()
+        guard !query.isEmpty else { return true }
+        return values.joined(separator: " ")
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .lowercased()
+            .contains(query)
+    }
+
+    private func performPaletteAction(_ action: AtlasPaletteAction) {
+        closeQuickPalette()
+        switch action {
+        case .search:
+            if !sidebarVisible { sidebarVisible = true }
+            DispatchQueue.main.async { searchFocused = true }
+        case .fitGermany:
+            viewport.fitGermany()
+        case .dataCatalog:
+            revealDrawer(.catalog)
+        case .collection:
+            if !bookmarks.bookmarks.isEmpty { revealDrawer(.collection) }
+        case .areaAnalysis:
+            toggleAreaAnalysis()
+        case .landscapeProfile:
+            toggleLandscapeProfile()
+        case .appearance:
+            revealDrawer(.appearance)
+        }
+    }
+
+    private func activatePaletteEntry(_ entry: MapManifest.DataCatalogEntry) {
+        closeQuickPalette()
+        activeDrawer = nil
+        activateCatalogEntry(entry)
+        switch entry.activation {
+        case .surfaceTexture:
+            revealDrawer(.surface)
+        case .thematic:
+            revealDrawer(.thematic)
+        default:
+            break
+        }
+    }
+
+    private func movePaletteSelection(by offset: Int, itemCount: Int) {
+        guard itemCount > 0 else { return }
+        paletteSelectionIndex = (paletteSelectionIndex + offset + itemCount) % itemCount
+        paletteNavigationSequence &+= 1
+    }
+
+    private func selectPaletteItem(
+        at index: Int,
+        actions: [AtlasPaletteAction],
+        references: [MapReference],
+        catalog: [MapManifest.DataCatalogEntry],
+        showsAllSourcesItem: Bool
+    ) {
+        guard index >= 0 else { return }
+        if index < actions.count {
+            performPaletteAction(actions[index])
+            return
+        }
+        let referenceIndex = index - actions.count
+        if referenceIndex < references.count {
+            closeQuickPalette()
+            viewport.show(references[referenceIndex])
+            return
+        }
+        let catalogIndex = referenceIndex - references.count
+        if catalogIndex < catalog.count {
+            activatePaletteEntry(catalog[catalogIndex])
+        } else if showsAllSourcesItem && catalogIndex == catalog.count {
+            closeQuickPalette()
+            revealDrawer(.catalog)
+        }
+    }
+
+    private func quickPaletteOverlay(manifest: MapManifest) -> some View {
+        let actions = AtlasPaletteAction.allCases.filter {
+            ($0 != .collection || !bookmarks.bookmarks.isEmpty)
+                && paletteMatches([$0.title, $0.detail])
+        }
+        let references = MapReference.all.filter {
+            paletteMatches([$0.name, $0.subtitle, $0.story])
+        }
+        let catalog = manifest.dataCatalog.filter {
+            paletteMatches([
+                $0.name, $0.role, $0.license, $0.productName ?? "", $0.category.title,
+            ])
+        }
+        let visibleCatalog = paletteQuery.isEmpty ? Array(catalog.prefix(5)) : catalog
+        let resultCount = actions.count + references.count + catalog.count
+        let showsAllSourcesItem = paletteQuery.isEmpty && catalog.count > visibleCatalog.count
+        let selectableCount = actions.count + references.count + visibleCatalog.count
+            + (showsAllSourcesItem ? 1 : 0)
+        let selectedIndex = selectableCount > 0
+            ? min(paletteSelectionIndex, selectableCount - 1) : 0
+
+        return ZStack(alignment: .top) {
+            Color.black.opacity(0.16)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { closeQuickPalette() }
+
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.green)
+                        .contentTransition(.symbolEffect(.replace))
+                    TextField("Landschaft, Datensatz oder Werkzeug", text: $paletteQuery)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 16, weight: .medium))
+                        .focused($paletteFocused)
+                        .onSubmit {
+                            selectPaletteItem(
+                                at: selectedIndex,
+                                actions: actions,
+                                references: references,
+                                catalog: visibleCatalog,
+                                showsAllSourcesItem: showsAllSourcesItem
+                            )
+                        }
+                        .onKeyPress(.downArrow) {
+                            movePaletteSelection(by: 1, itemCount: selectableCount)
+                            return .handled
+                        }
+                        .onKeyPress(.upArrow) {
+                            movePaletteSelection(by: -1, itemCount: selectableCount)
+                            return .handled
+                        }
+                        .onChange(of: paletteQuery) { _, _ in paletteSelectionIndex = 0 }
+                    if !paletteQuery.isEmpty {
+                        Text("\(resultCount)")
+                            .font(.caption.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(.primary.opacity(0.055), in: Capsule())
+                            .transition(.scale.combined(with: .opacity))
+                        Button { paletteQuery = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.88))
+                    }
+                    Text("⌘K")
+                        .font(.caption2.monospaced().weight(.medium))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 5))
+                    Button { closeQuickPalette() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .frame(width: 22, height: 22)
+                            .background(.primary.opacity(0.055), in: Circle())
+                    }
+                    .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.88))
+                    .help("Stöberpalette schließen")
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 54)
+
+                Divider().opacity(0.55)
+
+                if resultCount == 0 {
+                    ContentUnavailableView(
+                        "Nichts gefunden",
+                        systemImage: "magnifyingglass",
+                        description: Text("Versuche ein Thema wie Wald, Geologie, Wasser oder Relief.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 230)
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 5) {
+                                if !actions.isEmpty {
+                                    AtlasPaletteSectionTitle(title: "Werkzeuge", count: actions.count)
+                                    ForEach(Array(actions.enumerated()), id: \.element.id) { offset, action in
+                                        Button { performPaletteAction(action) } label: {
+                                            AtlasPaletteRow(
+                                                title: action.title,
+                                                detail: action.detail,
+                                                symbol: action.symbol,
+                                                tint: action.tint,
+                                                isSelected: selectedIndex == offset,
+                                                onHoverSelection: { paletteSelectionIndex = offset }
+                                            )
+                                        }
+                                        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.99))
+                                        .id("palette-\(offset)")
+                                    }
+                                }
+
+                                if !references.isEmpty {
+                                    AtlasPaletteSectionTitle(
+                                        title: "Landschaftsfunde",
+                                        count: references.count
+                                    )
+                                    ForEach(Array(references.enumerated()), id: \.element.id) { offset, reference in
+                                        let index = actions.count + offset
+                                        Button {
+                                            closeQuickPalette()
+                                            viewport.show(reference)
+                                        } label: {
+                                            AtlasPaletteRow(
+                                                title: reference.name,
+                                                detail: reference.subtitle,
+                                                symbol: reference.symbolName,
+                                                tint: RGBAColor(hex: reference.accentHex).color,
+                                                trailing: "Auf Karte",
+                                                isSelected: selectedIndex == index,
+                                                onHoverSelection: { paletteSelectionIndex = index }
+                                            )
+                                        }
+                                        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.99))
+                                        .id("palette-\(index)")
+                                    }
+                                }
+
+                                if !visibleCatalog.isEmpty {
+                                    AtlasPaletteSectionTitle(
+                                        title: paletteQuery.isEmpty ? "Freie Daten entdecken" : "Datensätze",
+                                        count: catalog.count
+                                    )
+                                    ForEach(Array(visibleCatalog.enumerated()), id: \.element.id) { offset, entry in
+                                        let index = actions.count + references.count + offset
+                                        Button {
+                                            activatePaletteEntry(entry)
+                                        } label: {
+                                            AtlasPaletteRow(
+                                                title: entry.name,
+                                                detail: entry.productName ?? entry.role,
+                                                symbol: entry.category.symbolName,
+                                                tint: catalogTint(entry.category),
+                                                trailing: entry.license,
+                                                isSelected: selectedIndex == index,
+                                                onHoverSelection: { paletteSelectionIndex = index }
+                                            )
+                                        }
+                                        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.99))
+                                        .id("palette-\(index)")
+                                    }
+                                    if showsAllSourcesItem {
+                                        let index = actions.count + references.count + visibleCatalog.count
+                                        Button {
+                                            closeQuickPalette()
+                                            revealDrawer(.catalog)
+                                        } label: {
+                                            AtlasPaletteRow(
+                                                title: "Alle \(catalog.count) Quellen",
+                                                detail: "Vollständigen Datenatlas öffnen",
+                                                symbol: "books.vertical.fill",
+                                                tint: .green,
+                                                trailing: "Datenatlas",
+                                                isSelected: selectedIndex == index,
+                                                onHoverSelection: { paletteSelectionIndex = index }
+                                            )
+                                        }
+                                        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.99))
+                                        .id("palette-\(index)")
+                                    }
+                                }
+                            }
+                            .padding(10)
+                        }
+                        .onChange(of: paletteNavigationSequence) { _, _ in
+                            let scroll = { proxy.scrollTo("palette-\(selectedIndex)", anchor: .center) }
+                            if reduceMotion { scroll() }
+                            else { withAnimation(.snappy(duration: 0.18)) { scroll() } }
+                        }
+                    }
+                    .frame(maxHeight: 480)
+                }
+
+                HStack {
+                    Label(
+                        "Tippen filtert alles gemeinsam",
+                        systemImage: "line.3.horizontal.decrease.circle"
+                    )
+                    Spacer()
+                    Text("↑↓ wählen · ↩ öffnen · esc schließen")
+                }
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 15)
+                .frame(height: 32)
+                .background(.primary.opacity(0.025))
+            }
+            .frame(width: 570)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 19, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.white.opacity(0.62), .green.opacity(0.18), .black.opacity(0.10)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.9
+                    )
+            }
+            .overlay(alignment: .top) {
+                Capsule()
+                    .fill(.white.opacity(0.50))
+                    .frame(width: 92, height: 1)
+                    .padding(.top, 1)
+            }
+            .shadow(color: .black.opacity(0.26), radius: 34, y: 16)
+            .padding(.top, 76)
+            .onExitCommand { closeQuickPalette() }
+        }
+        .onAppear { DispatchQueue.main.async { paletteFocused = true } }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: paletteQuery.isEmpty)
+    }
+
+    private func toggleAreaAnalysis() {
+        let enabled = !analysisMode
+        analysisMode = enabled
+        profileMode = false
+        viewport.clearProfile()
+        if enabled {
+            activeDrawer = nil
+            viewport.clearAnalysis()
+        }
+    }
+
+    private func toggleLandscapeProfile() {
+        let enabled = !profileMode
+        profileMode = enabled
+        analysisMode = false
+        viewport.clearAnalysis()
+        if enabled {
+            activeDrawer = nil
+            viewport.clearProfile()
+        }
     }
 
     private func thematicSymbol(_ product: MapManifest.ThematicRaster) -> String {
@@ -1465,27 +2815,6 @@ struct ContentView: View {
         )
     }
 
-    private func referenceSymbol(_ reference: MapReference) -> String {
-        switch reference.id {
-        case "harz": "mountain.2.fill"
-        case "alpen": "mountain.2"
-        case "kueste": "water.waves"
-        case "ruhrgebiet": "building.2.crop.circle.fill"
-        case "hannover": "square.3.layers.3d.down.right"
-        default: "leaf.fill"
-        }
-    }
-
-    private func referenceDescription(_ reference: MapReference) -> String {
-        switch reference.id {
-        case "harz": "Wald & Mittelgebirge"
-        case "alpen": "Hochgebirge & Täler"
-        case "kueste": "Meer, Marsch & Häfen"
-        case "ruhrgebiet": "Städte & Industrie"
-        case "hannover": "Surface-PoC · Felder, Wald & Stadt"
-        default: "Felder & Siedlungen"
-        }
-    }
 }
 
 private struct GeoScienceSidebar: View {
@@ -1780,6 +3109,9 @@ private enum AtlasDrawer: String, Equatable {
     case transport
     case hydrography
     case energy
+    case discovery
+    case catalog
+    case collection
     case appearance
 
     var title: String {
@@ -1791,6 +3123,9 @@ private enum AtlasDrawer: String, Equatable {
         case .transport: "Verkehr"
         case .hydrography: "Gewässer & Grenzen"
         case .energy: "Energie"
+        case .discovery: "Landschaft lesen"
+        case .catalog: "Datenatlas"
+        case .collection: "Meine Sammlung"
         case .appearance: "Stile & Export"
         }
     }
@@ -1804,6 +3139,9 @@ private enum AtlasDrawer: String, Equatable {
         case .transport: "Straßen- und Schienennetze"
         case .hydrography: "Hydrographie und Verwaltung"
         case .energy: "Netze, Knoten und Erzeugung"
+        case .discovery: "Beobachtungsimpulse & freie Daten"
+        case .catalog: "Quellen, Lizenzen & Kartenbezug"
+        case .collection: "Fundstellen bewahren & vergleichen"
         case .appearance: "Kartenstil, Ausgabe und Daten"
         }
     }
@@ -1817,6 +3155,9 @@ private enum AtlasDrawer: String, Equatable {
         case .transport: "point.bottomleft.forward.to.point.topright.scurvepath"
         case .hydrography: "water.waves"
         case .energy: "bolt.fill"
+        case .discovery: "binoculars.fill"
+        case .catalog: "books.vertical.fill"
+        case .collection: "rectangle.stack.fill"
         case .appearance: "paintpalette.fill"
         }
     }
@@ -1829,6 +3170,9 @@ private enum AtlasDrawer: String, Equatable {
         case .transport: .red
         case .hydrography: .blue
         case .energy: .yellow
+        case .discovery: .green
+        case .catalog: .teal
+        case .collection: .teal
         case .appearance: .purple
         }
     }
@@ -2043,6 +3387,269 @@ private struct SurfaceClassEditor: View {
     }
 }
 
+private struct ProfileSelectionOverlay: View {
+    let line: MapScreenLine
+
+    var body: some View {
+        Canvas { context, _ in
+            var path = Path()
+            path.move(to: line.start)
+            path.addLine(to: line.end)
+            context.stroke(path, with: .color(.black.opacity(0.42)), lineWidth: 5)
+            context.stroke(
+                path,
+                with: .color(.cyan.opacity(0.96)),
+                style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: [8, 5])
+            )
+            for (point, label) in [(line.start, "A"), (line.end, "B")] {
+                let circle = Path(ellipseIn: CGRect(x: point.x - 10, y: point.y - 10, width: 20, height: 20))
+                context.fill(circle, with: .color(.cyan))
+                context.stroke(circle, with: .color(.white.opacity(0.94)), lineWidth: 1.3)
+                context.draw(
+                    Text(label).font(.system(size: 10, weight: .bold)).foregroundColor(.black),
+                    at: point,
+                    anchor: .center
+                )
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct LandscapeProfilePanel: View {
+    let profile: LandscapeProfile?
+    let isLoading: Bool
+    let message: String?
+    let colors: [RGBAColor]
+    let thematicName: String?
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "chart.xyaxis.line")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.cyan)
+                    .frame(width: 32, height: 32)
+                    .background(.cyan.opacity(0.11), in: Circle())
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Landschaftsprofil")
+                        .font(.headline)
+                    Text("Gelände und Landoberfläche von A nach B")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 24, height: 24)
+                        .background(.primary.opacity(0.07), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Profil schließen")
+            }
+            .padding(12)
+
+            Divider().opacity(0.55)
+
+            if isLoading {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Profil wird aus den 10-m-Kacheln gelesen …")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 150)
+            } else if let profile {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 7) {
+                        profileMetric("Strecke", distance(profile.distanceMeters), symbol: "ruler")
+                        profileMetric(
+                            "Höhen",
+                            elevationSpan(profile),
+                            symbol: "mountain.2.fill"
+                        )
+                        profileMetric("Anstieg", "+\(profile.ascentMeters.formatted()) m", symbol: "arrow.up.right")
+                        profileMetric("Abstieg", "−\(profile.descentMeters.formatted()) m", symbol: "arrow.down.right")
+                    }
+
+                    LandscapeProfileChart(profile: profile, colors: colors)
+                        .frame(height: 146)
+
+                    HStack(alignment: .top, spacing: 12) {
+                        Label(
+                            "\(profile.distinctLandClasses) Landklassen in \(profile.segments.count) Abschnitten",
+                            systemImage: "square.3.layers.3d"
+                        )
+                        if let thematicName, profile.distinctThematicClasses > 0 {
+                            Label(
+                                "\(profile.distinctThematicClasses) Klassen · \(thematicName)",
+                                systemImage: "fossil.shell.fill"
+                            )
+                        }
+                        Spacer(minLength: 0)
+                        Text("\(profile.samples.count) Messpunkte")
+                            .monospacedDigit()
+                    }
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.secondary)
+
+                    let classes = uniqueClasses(profile)
+                    HStack(spacing: 10) {
+                        ForEach(classes, id: \.classID) { segment in
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(color(for: segment.classID))
+                                    .frame(width: 7, height: 7)
+                                Text(segment.className)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                }
+                .padding(12)
+            } else {
+                ContentUnavailableView(
+                    "Profil nicht verfügbar",
+                    systemImage: "chart.xyaxis.line",
+                    description: Text(message ?? "Ziehe eine längere Linie innerhalb der Karte.")
+                )
+                .frame(maxWidth: .infinity, minHeight: 150)
+            }
+        }
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.60), .cyan.opacity(0.22), .black.opacity(0.10)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
+        }
+        .shadow(color: .black.opacity(0.24), radius: 24, y: 11)
+    }
+
+    private func profileMetric(_ title: String, _ value: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 8, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private func distance(_ meters: Double) -> String {
+        if meters < 1_000 { return "\(Int(meters.rounded()).formatted()) m" }
+        return "\((meters / 1_000).formatted(.number.precision(.fractionLength(1)))) km"
+    }
+
+    private func elevationSpan(_ profile: LandscapeProfile) -> String {
+        guard let minimum = profile.minimumElevation, let maximum = profile.maximumElevation else {
+            return "–"
+        }
+        return "\(minimum.formatted())–\(maximum.formatted()) m"
+    }
+
+    private func uniqueClasses(_ profile: LandscapeProfile) -> [LandscapeProfileSegment] {
+        var seen: Set<Int> = []
+        return profile.segments.filter { seen.insert($0.classID).inserted }.prefix(5).map { $0 }
+    }
+
+    private func color(for classID: Int) -> Color {
+        colors.indices.contains(classID) ? colors[classID].color : .secondary
+    }
+}
+
+private struct LandscapeProfileChart: View {
+    let profile: LandscapeProfile
+    let colors: [RGBAColor]
+
+    var body: some View {
+        Canvas { context, size in
+            let plot = CGRect(x: 10, y: 9, width: max(1, size.width - 20), height: max(1, size.height - 31))
+            for fraction in [0.0, 0.5, 1.0] {
+                let y = plot.minY + plot.height * fraction
+                var grid = Path()
+                grid.move(to: CGPoint(x: plot.minX, y: y))
+                grid.addLine(to: CGPoint(x: plot.maxX, y: y))
+                context.stroke(grid, with: .color(.secondary.opacity(0.15)), lineWidth: 0.7)
+            }
+
+            let minimum = Double(profile.minimumElevation ?? 0)
+            let maximum = Double(profile.maximumElevation ?? Int(minimum + 1))
+            let range = max(20, maximum - minimum)
+            var line = Path()
+            var area = Path()
+            var started = false
+            for sample in profile.samples {
+                guard let elevation = sample.elevation else {
+                    started = false
+                    continue
+                }
+                let x = plot.minX + plot.width * sample.distanceMeters / max(1, profile.distanceMeters)
+                let normalized = (Double(elevation) - minimum) / range
+                let y = plot.maxY - plot.height * normalized
+                let point = CGPoint(x: x, y: y)
+                if started {
+                    line.addLine(to: point)
+                    area.addLine(to: point)
+                } else {
+                    line.move(to: point)
+                    area.move(to: CGPoint(x: x, y: plot.maxY))
+                    area.addLine(to: point)
+                    started = true
+                }
+            }
+            if let last = profile.samples.last {
+                let x = plot.minX + plot.width * last.distanceMeters / max(1, profile.distanceMeters)
+                area.addLine(to: CGPoint(x: x, y: plot.maxY))
+                area.closeSubpath()
+            }
+            context.fill(
+                area,
+                with: .linearGradient(
+                    Gradient(colors: [.cyan.opacity(0.30), .cyan.opacity(0.03)]),
+                    startPoint: CGPoint(x: plot.midX, y: plot.minY),
+                    endPoint: CGPoint(x: plot.midX, y: plot.maxY)
+                )
+            )
+            context.stroke(line, with: .color(.cyan), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+
+            let bandY = size.height - 16
+            for segment in profile.segments {
+                let startX = plot.minX + plot.width * segment.startMeters / max(1, profile.distanceMeters)
+                let endX = plot.minX + plot.width * segment.endMeters / max(1, profile.distanceMeters)
+                let rectangle = CGRect(x: startX, y: bandY, width: max(1, endX - startX), height: 9)
+                context.fill(Path(roundedRect: rectangle, cornerRadius: 2), with: .color(color(segment.classID)))
+            }
+            context.draw(Text("A").font(.caption2.bold()), at: CGPoint(x: plot.minX, y: size.height - 3), anchor: .bottomLeading)
+            context.draw(Text("B").font(.caption2.bold()), at: CGPoint(x: plot.maxX, y: size.height - 3), anchor: .bottomTrailing)
+        }
+        .background(.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 11))
+        .overlay {
+            RoundedRectangle(cornerRadius: 11)
+                .stroke(.primary.opacity(0.06), lineWidth: 0.7)
+        }
+        .accessibilityLabel("Höhen- und Landoberflächenprofil von A nach B")
+    }
+
+    private func color(_ classID: Int) -> Color {
+        colors.indices.contains(classID) ? colors[classID].color : .secondary
+    }
+}
+
 private struct AreaStatisticsPanel: View {
     let statistics: AreaStatistics?
     let isLoading: Bool
@@ -2208,6 +3815,1265 @@ private struct AreaStatisticsPanel: View {
     }
 }
 
+private struct BookmarkCollectionRow: View {
+    let bookmark: MapBookmark
+    let classColors: [Color]
+    let comparisonSlot: Int?
+    let onSelectComparison: () -> Void
+    let onShow: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Button(action: onSelectComparison) {
+                ZStack {
+                    Circle()
+                        .fill(comparisonSlot == 0 ? Color.teal : comparisonSlot == 1 ? Color.orange : Color.primary.opacity(0.055))
+                    if let comparisonSlot {
+                        Text(comparisonSlot == 0 ? "A" : "B")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.white)
+                    } else {
+                        Image(systemName: bookmark.isComparable ? "plus" : "map")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .disabled(!bookmark.isComparable)
+            .help(bookmark.isComparable ? "Für Vergleich als A oder B wählen" : "Einfache Kartenansicht ohne Punktdaten")
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(bookmark.name)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(2)
+                if let detail = bookmark.detail {
+                    Text([detail.surfaceGroup, detail.surfaceName].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    if let thematic = detail.thematicClassName {
+                        Label(thematic, systemImage: "fossil.shell.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.indigo)
+                            .lineLimit(1)
+                    }
+                    if let context = detail.landscapeContext {
+                        LandscapeFingerprintBar(context: context, classColors: classColors)
+                            .frame(height: 7)
+                            .padding(.vertical, 2)
+                        Label(
+                            "\(contextRadius(context)) · \(context.classes.count) Klassen · "
+                                + elevationRange(context),
+                            systemImage: "circle.dotted.and.circle"
+                        )
+                        .font(.system(size: 9))
+                        .foregroundStyle(.teal)
+                        .lineLimit(1)
+                        if let nearbyNames = context.nearbyNames {
+                            Label(nearbyNames, systemImage: "text.magnifyingglass")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                } else {
+                    Text("Kartenansicht · \(bookmark.coordinateText)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                if let note = bookmark.note, !note.isEmpty {
+                    Text("„\(note)“")
+                        .font(.system(size: 9))
+                        .italic()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                HStack(spacing: 8) {
+                    Button("Zeigen", action: onShow)
+                        .buttonStyle(.borderless)
+                        .font(.system(size: 9, weight: .semibold))
+                    Spacer()
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 9))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Aus Sammlung löschen")
+                }
+            }
+        }
+    }
+
+    private func contextRadius(_ context: LandscapeContext) -> String {
+        "\((context.radiusMeters / 1_000).formatted(.number.precision(.fractionLength(0)))) km"
+    }
+
+    private func elevationRange(_ context: LandscapeContext) -> String {
+        guard let range = context.elevationRange else { return "ohne Höhenwert" }
+        return "\(range.formatted()) m Höhenraum"
+    }
+}
+
+private struct BookmarkComparisonPanel: View {
+    let comparison: MapBookmarkComparison
+    let classColors: [Color]
+    let show: (MapBookmark) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Direkter Vergleich", systemImage: "arrow.left.arrow.right")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if let difference = comparison.elevationDifference {
+                    Text(elevationDifference(difference))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            HStack(alignment: .top, spacing: 8) {
+                comparisonHeading("A", bookmark: comparison.first, color: .teal)
+                comparisonHeading("B", bookmark: comparison.second, color: .orange)
+            }
+
+            if comparison.first.detail?.landscapeContext != nil
+                || comparison.second.detail?.landscapeContext != nil
+            {
+                HStack(alignment: .top, spacing: 8) {
+                    landscapePortrait(comparison.first.detail?.landscapeContext, tint: .teal)
+                    landscapePortrait(comparison.second.detail?.landscapeContext, tint: .orange)
+                }
+                comparisonRow(
+                    "Prägende Umgebung",
+                    symbol: comparison.sharesDominantContextClass == true
+                        ? "equal.circle.fill" : "circle.lefthalf.filled",
+                    first: dominantContext(comparison.first),
+                    second: dominantContext(comparison.second)
+                )
+                comparisonRow(
+                    "Landschaftsmosaik",
+                    symbol: "square.grid.3x3",
+                    first: contextDiversity(comparison.first),
+                    second: contextDiversity(comparison.second)
+                )
+                comparisonRow(
+                    "Höhenraum",
+                    symbol: "mountain.2",
+                    first: contextElevation(comparison.first),
+                    second: contextElevation(comparison.second)
+                )
+                comparisonRow(
+                    "Relief",
+                    symbol: "angle",
+                    first: contextRelief(comparison.first),
+                    second: contextRelief(comparison.second)
+                )
+                comparisonRow(
+                    "Bevölkerung im Kreis",
+                    symbol: "person.2",
+                    first: contextPopulation(comparison.first),
+                    second: contextPopulation(comparison.second)
+                )
+                comparisonRow(
+                    "Benannte Nähe",
+                    symbol: "text.magnifyingglass",
+                    first: contextNames(comparison.first),
+                    second: contextNames(comparison.second)
+                )
+            }
+
+            comparisonRow(
+                "Oberfläche",
+                symbol: "leaf.fill",
+                first: comparison.first.detail?.surfaceName,
+                second: comparison.second.detail?.surfaceName
+            )
+            comparisonRow(
+                "Landschaftsgruppe",
+                symbol: comparison.sharesSurfaceGroup == true ? "equal.circle.fill" : "circle.lefthalf.filled",
+                first: comparison.first.detail?.surfaceGroup,
+                second: comparison.second.detail?.surfaceGroup
+            )
+            comparisonRow(
+                "Höhe",
+                symbol: "mountain.2.fill",
+                first: comparison.first.detail?.elevation.map { "\($0.formatted()) m" },
+                second: comparison.second.detail?.elevation.map { "\($0.formatted()) m" }
+            )
+            comparisonRow(
+                "Hanglage",
+                symbol: "angle",
+                first: terrain(comparison.first),
+                second: terrain(comparison.second)
+            )
+            if comparison.first.detail?.thematicClassName != nil
+                || comparison.second.detail?.thematicClassName != nil
+            {
+                comparisonRow(
+                    comparison.sharesThematicProduct
+                        ? comparison.first.detail?.thematicProductName ?? "Fachkarte" : "Fachinformation",
+                    symbol: "fossil.shell.fill",
+                    first: comparison.first.detail?.thematicClassName,
+                    second: comparison.second.detail?.thematicClassName
+                )
+            }
+
+            HStack(spacing: 8) {
+                Button { show(comparison.first) } label: {
+                    Label("A zeigen", systemImage: "scope")
+                        .frame(maxWidth: .infinity)
+                }
+                .tint(.teal)
+                Button { show(comparison.second) } label: {
+                    Label("B zeigen", systemImage: "scope")
+                        .frame(maxWidth: .infinity)
+                }
+                .tint(.orange)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .font(.system(size: 9, weight: .semibold))
+        }
+        .padding(12)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.teal.opacity(0.32), .orange.opacity(0.26)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    lineWidth: 0.9
+                )
+        }
+    }
+
+    private func comparisonHeading(_ slot: String, bookmark: MapBookmark, color: Color) -> some View {
+        HStack(alignment: .top, spacing: 7) {
+            Text(slot)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 23, height: 23)
+                .background(color, in: Circle())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(bookmark.name)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(2)
+                Text(bookmark.coordinateText)
+                    .font(.system(size: 8).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func landscapePortrait(_ context: LandscapeContext?, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            if let context {
+                HStack(alignment: .top, spacing: 7) {
+                    LandscapeCompositionOrb(context: context)
+                        .frame(width: 37, height: 37)
+                    VStack(alignment: .leading, spacing: 4) {
+                        LandscapeFingerprintBar(context: context, classColors: classColors)
+                            .frame(height: 7)
+                        Text(context.title)
+                            .font(.system(size: 9, weight: .semibold))
+                            .lineLimit(2)
+                        Text(
+                            "\((context.radiusMeters / 1_000).formatted(.number.precision(.fractionLength(0)))) km Radius"
+                        )
+                        .font(.system(size: 8).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Label("Nur Punktdaten", systemImage: "mappin")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, minHeight: 55, alignment: .topLeading)
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private func dominantContext(_ bookmark: MapBookmark) -> String? {
+        guard let item = bookmark.detail?.landscapeContext?.classes.first else { return nil }
+        return "\(item.name) · \(item.share.formatted(.percent.precision(.fractionLength(0))))"
+    }
+
+    private func contextDiversity(_ bookmark: MapBookmark) -> String? {
+        guard let context = bookmark.detail?.landscapeContext else { return nil }
+        return "\(context.classes.count) Klassen · \(context.distinctGroups) Gruppen"
+    }
+
+    private func contextElevation(_ bookmark: MapBookmark) -> String? {
+        guard
+            let context = bookmark.detail?.landscapeContext,
+            let minimum = context.minimumElevation,
+            let maximum = context.maximumElevation
+        else { return nil }
+        return "\(minimum.formatted())–\(maximum.formatted()) m · Δ \((maximum - minimum).formatted()) m"
+    }
+
+    private func contextRelief(_ bookmark: MapBookmark) -> String? {
+        guard
+            let context = bookmark.detail?.landscapeContext,
+            let mean = context.meanSlopeDegrees,
+            let maximum = context.maximumSlopeDegrees
+        else { return nil }
+        return "Ø \(mean.formatted(.number.precision(.fractionLength(1))))° · "
+            + "max \(maximum.formatted(.number.precision(.fractionLength(1))))°"
+    }
+
+    private func contextPopulation(_ bookmark: MapBookmark) -> String? {
+        guard
+            let context = bookmark.detail?.landscapeContext,
+            let population = context.population
+        else { return nil }
+        let count = population.formatted(.number.notation(.compactName))
+        guard let density = context.populationDensity else { return count }
+        return "\(count) · \(Int(density.rounded()).formatted())/km²"
+    }
+
+    private func contextNames(_ bookmark: MapBookmark) -> String? {
+        bookmark.detail?.landscapeContext?.nearbyNames
+    }
+
+    private func terrain(_ bookmark: MapBookmark) -> String? {
+        guard let slope = bookmark.detail?.slopeDegrees else { return nil }
+        if slope < 0.5 { return "nahezu eben" }
+        let direction = bookmark.detail?.aspectDegrees.map(aspectDirection)
+        let value = slope.formatted(.number.precision(.fractionLength(1))) + "°"
+        return direction.map { "\(value) nach \($0)" } ?? value
+    }
+
+    private func aspectDirection(_ degrees: Double) -> String {
+        let directions = ["N", "NO", "O", "SO", "S", "SW", "W", "NW"]
+        return directions[Int((degrees + 22.5) / 45) % directions.count]
+    }
+
+    private func comparisonRow(
+        _ title: String,
+        symbol: String,
+        first: String?,
+        second: String?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 8) {
+                Text(first ?? "–")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Divider()
+                Text(second ?? "–")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .font(.caption2)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(8)
+        .background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private func elevationDifference(_ difference: Int) -> String {
+        if difference == 0 { return "gleiche Höhe" }
+        return "B \(abs(difference).formatted()) m \(difference > 0 ? "höher" : "tiefer")"
+    }
+}
+
+private struct MapArrivalPulse: View {
+    let color: Color
+    @State private var isFinished = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(color.opacity(0.12))
+                .frame(width: 24, height: 24)
+                .scaleEffect(isFinished ? 2.8 : 0.65)
+                .opacity(isFinished ? 0 : 0.8)
+            Circle()
+                .stroke(color.opacity(0.72), lineWidth: 1.2)
+                .frame(width: 18, height: 18)
+                .scaleEffect(isFinished ? 1.65 : 0.72)
+                .opacity(isFinished ? 0 : 1)
+            Circle()
+                .fill(color)
+                .frame(width: 5, height: 5)
+                .opacity(isFinished ? 0 : 0.9)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.58)) { isFinished = true }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct LandscapeFingerprintBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let context: LandscapeContext
+    let classColors: [Color]
+    @State private var isRevealed = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 1) {
+                ForEach(context.classes) { item in
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(color(item.classID))
+                        .frame(
+                            width: max(
+                                1,
+                                geometry.size.width * item.share * (isRevealed ? 1 : 0) - 1
+                            )
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 3))
+        }
+        .accessibilityLabel(
+            "Landschaftsmosaik aus \(context.classes.count) Oberflächenklassen"
+        )
+        .onAppear {
+            if reduceMotion {
+                isRevealed = true
+            } else {
+                withAnimation(.smooth(duration: 0.42)) { isRevealed = true }
+            }
+        }
+    }
+
+    private func color(_ classID: Int) -> Color {
+        classColors.indices.contains(classID) ? classColors[classID] : .secondary
+    }
+}
+
+private struct LandscapeCompositionOrb: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let context: LandscapeContext
+    @State private var reveal: CGFloat = 0
+    @State private var isHovered = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let groups = context.groupShares
+            let diameter = min(geometry.size.width, geometry.size.height)
+            ZStack {
+                Circle()
+                    .stroke(.primary.opacity(0.055), lineWidth: diameter * 0.14)
+                ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                    let share = CGFloat(group.share)
+                    let gap = min(0.006, share * 0.22)
+                    Circle()
+                        .trim(
+                            from: segmentStart(index, groups: groups) + gap,
+                            to: max(
+                                segmentStart(index, groups: groups) + gap,
+                                segmentStart(index, groups: groups) + share * reveal - gap
+                            )
+                        )
+                        .stroke(
+                            groupColor(group.name),
+                            style: StrokeStyle(
+                                lineWidth: diameter * 0.14,
+                                lineCap: .round
+                            )
+                        )
+                        .rotationEffect(.degrees(-90))
+                }
+                Circle()
+                    .fill(.regularMaterial)
+                    .frame(width: diameter * 0.61, height: diameter * 0.61)
+                    .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                if let dominant = groups.first {
+                    if isHovered {
+                        Text(dominant.share.formatted(.percent.precision(.fractionLength(0))))
+                            .font(.system(size: diameter * 0.18, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .transition(.opacity.combined(with: .scale(scale: 0.82)))
+                    } else {
+                        Image(systemName: groupSymbol(dominant.name))
+                            .font(.system(size: diameter * 0.24, weight: .semibold))
+                            .foregroundStyle(groupColor(dominant.name))
+                            .transition(.opacity.combined(with: .scale(scale: 0.82)))
+                    }
+                }
+            }
+            .frame(width: diameter, height: diameter)
+            .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+            .scaleEffect(isHovered && !reduceMotion ? 1.045 : 1)
+        }
+        .onAppear {
+            if reduceMotion {
+                reveal = 1
+            } else {
+                withAnimation(.smooth(duration: 0.52)) { reveal = 1 }
+            }
+        }
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: isHovered)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.38), value: context.groupShares)
+        .help(breakdownText)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Landschaftsgruppen: \(breakdownText)")
+    }
+
+    private func segmentStart(
+        _ index: Int,
+        groups: [LandscapeContextGroupShare]
+    ) -> CGFloat {
+        groups.prefix(index).reduce(0) { $0 + CGFloat($1.share) }
+    }
+
+    private func groupColor(_ group: String) -> Color {
+        switch group {
+        case "Siedlung": Color(red: 0.70, green: 0.36, blue: 0.31)
+        case "Landwirtschaft": Color(red: 0.76, green: 0.59, blue: 0.24)
+        case "Wald": Color(red: 0.20, green: 0.43, blue: 0.28)
+        case "Natur": Color(red: 0.24, green: 0.52, blue: 0.59)
+        default: .secondary
+        }
+    }
+
+    private func groupSymbol(_ group: String) -> String {
+        switch group {
+        case "Siedlung": "building.2.fill"
+        case "Landwirtschaft": "leaf.fill"
+        case "Wald": "tree.fill"
+        case "Natur": "water.waves"
+        default: "circle.hexagongrid.fill"
+        }
+    }
+
+    private var breakdownText: String {
+        context.groupShares.map {
+            "\($0.name) \($0.share.formatted(.percent.precision(.fractionLength(0))))"
+        }.joined(separator: ", ")
+    }
+}
+
+private struct PinnedProbeMarker: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let probe: MapProbe
+    let snapshot: ViewportSnapshot?
+    let radiusMeters: Double
+    let namedFeatures: [LandscapeContextFeature]
+    let color: Color
+    let onNamedFeature: (LandscapeContextFeature) -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            if let snapshot {
+                let x = geometry.size.width / 2
+                    + CGFloat((probe.worldX - snapshot.centerX) / snapshot.metersPerPoint)
+                let y = geometry.size.height / 2
+                    - CGFloat((probe.worldY - snapshot.centerY) / snapshot.metersPerPoint)
+                let isVisible = x >= -20 && x <= geometry.size.width + 20
+                    && y >= -20 && y <= geometry.size.height + 20
+                if isVisible {
+                    let diameter = CGFloat(radiusMeters * 2 / snapshot.metersPerPoint)
+                    if diameter > 2, diameter < 6_000 {
+                        Circle()
+                            .fill(color.opacity(0.035))
+                            .overlay {
+                                Circle().stroke(
+                                    color.opacity(0.55),
+                                    style: StrokeStyle(lineWidth: 1.2, dash: [7, 5])
+                                )
+                            }
+                            .frame(width: diameter, height: diameter)
+                            .position(x: x, y: y)
+                            .allowsHitTesting(false)
+                    }
+
+                    if !namedFeatures.isEmpty {
+                        Path { path in
+                            for feature in namedFeatures {
+                                let point = screenPoint(
+                                    feature, snapshot: snapshot, size: geometry.size
+                                )
+                                path.move(to: CGPoint(x: x, y: y))
+                                path.addLine(to: point)
+                            }
+                        }
+                        .stroke(
+                            color.opacity(0.18),
+                            style: StrokeStyle(lineWidth: 0.7, dash: [2, 4])
+                        )
+                        .allowsHitTesting(false)
+
+                        ForEach(Array(namedFeatures.enumerated()), id: \.element.id) { index, feature in
+                            let point = screenPoint(
+                                feature, snapshot: snapshot, size: geometry.size
+                            )
+                            if point.x >= -16, point.x <= geometry.size.width + 16,
+                               point.y >= -16, point.y <= geometry.size.height + 16
+                            {
+                                MapNamedFeatureMarker(
+                                    feature: feature,
+                                    number: index + 1,
+                                    delay: Double(index) * 0.045,
+                                    color: color,
+                                    action: { onNamedFeature(feature) }
+                                )
+                                .position(point)
+                                .zIndex(100 - Double(index))
+                            }
+                        }
+                    }
+
+                    ZStack {
+                        Circle()
+                            .fill(color.opacity(0.16))
+                            .frame(width: 32, height: 32)
+                        Circle()
+                            .stroke(color.opacity(0.72), lineWidth: 1.5)
+                            .frame(width: 22, height: 22)
+                        Circle()
+                            .fill(color)
+                            .frame(width: 9, height: 9)
+                            .overlay(Circle().stroke(.white.opacity(0.92), lineWidth: 1.2))
+                            .shadow(color: .black.opacity(0.28), radius: 4, y: 2)
+                    }
+                    .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: radiusMeters)
+                    .position(x: x, y: y)
+                    .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    private func screenPoint(
+        _ feature: LandscapeContextFeature,
+        snapshot: ViewportSnapshot,
+        size: CGSize
+    ) -> CGPoint {
+        CGPoint(
+            x: size.width / 2
+                + CGFloat((feature.worldX - snapshot.centerX) / snapshot.metersPerPoint),
+            y: size.height / 2
+                - CGFloat((feature.worldY - snapshot.centerY) / snapshot.metersPerPoint)
+        )
+    }
+}
+
+private struct MapNamedFeatureMarker: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let feature: LandscapeContextFeature
+    let number: Int
+    let delay: Double
+    let color: Color
+    let action: () -> Void
+    @State private var isRevealed = false
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(number.formatted())
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+                .foregroundStyle(color)
+                .frame(width: 19, height: 19)
+                .background(.regularMaterial, in: Circle())
+                .overlay(Circle().stroke(color.opacity(isHovered ? 0.92 : 0.62), lineWidth: 1))
+                .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                .scaleEffect(isHovered && !reduceMotion ? 1.12 : 1)
+        }
+        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.88))
+        .onHover { isHovered = $0 }
+        .overlay {
+            if isHovered {
+                HStack(spacing: 6) {
+                    Image(systemName: feature.symbolName)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(color)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(feature.name)
+                            .font(.system(size: 9, weight: .semibold))
+                            .lineLimit(1)
+                        Text("\(feature.kindTitle) · \(feature.proximityText)")
+                            .font(.system(size: 7.5).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .frame(width: 164, height: 38, alignment: .leading)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(color.opacity(0.24), lineWidth: 0.8)
+                }
+                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+                .offset(calloutOffset)
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                .allowsHitTesting(false)
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.17), value: isHovered)
+        .accessibilityLabel(
+            "Fund \(number), \(feature.name), \(feature.kindTitle), \(feature.proximityText)"
+        )
+        .accessibilityHint("Zur Fundstelle fliegen")
+        .accessibilityAddTraits(.isButton)
+        .compositingGroup()
+        .scaleEffect(isRevealed ? 1 : 0.45)
+        .opacity(isRevealed ? 1 : 0)
+        .onAppear {
+            if reduceMotion {
+                isRevealed = true
+            } else {
+                withAnimation(.spring(duration: 0.32, bounce: 0.22).delay(delay)) {
+                    isRevealed = true
+                }
+            }
+        }
+    }
+
+    private var calloutOffset: CGSize {
+        let radians = feature.directionDegrees * .pi / 180
+        return CGSize(
+            width: sin(radians) * 92,
+            height: -cos(radians) * 42
+        )
+    }
+}
+
+private struct PinnedProbePanel: View {
+    let probe: MapProbe
+    let thematicProduct: MapManifest.ThematicRaster?
+    let baseSourceCount: Int
+    let showsElevation: Bool
+    let contentColor: Color?
+    let classColors: [Color]
+    let landscapeContext: LandscapeContext?
+    let isReadingLandscapeContext: Bool
+    let landscapeContextMessage: String?
+    let landscapeContextRadius: Double
+    let onLandscapeContextRadiusChange: (Double) -> Void
+    let onNamedFeature: (LandscapeContextFeature) -> Void
+    let onCenter: () -> Void
+    let onBookmark: (String, String) -> Void
+    let onClose: () -> Void
+    @State private var copied = false
+    @State private var saved = false
+    @State private var showSaveForm = false
+    @State private var draftName = ""
+    @State private var draftNote = ""
+    @State private var showLandscapeContext = true
+
+    private var accent: Color { contentColor ?? .accentColor }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 9) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .frame(width: 30, height: 30)
+                    .background(accent.opacity(0.12), in: Circle())
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Fundstelle")
+                        .font(.headline)
+                    Text("Festgehaltener Kartenpunkt")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 24, height: 24)
+                        .background(.primary.opacity(0.07), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Fundstelle lösen")
+            }
+            .padding(13)
+
+            Divider().opacity(0.55)
+
+            VStack(alignment: .leading, spacing: 12) {
+                if let thematicProduct {
+                    probeSection(
+                        eyebrow: thematicProduct.name,
+                        name: probe.thematic?.className ?? "Keine Fachklassifikation",
+                        symbol: "fossil.shell.fill",
+                        detail: probe.thematic?.qualitySummary
+                    )
+                    Divider().opacity(0.45)
+                }
+
+                probeSection(
+                    eyebrow: "Landoberfläche",
+                    name: probe.className ?? "Keine Kartendaten",
+                    symbol: "leaf.fill",
+                    detail: probe.classGroup
+                )
+
+                if showsElevation, let elevation = probe.elevation {
+                    HStack(spacing: 8) {
+                        probeMetric(
+                            title: "Höhe",
+                            value: "\(elevation.formatted()) m",
+                            symbol: "mountain.2.fill"
+                        )
+                        if let terrainSummary = probe.terrainSummary {
+                            probeMetric(
+                                title: "Gelände",
+                                value: terrainSummary,
+                                symbol: "angle"
+                            )
+                        }
+                    }
+                }
+                probeMetric(
+                    title: "EPSG:3035",
+                    value: probe.coordinateText,
+                    symbol: "scope"
+                )
+
+                DisclosureGroup(isExpanded: $showLandscapeContext) {
+                    landscapeContextSection
+                        .padding(.top, 9)
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "circle.dotted.and.circle")
+                            .foregroundStyle(accent)
+                        Text("Umgebung lesen")
+                            .font(.caption.weight(.semibold))
+                        Spacer()
+                        Text(radiusText(landscapeContextRadius))
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tint(accent)
+                .padding(9)
+                .background(accent.opacity(0.055), in: RoundedRectangle(cornerRadius: 11))
+
+                if baseSourceCount > 0 {
+                    Label(
+                        "\(baseSourceCount) dokumentierte Quellen bilden die Kartengrundlage",
+                        systemImage: "checkmark.seal"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 6) {
+                    probeAction("Zentrieren", symbol: "scope", action: onCenter)
+                    probeAction(saved ? "Gemerkt" : "Merken", symbol: saved ? "bookmark.fill" : "bookmark") {
+                        guard !saved else { return }
+                        if draftName.isEmpty { draftName = probe.discoveryTitle }
+                        showLandscapeContext = false
+                        showSaveForm.toggle()
+                    }
+                    probeAction(copied ? "Kopiert" : "Koordinate", symbol: copied ? "checkmark" : "doc.on.doc") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(probe.copyText, forType: .string)
+                        copied = true
+                    }
+                }
+
+                if showSaveForm, !saved {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Fundstelle sammeln")
+                            .font(.caption.weight(.semibold))
+                        TextField("Eigener Name", text: $draftName)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Notiz – was ist hier interessant?", text: $draftNote, axis: .vertical)
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(2...4)
+                        HStack {
+                            Button("Abbrechen") { showSaveForm = false }
+                                .buttonStyle(.borderless)
+                            Spacer()
+                            Button("In Sammlung") {
+                                onBookmark(draftName, draftNote)
+                                saved = true
+                                showSaveForm = false
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .disabled(draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+                    .padding(9)
+                    .background(accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .padding(13)
+        }
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.regularMaterial)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [accent.opacity(0.14), .clear, .black.opacity(0.025)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.65), accent.opacity(0.22), .black.opacity(0.11)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
+        }
+        .shadow(color: .black.opacity(0.22), radius: 22, y: 10)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func probeSection(
+        eyebrow: String,
+        name: String,
+        symbol: String,
+        detail: String?
+    ) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Circle()
+                .fill(accent)
+                .frame(width: 11, height: 11)
+                .overlay(Circle().stroke(.white.opacity(0.72), lineWidth: 0.8))
+                .padding(.top, 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Label(eyebrow, systemImage: symbol)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(name)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .lineLimit(2)
+                if let detail {
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var landscapeContextSection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Picker(
+                "Radius",
+                selection: Binding(
+                    get: { landscapeContextRadius },
+                    set: onLandscapeContextRadiusChange
+                )
+            ) {
+                Text("1 km").tag(1_000.0)
+                Text("3 km").tag(3_000.0)
+                Text("10 km").tag(10_000.0)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.mini)
+
+            if isReadingLandscapeContext {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Landschaft wird gelesen …")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 7)
+            } else if let landscapeContext {
+                HStack(alignment: .top, spacing: 10) {
+                    LandscapeCompositionOrb(context: landscapeContext)
+                        .frame(width: 54, height: 54)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(landscapeContext.title)
+                            .font(.subheadline.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(landscapeContext.narrative)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(groupSummary(landscapeContext))
+                            .font(.system(size: 8.5).monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                    }
+                }
+
+                ForEach(landscapeContext.classes.prefix(3)) { item in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(item.name).lineLimit(1)
+                            Spacer()
+                            Text(item.share.formatted(.percent.precision(.fractionLength(0))))
+                                .monospacedDigit()
+                        }
+                        .font(.caption2.weight(.medium))
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(.primary.opacity(0.07))
+                                Capsule()
+                                    .fill(classColor(item.classID))
+                                    .frame(width: max(3, geometry.size.width * item.share))
+                            }
+                        }
+                        .frame(height: 5)
+                    }
+                }
+
+                if let features = landscapeContext.namedFeatures, !features.isEmpty {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Label("Namen im Kreis", systemImage: "text.magnifyingglass")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("anklicken zum Anfliegen")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.tertiary)
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(spacing: 6) {
+                                ForEach(Array(features.enumerated()), id: \.element.id) { index, feature in
+                                    LandscapeNamedFeatureButton(
+                                        feature: feature,
+                                        number: index + 1,
+                                        tint: accent,
+                                        action: { onNamedFeature(feature) }
+                                    )
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        .scrollClipDisabled()
+                        .frame(height: 51)
+                    }
+                }
+
+                HStack(spacing: 7) {
+                    contextMetric(
+                        title: "Höhenraum",
+                        value: elevationText(landscapeContext),
+                        symbol: "mountain.2"
+                    )
+                    contextMetric(
+                        title: "Relief",
+                        value: slopeText(landscapeContext),
+                        symbol: "angle"
+                    )
+                }
+
+                HStack(spacing: 7) {
+                    if let population = landscapeContext.population {
+                        contextMetric(
+                            title: "Bevölkerung",
+                            value: populationText(population, context: landscapeContext),
+                            symbol: "person.2"
+                        )
+                    }
+                    contextMetric(
+                        title: "Mosaik",
+                        value: "\(landscapeContext.classes.count) Klassen",
+                        symbol: "square.grid.3x3"
+                    )
+                }
+
+                if let thematicName = landscapeContext.thematicProductName,
+                   let dominant = landscapeContext.thematicClasses.first
+                {
+                    Label(
+                        "\(thematicName): \(dominant.name) dominiert · "
+                            + "\(landscapeContext.thematicClasses.count) Klassen",
+                        systemImage: "fossil.shell"
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Text(
+                    "\(landscapeContext.sampleCount) Messpunkte · etwa "
+                        + "\(Int(landscapeContext.sampledResolution.rounded()).formatted()) m Abstand"
+                )
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+                if let populationSource = landscapeContext.populationSource {
+                    Text("Bevölkerung: \(populationSource)")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            } else if let landscapeContextMessage {
+                Label(landscapeContextMessage, systemImage: "exclamationmark.triangle")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func contextMetric(title: String, value: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption2.monospacedDigit().weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .padding(7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func classColor(_ classID: Int) -> Color {
+        classColors.indices.contains(classID) ? classColors[classID] : accent
+    }
+
+    private func elevationText(_ context: LandscapeContext) -> String {
+        guard let minimum = context.minimumElevation, let maximum = context.maximumElevation else {
+            return "–"
+        }
+        return "\(minimum.formatted())–\(maximum.formatted()) m"
+    }
+
+    private func slopeText(_ context: LandscapeContext) -> String {
+        guard let mean = context.meanSlopeDegrees, let maximum = context.maximumSlopeDegrees else {
+            return "–"
+        }
+        return "Ø \(mean.formatted(.number.precision(.fractionLength(1))))° · max "
+            + "\(maximum.formatted(.number.precision(.fractionLength(1))))°"
+    }
+
+    private func populationText(_ population: Int, context: LandscapeContext) -> String {
+        let count = population.formatted(.number.notation(.compactName))
+        guard let density = context.populationDensity else { return count }
+        return "\(count) · \(Int(density.rounded()).formatted())/km²"
+    }
+
+    private func groupSummary(_ context: LandscapeContext) -> String {
+        context.groupShares.prefix(4).map {
+            "\($0.name) \($0.share.formatted(.percent.precision(.fractionLength(0))))"
+        }.joined(separator: " · ")
+    }
+
+    private func radiusText(_ radius: Double) -> String {
+        radius >= 1_000
+            ? "\((radius / 1_000).formatted(.number.precision(.fractionLength(0)))) km"
+            : "\(Int(radius.rounded()).formatted()) m"
+    }
+
+    private func probeMetric(title: String, value: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
+    }
+
+    private func probeAction(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 9, weight: .semibold))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+}
+
+private struct LandscapeNamedFeatureButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let feature: LandscapeContextFeature
+    let number: Int
+    let tint: Color
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                Image(systemName: feature.symbolName)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 25, height: 25)
+                    .background(tint.opacity(0.10), in: Circle())
+                    .scaleEffect(isHovered && !reduceMotion ? 1.08 : 1)
+                    .overlay(alignment: .topTrailing) {
+                        Text(number.formatted())
+                            .font(.system(size: 6, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .frame(width: 11, height: 11)
+                            .background(tint, in: Circle())
+                            .offset(x: 3, y: -3)
+                    }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(feature.name)
+                        .font(.system(size: 9, weight: .semibold))
+                        .lineLimit(1)
+                    Text(feature.proximityText)
+                        .font(.system(size: 8).monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "location.north.fill")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(tint.opacity(0.70))
+                    .rotationEffect(.degrees(feature.directionDegrees))
+            }
+            .padding(.horizontal, 7)
+            .frame(width: 144, height: 45, alignment: .leading)
+            .background(
+                isHovered ? tint.opacity(0.09) : Color.primary.opacity(0.035),
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(tint.opacity(isHovered ? 0.24 : 0.10), lineWidth: 0.7)
+            }
+        }
+        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.97))
+        .atlasHoverGlow(tint: tint, cornerRadius: 9, lift: 0.75)
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: isHovered)
+        .help("\(feature.kindTitle) anfliegen")
+        .accessibilityLabel(
+            "Fund \(number), \(feature.name), \(feature.kindTitle), "
+                + "\(feature.proximityText), anfliegen"
+        )
+    }
+}
+
 private struct CursorInfoGlassOverlay: View {
     let probe: MapProbe
     let thematicProduct: MapManifest.ThematicRaster?
@@ -2256,7 +5122,7 @@ private struct CursorInfoGlassOverlay: View {
             }
 
             if showsElevation, let elevation = probe.elevation {
-                Label("\(elevation.formatted()) m Höhe", systemImage: "mountain.2.fill")
+                Label(terrainLine(elevation), systemImage: "mountain.2.fill")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .contentTransition(.numericText())
@@ -2301,17 +5167,26 @@ private struct CursorInfoGlassOverlay: View {
         .accessibilityLabel(accessibilitySummary)
     }
 
+    private func terrainLine(_ elevation: Int) -> String {
+        guard let terrainSummary = probe.terrainSummary else {
+            return "\(elevation.formatted()) m Höhe"
+        }
+        return "\(elevation.formatted()) m · \(terrainSummary)"
+    }
+
     private var accessibilitySummary: String {
         var parts = [title, className]
         if let quality = probe.thematic?.qualitySummary, thematicProduct != nil {
             parts.append(quality)
         }
         if showsElevation, let elevation = probe.elevation { parts.append("\(elevation) Meter Höhe") }
+        if let terrainSummary = probe.terrainSummary { parts.append(terrainSummary) }
         return parts.joined(separator: ", ")
     }
 }
 
 private struct AtlasContextDrawer<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let subtitle: String
     let symbol: String
@@ -2344,6 +5219,7 @@ private struct AtlasContextDrawer<Content: View>: View {
                     Image(systemName: symbol)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(tint)
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: 32, height: 32)
 
@@ -2360,7 +5236,8 @@ private struct AtlasContextDrawer<Content: View>: View {
                         .frame(width: 24, height: 24)
                         .background(.primary.opacity(0.07), in: Circle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.88))
+                .atlasHoverGlow(tint: tint, cornerRadius: 12, lift: 1)
                 .help("Schließen")
             }
             .padding(14)
@@ -2386,6 +5263,7 @@ private struct AtlasContextDrawer<Content: View>: View {
                 )
         }
         .shadow(color: .black.opacity(0.22), radius: 22, y: 10)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: symbol)
     }
 }
 
@@ -2418,6 +5296,7 @@ private struct AtlasInspectorPanel<Content: View>: View {
 }
 
 private struct AtlasCompactStackRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let detail: String
     let symbol: String
@@ -2425,6 +5304,7 @@ private struct AtlasCompactStackRow: View {
     @Binding var isOn: Bool
     let isSelected: Bool
     let action: () -> Void
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 5) {
@@ -2435,6 +5315,7 @@ private struct AtlasCompactStackRow: View {
                         .foregroundStyle(isOn ? tint : .secondary)
                         .frame(width: 28, height: 28)
                         .background(tint.opacity(isOn ? 0.11 : 0.04), in: RoundedRectangle(cornerRadius: 8))
+                        .scaleEffect(isHovered && !reduceMotion ? 1.045 : 1)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title)
                             .font(.subheadline.weight(.medium))
@@ -2448,10 +5329,11 @@ private struct AtlasCompactStackRow: View {
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.tertiary)
+                        .offset(x: isHovered && !reduceMotion ? 2 : 0)
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.985))
 
             Toggle(title, isOn: $isOn)
                 .labelsHidden()
@@ -2468,10 +5350,185 @@ private struct AtlasCompactStackRow: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(isSelected ? Color.accentColor.opacity(0.18) : .primary.opacity(0.045), lineWidth: 0.7)
         }
+        .atlasHoverGlow(tint: tint, cornerRadius: 10, lift: 1)
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: isHovered)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: isSelected)
+    }
+}
+
+private struct AtlasDiscoveryCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let reference: MapReference
+    let isSelected: Bool
+    @State private var isHovered = false
+
+    private var tint: Color { RGBAColor(hex: reference.accentHex).color }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Image(systemName: reference.symbolName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 30, height: 30)
+                    .background(tint.opacity(0.13), in: Circle())
+                    .scaleEffect(isHovered && !reduceMotion ? 1.07 : 1)
+                Spacer()
+                Image(systemName: isSelected ? "location.fill" : "arrow.up.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(isSelected ? tint : Color.secondary.opacity(0.55))
+                    .offset(
+                        x: isHovered && !isSelected && !reduceMotion ? 2 : 0,
+                        y: isHovered && !isSelected && !reduceMotion ? -2 : 0
+                    )
+            }
+
+            Spacer(minLength: 10)
+
+            Text(reference.name)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+            Text(reference.subtitle)
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(10)
+        .frame(width: 132, height: 94, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [tint.opacity(isSelected ? 0.20 : 0.10), .primary.opacity(0.025)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(isSelected ? tint.opacity(0.46) : .primary.opacity(0.07), lineWidth: isSelected ? 1.1 : 0.7)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .atlasHoverGlow(tint: tint, cornerRadius: 13, lift: 2)
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: isHovered)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: isSelected)
+    }
+}
+
+private struct AtlasSourceRow: View {
+    let title: String
+    let detail: String
+    let license: String
+    let url: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "database.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.green)
+                .frame(width: 24, height: 24)
+                .background(.green.opacity(0.09), in: RoundedRectangle(cornerRadius: 7))
+            VStack(alignment: .leading, spacing: 1) {
+                if let destination = URL(string: url) {
+                    Link(destination: destination) {
+                        HStack(spacing: 4) {
+                            Text(title)
+                                .lineLimit(2)
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption.weight(.semibold))
+                } else {
+                    Text(title).font(.caption.weight(.semibold))
+                }
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(license)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private struct CatalogDatasetRow: View {
+    let entry: MapManifest.DataCatalogEntry
+    let tint: Color
+    let isActive: Bool
+    let actionTitle: String
+    let action: () -> Void
+
+    private var metadata: String {
+        var parts: [String] = []
+        if let year = entry.year { parts.append(String(year)) }
+        if let scale = entry.scale { parts.append("1:\(scale.formatted())") }
+        parts.append(entry.license)
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: entry.category.symbolName)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 4) {
+                if let productName = entry.productName {
+                    Text(productName.uppercased())
+                        .font(.system(size: 8, weight: .bold))
+                        .tracking(0.55)
+                        .foregroundStyle(tint)
+                        .lineLimit(1)
+                }
+                Text(entry.name)
+                    .font(.caption.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(entry.role)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(metadata)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 6) {
+                    if let destination = URL(string: entry.url) {
+                        Link(destination: destination) {
+                            Label("Quelle", systemImage: "arrow.up.right")
+                                .font(.system(size: 9, weight: .semibold))
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    Spacer()
+                    Button(action: action) {
+                        Label(
+                            actionTitle,
+                            systemImage: isActive ? "checkmark.circle.fill" : "eye.fill"
+                        )
+                        .font(.system(size: 9, weight: .semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .tint(isActive ? .green : tint)
+                    .disabled(isActive && entry.activation != .surface)
+                }
+                .padding(.top, 2)
+            }
+        }
     }
 }
 
 private struct AtlasStackButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let isSelected: Bool
 
     func makeBody(configuration: Configuration) -> some View {
@@ -2487,6 +5544,20 @@ private struct AtlasStackButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 13)
                     .stroke(isSelected ? Color.accentColor.opacity(0.20) : .primary.opacity(0.055), lineWidth: 0.7)
             }
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
+private struct AtlasPressButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let pressedScale: CGFloat
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? pressedScale : 1)
+            .opacity(configuration.isPressed ? 0.78 : 1)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.14), value: configuration.isPressed)
     }
 }
 
@@ -2524,22 +5595,277 @@ private struct AtlasLayerKindRow: View {
     }
 }
 
+private enum AtlasPaletteAction: String, CaseIterable, Identifiable {
+    case search
+    case fitGermany
+    case dataCatalog
+    case collection
+    case areaAnalysis
+    case landscapeProfile
+    case appearance
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .search: "Ort oder Koordinate suchen"
+        case .fitGermany: "Deutschland einpassen"
+        case .dataCatalog: "Datenatlas öffnen"
+        case .collection: "Sammlung öffnen"
+        case .areaAnalysis: "Fläche untersuchen"
+        case .landscapeProfile: "Landschaftsprofil ziehen"
+        case .appearance: "Kartenbild gestalten"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .search: "Ortsnamen und EPSG:3035-Koordinaten"
+        case .fitGermany: "Zur ruhigen Gesamtansicht zurückkehren"
+        case .dataCatalog: "Quellen, Lizenzen und Kartenwirkung"
+        case .collection: "Fundstellen ansehen und vergleichen"
+        case .areaAnalysis: "Rechteck aufziehen und Landschaft zählen"
+        case .landscapeProfile: "Höhe und Landklassen entlang einer Linie"
+        case .appearance: "Relief, Farben, Vergleich und Export"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .search: "magnifyingglass"
+        case .fitGermany: "scope"
+        case .dataCatalog: "books.vertical.fill"
+        case .collection: "rectangle.stack.fill"
+        case .areaAnalysis: "rectangle.dashed"
+        case .landscapeProfile: "chart.xyaxis.line"
+        case .appearance: "paintpalette.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .search, .fitGermany, .dataCatalog: .green
+        case .collection: .teal
+        case .areaAnalysis: .cyan
+        case .landscapeProfile: .indigo
+        case .appearance: .purple
+        }
+    }
+}
+
+private struct AtlasPaletteSectionTitle: View {
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .tracking(0.75)
+            Spacer()
+            Text("\(count)")
+                .monospacedDigit()
+        }
+        .foregroundStyle(.tertiary)
+        .padding(.horizontal, 8)
+        .padding(.top, 9)
+        .padding(.bottom, 3)
+    }
+}
+
+private struct AtlasPaletteRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let title: String
+    let detail: String
+    let symbol: String
+    let tint: Color
+    var trailing: String? = nil
+    let isSelected: Bool
+    let onHoverSelection: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: 8))
+                .scaleEffect(isHovered && !reduceMotion ? 1.045 : 1)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            if let trailing {
+                Text(trailing)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .frame(maxWidth: 115, alignment: .trailing)
+            }
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(isSelected ? tint : Color.secondary.opacity(0.55))
+                .offset(
+                    x: isHovered && !reduceMotion ? 2 : 0,
+                    y: isHovered && !reduceMotion ? -2 : 0
+                )
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .background(
+            isSelected ? tint.opacity(0.10) : Color.primary.opacity(isHovered ? 0.045 : 0.018),
+            in: RoundedRectangle(cornerRadius: 11)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(isSelected ? tint.opacity(0.25) : Color.clear, lineWidth: 0.8)
+        }
+        .atlasHoverGlow(tint: tint, cornerRadius: 11, lift: 0.75)
+        .onHover {
+            isHovered = $0
+            if $0 { onHoverSelection() }
+        }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.17), value: isHovered)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.17), value: isSelected)
+    }
+}
+
 private struct MapChromeButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let symbol: String
     let help: String
+    let isActive: Bool
+    let tint: Color
     let action: () -> Void
+    @State private var isHovered = false
+
+    init(
+        symbol: String,
+        help: String,
+        isActive: Bool = false,
+        tint: Color = .accentColor,
+        action: @escaping () -> Void
+    ) {
+        self.symbol = symbol
+        self.help = help
+        self.isActive = isActive
+        self.tint = tint
+        self.action = action
+    }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isActive ? tint : Color.primary)
                 .frame(width: 18, height: 18)
                 .padding(7)
                 .contentShape(Rectangle())
+                .scaleEffect(isHovered && !reduceMotion ? 1.08 : 1)
+                .contentTransition(.symbolEffect(.replace))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AtlasPressButtonStyle(pressedScale: 0.9))
+        .background(
+            isActive ? tint.opacity(0.13) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+        )
         .atlasGlass(cornerRadius: 11)
+        .overlay {
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(isActive ? tint.opacity(0.46) : Color.clear, lineWidth: 1)
+        }
+        .atlasHoverGlow(tint: tint, cornerRadius: 11, lift: 1.5)
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: isHovered)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: isActive)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: symbol)
+        .accessibilityValue(isActive ? "Aktiv" : "")
         .help(help)
+    }
+}
+
+private struct MapStatusPill: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let status: String
+    let snapshot: ViewportSnapshot?
+    @State private var isHovered = false
+
+    private var parts: [String] {
+        status.components(separatedBy: " · ")
+    }
+
+    private var zoom: String { parts.first ?? "Karte" }
+    private var resolution: String { parts.count > 1 ? parts[1] : status }
+
+    private var visibleExtent: String? {
+        guard let width = snapshot?.visibleWidthMeters else { return nil }
+        if width >= 10_000 {
+            return "\((width / 1_000).formatted(.number.precision(.fractionLength(0)))) km breit"
+        }
+        if width >= 1_000 {
+            return "\((width / 1_000).formatted(.number.precision(.fractionLength(1)))) km breit"
+        }
+        return "\(width.formatted(.number.precision(.fractionLength(0)))) m breit"
+    }
+
+    private var pendingCount: Int {
+        guard let loading = parts.last, loading.hasSuffix(" lädt") else { return 0 }
+        return Int(loading.split(separator: " ").first ?? "0") ?? 0
+    }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "viewfinder")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.green)
+
+            Text(resolution)
+                .font(.caption.monospacedDigit().weight(.medium))
+
+            if pendingCount > 0 {
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 5, height: 5)
+                Text("\(pendingCount) lädt")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+
+            if isHovered {
+                Capsule()
+                    .fill(.primary.opacity(0.13))
+                    .frame(width: 1, height: 13)
+                    .transition(.scale.combined(with: .opacity))
+                Text([zoom, visibleExtent].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .fixedSize(horizontal: true, vertical: false)
+        .atlasGlass(cornerRadius: 10)
+        .atlasHoverGlow(tint: .green, cornerRadius: 10, lift: 1)
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.22), value: isHovered)
+        .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: pendingCount > 0)
+        .help("Kartentechnik · \(status)")
+        .accessibilityLabel("Kartenauflösung \(resolution), \(visibleExtent ?? zoom)")
     }
 }
 
@@ -2580,5 +5906,65 @@ extension View {
                     )
             }
             .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+    }
+
+    func atlasHoverGlow(
+        tint: Color,
+        cornerRadius: CGFloat,
+        lift: CGFloat = 1
+    ) -> some View {
+        modifier(AtlasHoverGlowModifier(tint: tint, cornerRadius: cornerRadius, lift: lift))
+    }
+}
+
+private struct AtlasHoverGlowModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let tint: Color
+    let cornerRadius: CGFloat
+    let lift: CGFloat
+    @State private var hoverLocation: CGPoint?
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                GeometryReader { geometry in
+                    if let hoverLocation {
+                        let width = max(geometry.size.width, 1)
+                        let height = max(geometry.size.height, 1)
+                        RadialGradient(
+                            colors: [tint.opacity(0.16), tint.opacity(0)],
+                            center: UnitPoint(
+                                x: min(max(hoverLocation.x / width, 0), 1),
+                                y: min(max(hoverLocation.y / height, 0), 1)
+                            ),
+                            startRadius: 0,
+                            endRadius: max(width, height) * 0.72
+                        )
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        )
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                    }
+                }
+            }
+            .offset(y: isHovered && !reduceMotion ? -lift : 0)
+            .shadow(
+                color: tint.opacity(isHovered ? 0.10 : 0),
+                radius: isHovered ? 10 : 0,
+                y: isHovered ? 4 : 0
+            )
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let location):
+                    hoverLocation = location
+                    isHovered = true
+                case .ended:
+                    hoverLocation = nil
+                    isHovered = false
+                }
+            }
+            .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: isHovered)
     }
 }

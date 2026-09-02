@@ -124,6 +124,25 @@ OSMIUM_FILTERS = [
     "nwr/power=substation,transformer,generator,plant",
 ]
 
+VECTOR_SOURCES = [
+    {
+        "id": "openstreetmap",
+        "name": "OpenStreetMap",
+        "license": "Open Database License 1.0",
+        "url": "https://www.openstreetmap.org/copyright",
+        "role": "Straßen, Bahn, Gewässer, Grenzen, Orte und Energie",
+    },
+    {
+        "id": "bkg-gn250",
+        "name": "BKG Geographische Namen 1:250 000 (GN250)",
+        "license": "Datenlizenz Deutschland – Namensnennung – Version 2.0",
+        "url": "https://gdz.bkg.bund.de/index.php/default/geographische-namen-1-250-000-gn250.html",
+        "role": "Berge, Landschaften, Gewässer, Naturgebiete, Inseln und Höhlen",
+        "scale": 250000,
+        "year": 2026,
+    },
+]
+
 
 @dataclass(frozen=True)
 class Level:
@@ -1194,9 +1213,20 @@ def write_manifest(
             "compressedTileBytes": packed_bytes,
         },
         "source": source_paths,
+        "sources": VECTOR_SOURCES,
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "generationSignature": generation_signature,
     }
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def update_raster_source_catalog(path: Path) -> None:
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if document.get("vectorSources") == VECTOR_SOURCES:
+        return
+    document["vectorSources"] = VECTOR_SOURCES
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     temporary.replace(path)
@@ -1241,6 +1271,7 @@ def main() -> int:
     if final_manifest.is_file() and not args.force:
         existing = json.loads(final_manifest.read_text(encoding="utf-8"))
         if existing.get("generationSignature") == signature:
+            update_raster_source_catalog(args.manifest)
             print(f"Bereits vollständig: {output}")
             return 0
         print("Quellen oder Pipeline wurden verändert; Vektorkacheln werden neu aufgebaut.")
@@ -1314,6 +1345,7 @@ def main() -> int:
         packed_tile_bytes,
         signature,
     )
+    update_raster_source_catalog(args.manifest)
 
     print(
         f"Fertig: {output} · {packed_tile_bytes / 1024**2:.1f} MiB Kacheln "

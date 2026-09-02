@@ -95,9 +95,28 @@ Mit einer vollständigen Xcode-Installation kann das Projekt alternativ über `P
 - Energieinfrastruktur: 380-, 220- und 110-kV-Netze sowie Umspannwerke, Transformatoren, Wind-, Solar- und konventionelle Erzeugungsanlagen aus OpenStreetMap
 - Beschriftung: Gewässer blau, Naturgebiete grün und Landschaften typografisch vom Ortsnamen getrennt
 - Suche: Ortsname oder EPSG:3035-Koordinaten eingeben
-- Mauszeiger: Koordinaten, Höhe und Landklasse ablesen
+- Stöberpalette: mit `⌘K` Landschaftsfunde, freie Datensätze und Werkzeuge
+  gemeinsam durchsuchen und direkt öffnen
+- Datenatlas: alle verwendeten Quellen nach Kartenfamilie durchsuchen, Lizenz,
+  Jahr und Maßstab prüfen und den zugehörigen Karteninhalt direkt anzeigen
+- Mauszeiger: Höhe, Hangneigung, Exposition und Landklasse ablesen; ein Klick hält die Fundstelle mit
+  EPSG:3035-Koordinate, Fachklasse, Quellenmaßstab und Merkfunktion fest
+- Umgebung lesen: um Fundstellen 1-, 3- oder 10-km-Kreise aus Oberflächenanteilen,
+  Höhenraum, Relief, Bevölkerung, Dichte, Landschaftsmosaik, nahen Orts-/Naturnamen
+  und aktiver Fachkarte lokal auswerten; nummerierte Fundkonstellationen zeigen
+  die echte Lage, Namenskarten fliegen den Fund direkt an
+- Sammlung: Fundstellen samt Umgebungsmosaik, Radius, Höhenraum, Relief, Bevölkerung, eigenem Namen
+  und Notiz bewahren; je zwei Punkte oder Landschaftsbilder direkt vergleichen
+- Landschaftsorb: alle Einzelklassen als kompakte Gruppensignatur aus Siedlung,
+  Landwirtschaft, Wald und Natur lesen und zwischen Landschaftsbildern vergleichen
+- Offenes Feldbuch: Sammlung verlustfrei als GeoJSON mit WGS84-Geometrien,
+  EPSG:3035-Originalkoordinaten und Quellen/Lizenzen exportieren oder importieren
 - Fachkarten: Substrat, Geologie, Reliefform oder Grundwasser exklusiv als Overlay/Basiskarte, mit eigener Legende, Quelle und Erfassungsmaßstab
 - Flächenanalyse: Analyseknopf aktivieren, Rechteck ziehen und Einwohner, Dichte sowie alle vorkommenden Kultur-, Wald- und sonstigen Flächen auswerten
+- Landschaftsprofil: Linie von A nach B ziehen und Höhenverlauf, Auf-/Abstieg,
+  Landklassenabschnitte und aktive Fachklassen gemeinsam lesen
+- Adaptive Kartenleiste und zentrale Tastaturbefehle für Suche, Landschaftsfunde,
+  Datenatlas, Sammlung, Analyse, Profil, Export und Seitenleiste
 - Gesamtkarte: Kulturarten, Baumgattungen, Naturflächen und Siedlungsdichte
 - Export: echter Metal-Neuaufbau bis 4× mit feineren Kacheln, Maßstab und Stil-Datei
 

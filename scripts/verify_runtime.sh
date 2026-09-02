@@ -29,7 +29,9 @@ swiftc \
   "$PROJECT_DIR/Sources/TopoExplorer/MapStyleDocument.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/MapManifest.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/MapReference.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/SearchController.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/MapFeatures.swift" \
+  "$PROJECT_DIR/Sources/TopoExplorer/AtlasFieldbook.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/GeoScience.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/MapExport.swift" \
   "$PROJECT_DIR/Sources/TopoExplorer/VectorTiles.swift" \

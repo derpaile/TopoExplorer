@@ -7,7 +7,13 @@ final class MapCanvasView: MTKView {
     var analysisMode = false {
         didSet { if analysisMode != oldValue { window?.invalidateCursorRects(for: self) } }
     }
+    var profileMode = false {
+        didSet { if profileMode != oldValue { window?.invalidateCursorRects(for: self) } }
+    }
     private var lastDragPoint: CGPoint?
+    private var mouseDownPoint: CGPoint?
+    private var mouseDownClickCount = 0
+    private var didDrag = false
     private var pointerTrackingArea: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool { true }
@@ -47,9 +53,19 @@ final class MapCanvasView: MTKView {
         let point = convert(event.locationInWindow, from: nil)
         if analysisMode {
             lastDragPoint = nil
+            mouseDownPoint = nil
             mapRenderer?.beginAreaSelection(at: point)
             return
         }
+        if profileMode {
+            lastDragPoint = nil
+            mouseDownPoint = nil
+            mapRenderer?.beginProfileSelection(at: point)
+            return
+        }
+        mouseDownPoint = point
+        mouseDownClickCount = event.clickCount
+        didDrag = false
         if event.clickCount == 2 {
             mapRenderer?.zoom(factor: 2, around: point)
         }
@@ -62,7 +78,16 @@ final class MapCanvasView: MTKView {
             mapRenderer?.updateAreaSelection(to: point)
             return
         }
+        if profileMode {
+            mapRenderer?.updateProfileSelection(to: point)
+            return
+        }
         if let previous = lastDragPoint {
+            if let mouseDownPoint,
+               hypot(point.x - mouseDownPoint.x, point.y - mouseDownPoint.y) >= 3
+            {
+                didDrag = true
+            }
             mapRenderer?.pan(deltaX: point.x - previous.x, deltaY: point.y - previous.y)
         }
         lastDragPoint = point
@@ -71,12 +96,17 @@ final class MapCanvasView: MTKView {
     override func mouseUp(with event: NSEvent) {
         if analysisMode {
             mapRenderer?.finishAreaSelection(at: convert(event.locationInWindow, from: nil))
+        } else if profileMode {
+            mapRenderer?.finishProfileSelection(at: convert(event.locationInWindow, from: nil))
+        } else if !didDrag, mouseDownClickCount == 1, let mouseDownPoint {
+            mapRenderer?.pinInspection(at: mouseDownPoint)
         }
         lastDragPoint = nil
+        mouseDownPoint = nil
     }
 
     override func resetCursorRects() {
-        addCursorRect(bounds, cursor: analysisMode ? .crosshair : .openHand)
+        addCursorRect(bounds, cursor: analysisMode || profileMode ? .crosshair : .openHand)
     }
 
     override func scrollWheel(with event: NSEvent) {
@@ -111,11 +141,17 @@ struct MetalMapView: NSViewRepresentable {
     @ObservedObject var export: MapExportController
     @ObservedObject var viewport: ViewportController
     let analysisMode: Bool
+    let profileMode: Bool
+    let reduceMotion: Bool
 
     final class Coordinator {
         var renderer: MapRenderer?
         var lastExportID = -1
+        var lastLandscapeContextRequestToken = -1
+        var lastPinnedThematicProductID: String?
+        var lastPinnedLandcoverMode = -1
         var lastAnalysisMode = false
+        var lastProfileMode = false
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -128,10 +164,15 @@ struct MetalMapView: NSViewRepresentable {
 
     func updateNSView(_ view: MapCanvasView, context: Context) {
         view.analysisMode = analysisMode
+        view.profileMode = profileMode
         if context.coordinator.lastAnalysisMode && !analysisMode {
             context.coordinator.renderer?.cancelAreaSelection()
         }
         context.coordinator.lastAnalysisMode = analysisMode
+        if context.coordinator.lastProfileMode && !profileMode {
+            context.coordinator.renderer?.cancelProfileSelection()
+        }
+        context.coordinator.lastProfileMode = profileMode
         context.coordinator.renderer?.update(
             manifest: manifest,
             dataDirectory: dataDirectory,
@@ -141,8 +182,30 @@ struct MetalMapView: NSViewRepresentable {
             geoScience: geoScience.renderOptions(in: manifest),
             fitToken: viewport.fitToken,
             navigationToken: viewport.navigationToken,
-            target: viewport.target
+            target: viewport.target,
+            reduceMotion: reduceMotion
         )
+        let pinnedInputsChanged = context.coordinator.lastPinnedThematicProductID
+                != geoScience.selectedRasterID
+            || context.coordinator.lastPinnedLandcoverMode != comparison.mode.rawValue
+        context.coordinator.lastPinnedThematicProductID = geoScience.selectedRasterID
+        context.coordinator.lastPinnedLandcoverMode = comparison.mode.rawValue
+        if pinnedInputsChanged, let probe = viewport.pinnedProbe {
+            context.coordinator.lastLandscapeContextRequestToken = viewport.landscapeContextRequestToken
+            context.coordinator.renderer?.cancelLandscapeContextQuery()
+            context.coordinator.renderer?.refreshPinnedInspection(probe)
+        } else if viewport.landscapeContextRequestToken
+            != context.coordinator.lastLandscapeContextRequestToken
+        {
+            context.coordinator.lastLandscapeContextRequestToken = viewport.landscapeContextRequestToken
+            if let probe = viewport.pinnedProbe {
+                context.coordinator.renderer?.queryLandscapeContext(
+                    around: probe, radiusMeters: viewport.landscapeContextRadius
+                )
+            } else {
+                context.coordinator.renderer?.cancelLandscapeContextQuery()
+            }
+        }
         if let request = export.request, request.id != context.coordinator.lastExportID {
             context.coordinator.lastExportID = request.id
             context.coordinator.renderer?.export(request) { result in
